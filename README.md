@@ -113,14 +113,11 @@ sapheneia/
 │   ├── templates/                          # HTML templates
 │   └── static/                             # CSS/JS assets
 │
-├── src/                                    # Core libraries (legacy)
-│   ├── model.py                            # Model management
-│   ├── forecast.py                         # Forecasting logic
-│   ├── data.py                             # Data processing
-│   └── visualization.py                    # Plotting utilities
+├── ui/
+│   ├── visualization.py                    # Plotting utilities
 │
-├── data/                                   # Shared data folder
-│   ├── uploads/                            # User file uploads
+├── data/                                   # Shared data directory
+│   ├── uploads/                            # User uploaded files
 │   └── results/                            # Forecast outputs
 │
 ├── notebooks/                              # Jupyter notebooks
@@ -198,14 +195,14 @@ curl -X POST http://localhost:8000/api/v1/timesfm20/initialization \
 **Response:**
 ```json
 {
-  "status": "success",
+  "message": "Model initialized successfully from hf:google/timesfm-2.0-500m-pytorch",
+  "model_status": "ready",
   "model_info": {
     "backend": "cpu",
     "context_len": 64,
     "horizon_len": 24,
-    "checkpoint": "google/timesfm-2.0-500m-pytorch"
-  },
-  "message": "Model initialized successfully"
+    "source": "hf:google/timesfm-2.0-500m-pytorch"
+  }
 }
 ```
 
@@ -220,11 +217,7 @@ curl http://localhost:8000/api/v1/timesfm20/status \
 ```json
 {
   "model_status": "ready",
-  "details": {
-    "backend": "cpu",
-    "context_len": 64,
-    "horizon_len": 24
-  }
+  "details": "Source: hf:google/timesfm-2.0-500m-pytorch"
 }
 ```
 
@@ -257,19 +250,36 @@ curl -X POST http://localhost:8000/api/v1/timesfm20/inference \
 **Response:**
 ```json
 {
-  "status": "success",
-  "forecast": {
-    "mean_forecast": [100.2, 101.5, ...],
-    "quantile_forecasts": {
-      "q10": [95.1, 96.2, ...],
-      "q30": [98.5, 99.3, ...],
+  "prediction": {
+    "point_forecast": [[39808.79, 40049.30, 40379.86, ...]],
+    "method": "covariates_enhanced",
+    "quantile_forecast": [[[...], [...], [...]]],
+    "metadata": {
+      "input_series_count": 1,
+      "forecast_length": 24,
+      "covariates_used": true,
+      "quantiles_available": true
+    },
+    "quantile_bands": {
+      "quantile_band_0_lower": [...],
+      "quantile_band_0_upper": [...],
+      "quantile_band_0_label": "Q10–Q30",
       ...
     }
   },
-  "metadata": {
-    "context_len": 64,
-    "horizon_len": 24,
-    "inference_time_seconds": 2.34
+  "visualization_data": {
+    "historical_data": [33113.91, 34169.22, 37253.25, ...],
+    "dates_historical": ["2022-08-10T00:00:00", "2022-08-17T00:00:00", ...],
+    "dates_future": ["2023-11-01T00:00:00", "2023-11-08T00:00:00", ...],
+    "target_name": "btc_price"
+  },
+  "execution_metadata": {
+    "total_time_seconds": 0.329,
+    "execution_time_seconds": 0.329,
+    "async_execution": true,
+    "thread_pool": true,
+    "model_version": "2.0.0",
+    "api_version": "2.0.0"
   }
 }
 ```
@@ -576,7 +586,7 @@ print(response.json())
 
 ### Jupyter Notebooks
 
-The `src/` modules remain unchanged for research compatibility:
+Note: The `src/` directory has been migrated to `api/` and `ui/` modules. For existing notebooks, please update imports to use the new module structure.
 
 ```bash
 # Activate environment
@@ -590,15 +600,15 @@ uv run jupyter notebook
 
 ### Existing Code Compatibility
 
-All existing notebooks and research code continue to work:
+Update your notebooks to use the new module structure:
 
 ```python
-from src.model import TimesFMModel
-from src.data import DataProcessor
-from src.forecast import Forecaster
-from src.visualization import Visualizer
+from api.core.model_wrapper import TimesFMModel
+from api.core.data_processing import DataProcessor
+from api.core.forecasting import Forecaster
+from ui.visualization import Visualizer
 
-# Your existing code works as before!
+# Updated code with proper module imports
 ```
 
 ## 🚀 Adding New Models

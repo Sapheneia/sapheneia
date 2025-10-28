@@ -220,6 +220,7 @@ mlartifacts/
 # Backup files
 *_old.py
 *_backup.py
+app_old.py
 
 # macOS
 .DS_Store
