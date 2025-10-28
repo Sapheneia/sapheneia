@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(uv run:*)"
+      "Bash(docker logs:*)",
+      "Bash(cd:*)",
+      "Bash(docker compose up -d --build)",
+      "Bash(docker compose up -d)",
+      "Bash(curl:*)",
+      "Bash(brew list:*)",
+      "Read(//Users/marcelo/Library/CloudStorage/GoogleDrive-mslabre@gmail.com/**)",
+      "Bash(uv run python -c \"from ui.app import app; print(''''✅ UI app imports successfully'''')\")",
+      "Bash(uv run python -c \"from api.main import app; print(''''✅ API imports successfully'''')\")",
+      "Bash(uv run python -c \"from ui.app import app; print(''''✅ UI imports successfully'''')\")",
+      "Bash(pkill:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker compose build:*)",
+      "Bash(uv run python:*)",
+      "Bash(docker exec sapheneia-api grep:*)"
     ],
     "deny": [],
     "ask": []

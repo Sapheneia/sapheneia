@@ -194,11 +194,32 @@ cython_debug/
 .cursorindexingignore
 
 # Custom files
-GEMINI.md
-SAPHENEIA.md
 local/
 uploads/
 webapp/uploads/
+ui/uploads/
+ui/results/
+
+# API artifacts
+api/timesfm20/local/*.ckpt
+api/timesfm20/local/*.pt
+api/timesfm20/local/.mlflow_cache/
+
+# Logs
+logs/*.log
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*_old.py
+*_backup.py
 
 # macOS
 .DS_Store

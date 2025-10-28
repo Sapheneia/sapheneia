@@ -1,0 +1,75 @@
+# Sapheneia API Dockerfile
+# FastAPI backend for time series forecasting - supports multiple models
+#
+# Build args:
+#   MODEL_NAME: Name of the model to run (default: all models via main API)
+#   MODEL_PORT: Port to expose (default: 8000)
+#
+# Examples:
+#   docker build -t sapheneia-api .
+#   docker build -t sapheneia-api-timesfm20 --build-arg MODEL_NAME=timesfm20 --build-arg MODEL_PORT=8001 .
+
+FROM python:3.11-slim
+
+# Build arguments
+ARG MODEL_NAME=all
+ARG MODEL_PORT=8000
+
+# Set as environment variables
+ENV MODEL_NAME=${MODEL_NAME}
+ENV MODEL_PORT=${MODEL_PORT}
+
+LABEL maintainer="Sapheneia Team"
+LABEL description="Sapheneia Forecasting API - Model: ${MODEL_NAME}"
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+ENV UV_HOME=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
+    mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+
+# Verify uv is installed
+RUN which uv && uv --version
+
+# Copy project files
+COPY pyproject.toml ./
+COPY api/ ./api/
+COPY .env .env
+
+# Install base dependencies
+RUN uv pip install --system --no-cache -e .
+
+# Install model-specific dependencies based on MODEL_NAME
+RUN if [ "$MODEL_NAME" = "timesfm20" ] || [ "$MODEL_NAME" = "all" ]; then \
+        echo "Installing TimesFM dependencies..." && \
+        uv pip install --system --no-cache torch; \
+    fi
+
+# Future model dependencies can be added here:
+# RUN if [ "$MODEL_NAME" = "chronos" ] || [ "$MODEL_NAME" = "all" ]; then \
+#         uv pip install --system --no-cache chronos-forecasting; \
+#     fi
+
+# Create necessary directories for all models
+RUN mkdir -p \
+    api/models/timesfm20/local \
+    data/uploads \
+    logs
+
+# Expose the specified port
+EXPOSE ${MODEL_PORT}
+
+# Health check - adjust port based on MODEL_PORT
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:${MODEL_PORT}/health || exit 1
+
+# Run API server on specified port
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${MODEL_PORT}

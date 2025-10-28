@@ -1,51 +1,23 @@
 #!/bin/bash
 
 # =============================================================================
-# Sapheneia TimesFM Setup Script
-# 
-# This script sets up the complete Sapheneia TimesFM environment for:
-# - Local development and research
-# - Notebook environment
-# - Web application deployment (localhost only)
-# 
+# Sapheneia FastAPI Setup Script
+#
+# This script manages the Sapheneia FastAPI application with multiple options:
+# - Initialize environment and dependencies
+# - Run API and/or UI with virtual environment
+# - Run API and/or UI with Docker
+#
 # Usage:
-#   chmod +x setup.sh
-#   ./setup.sh [options]
-#
-# Options:
-#   --local-only    Setup only for local development (no webapp)
-#   --webapp-only   Setup only webapp dependencies
-#   --help          Show this help message
-# =============================================================================
-
-# =============================================================================
-#
-# Step-by-step explanation of what the setup.sh script does:
-#
-#   1. Parses Options: It first checks if you've provided any options like --local-only, --webapp-only, or --gcp-deploy to determine the scope of the setup. If you don't provide any, it performs a full setup (local development and web app).
-#
-#   2. Detects System: The script checks your operating system and CPU architecture (e.g., Apple Silicon arm64 or Intel/AMD x86_64). This is important for installing the correct version of the TimesFM library, as the PyTorch backend is used for Apple Silicon and the JAX backend is used for other systems.
-#
-#   3. Installs `uv`: It checks if the uv package manager is installed. If not, it downloads and installs it. uv is a fast Python package manager used by this project.
-#
-#   4. Creates Python Environment: It uses uv to create a Python 3.11 virtual environment in a directory named .venv. This isolates the project's dependencies from other Python projects on your system.
-#
-#   5. Installs Core Dependencies: It installs all the necessary Python libraries for the core functionality and research, including:
-#       * numpy, pandas, matplotlib, seaborn for data manipulation and visualization.
-#       * jax and jaxlib for numerical computation.
-#       * timesfm (the appropriate version for your system).
-#       * jupyter, ipykernel, ipywidgets for running the notebooks.
-#       * plotly for interactive visualizations in the web application.
-#
-#   6. Installs Web App Dependencies: If a full or webapp-only setup is selected, it installs the dependencies listed in webapp/requirements.txt, which includes Flask for the web server.
-#
-#   7. Sets Up Project Structure: It creates several directories that the application needs to run, such as data/, logs/, and webapp/uploads/. It also creates a standard .gitignore file if one doesn't already exist to prevent temporary files and data from being committed to version control.
-#
-#
-#   9. Verifies Installation: Finally, it runs a quick check to ensure everything was installed correctly. It tries to import the main libraries (timesfm, pandas, flask, etc.) and runs a very basic TimesFM operation to confirm the model is functional.
-#
-#   After all these steps, it prints a "Setup Complete!" message with instructions on what to do next, such as how to activate the virtual environment and run the Jupyter notebooks or the web app.
-#
+#   ./setup.sh init              # Initialize environment
+#   ./setup.sh run-venv api      # Run API with venv
+#   ./setup.sh run-venv ui       # Run UI with venv
+#   ./setup.sh run-venv all      # Run both API and UI
+#   ./setup.sh run-docker api    # Run API with Docker
+#   ./setup.sh run-docker ui     # Run UI with Docker
+#   ./setup.sh run-docker all    # Run both with Docker Compose
+#   ./setup.sh stop              # Stop all running services
+#   ./setup.sh --help            # Show help
 # =============================================================================
 
 set -e  # Exit on any error
@@ -58,9 +30,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_NAME="sapheneia-timesfm"
+PROJECT_NAME="sapheneia"
 PYTHON_VERSION="3.11"
 VENV_NAME=".venv"
+API_PORT=8000
+UI_PORT=8080
 
 # Function to print colored output
 print_status() {
@@ -84,13 +58,28 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to check if port is in use
+port_in_use() {
+    lsof -ti :$1 >/dev/null 2>&1
+}
+
+# Function to kill process on port
+kill_port() {
+    local port=$1
+    if port_in_use $port; then
+        print_status "Killing process on port $port..."
+        lsof -ti :$port | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 # Function to detect system architecture
 detect_system() {
     ARCH=$(uname -m)
     OS=$(uname -s)
-    
+
     print_status "Detected system: $OS ($ARCH)"
-    
+
     # Determine if we're on Apple Silicon
     if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
         APPLE_SILICON=true
@@ -104,18 +93,18 @@ detect_system() {
 # Function to install UV package manager
 install_uv() {
     print_header "Installing UV Package Manager"
-    
+
     if command_exists uv; then
         print_status "UV already installed: $(uv --version)"
         return
     fi
-    
+
     print_status "Installing UV package manager..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    
+
     # Add UV to PATH for current session
     export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-    
+
     if command_exists uv; then
         print_status "UV installed successfully: $(uv --version)"
     else
@@ -127,311 +116,368 @@ install_uv() {
 # Function to setup Python environment
 setup_python_env() {
     print_header "Setting up Python Environment"
-    
-    # Create virtual environment with UV
-    print_status "Creating Python $PYTHON_VERSION virtual environment..."
-    uv venv $VENV_NAME --python $PYTHON_VERSION
-    
-    # Activate virtual environment
-    source $VENV_NAME/bin/activate
-    print_status "Virtual environment activated: $VIRTUAL_ENV"
-    
-    # Upgrade pip
-    uv pip install --upgrade pip
-}
 
-# Function to install core dependencies
-install_core_dependencies() {
-    print_header "Installing Core Dependencies"
-    
-    print_status "Installing base scientific computing packages..."
-    uv pip install numpy pandas matplotlib seaborn scikit-learn python-dateutil
-    
-    print_status "Installing JAX for covariates support..."
-    if [[ "$APPLE_SILICON" == true ]]; then
-        # Install JAX for Apple Silicon
-        uv pip install jax jaxlib
+    if [[ -d "$VENV_NAME" ]]; then
+        print_status "Virtual environment already exists: $VENV_NAME"
     else
-        # Install JAX for x86_64
-        uv pip install "jax[cpu]" jaxlib
+        print_status "Creating Python $PYTHON_VERSION virtual environment..."
+        uv venv $VENV_NAME --python $PYTHON_VERSION
     fi
-    
-    print_status "Installing TimesFM..."
-    if [[ "$APPLE_SILICON" == true ]]; then
-        # Use PyTorch version for Apple Silicon
-        uv pip install "timesfm[torch]"
+
+    print_status "Virtual environment ready: $VENV_NAME"
+}
+
+# Function to install dependencies
+install_dependencies() {
+    print_header "Installing Dependencies"
+
+    print_status "Installing from pyproject.toml..."
+    uv pip install -e .
+
+    print_status "Installing dev dependencies (pytest, test tools)..."
+    uv pip install -e .[dev]
+
+    print_status "Installing python-dotenv for environment management..."
+    uv pip install python-dotenv
+
+    print_status "Dependencies installed successfully"
+}
+
+# Function to setup environment file
+setup_env_file() {
+    print_header "Setting up Environment File"
+
+    if [[ -f ".env" ]]; then
+        print_status ".env file already exists"
     else
-        # Use JAX version for x86_64
-        uv pip install timesfm
-    fi
-    
-    print_status "Installing Jupyter notebook support..."
-    uv pip install jupyter notebook ipykernel ipywidgets
-    
-    print_status "Installing Plotly for interactive visualizations..."
-    uv pip install plotly
-}
+        if [[ -f ".env.template" ]]; then
+            print_status "Copying .env.template to .env..."
+            cp .env.template .env
+            print_warning "Please edit .env and set your API_SECRET_KEY"
+        else
+            print_warning ".env.template not found, creating minimal .env..."
+            cat > .env << 'EOF'
+# Sapheneia API Configuration
+API_SECRET_KEY="$(openssl rand -base64 32)"
+API_HOST=0.0.0.0
+API_PORT=8000
+LOG_LEVEL=INFO
 
-# Function to install webapp dependencies
-install_webapp_dependencies() {
-    print_header "Installing Web Application Dependencies"
-    
-    print_status "Installing Flask and web dependencies..."
-    uv pip install -r webapp/requirements.txt
-}
+# TimesFM Model Configuration
+TIMESFM_DEFAULT_CONTEXT_LEN=64
+TIMESFM_DEFAULT_HORIZON_LEN=24
 
-# Function to verify installation
-verify_installation() {
-    print_header "Verifying Installation"
-    
-    print_status "Testing TimesFM import..."
-    python -c "
-import timesfm
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
+# MLflow Configuration (optional)
+MLFLOW_TRACKING_URI=http://localhost:5000
 
-print('✅ TimesFM imported successfully')
-print('✅ Core dependencies available')
-print('✅ Plotly imported successfully')
-
-# Test basic TimesFM functionality
-try:
-    hparams = timesfm.TimesFmHparams(
-        backend='cpu',
-        per_core_batch_size=1,
-        horizon_len=4,
-        num_layers=50,
-        context_len=64
-    )
-    print('✅ TimesFM hyperparameters created')
-except Exception as e:
-    print(f'⚠️  TimesFM basic test failed: {e}')
-
-print('✅ Installation verification completed')
-"
-    
-    if [[ "$SETUP_TYPE" != "--local-only" ]]; then
-        print_status "Testing web application imports..."
-        python -c "
-try:
-    from flask import Flask
-    print('✅ Flask available')
-    
-    import plotly.graph_objects as go
-    print('✅ Plotly available')
-    
-    import sys
-    sys.path.append('src')
-    from model import TimesFMModel
-    from data import DataProcessor
-    from forecast import Forecaster
-    from interactive_visualization import InteractiveVisualizer
-    print('✅ Sapheneia modules available')
-except ImportError as e:
-    print(f'⚠️  Web app imports failed: {e}')
-"
+# UI Configuration
+UI_API_BASE_URL=http://localhost:8000
+EOF
+            print_status ".env file created with default values"
+        fi
     fi
 }
 
-# Function to setup project structure
-setup_project_structure() {
-    print_header "Setting up Project Structure"
-    
+# Function to initialize environment
+cmd_init() {
+    print_header "Initializing Sapheneia Environment"
+
+    # Check if we're in the right directory
+    if [[ ! -f "pyproject.toml" ]]; then
+        print_error "Please run this script from the sapheneia project root directory"
+        print_error "Expected file: pyproject.toml"
+        exit 1
+    fi
+
+    # Detect system
+    detect_system
+
+    # Install UV
+    install_uv
+
+    # Setup Python environment
+    setup_python_env
+
+    # Install dependencies
+    install_dependencies
+
+    # Setup environment file
+    setup_env_file
+
     # Create necessary directories
-    mkdir -p data
-    mkdir -p notebooks
+    mkdir -p api/models/timesfm20/local
+    mkdir -p data/uploads
+    mkdir -p data/results
     mkdir -p logs
-    mkdir -p webapp/uploads
-    mkdir -p webapp/results
-    
-    print_status "Project directories created"
-    
-    # Create .gitignore if it doesn't exist
-    if [[ ! -f .gitignore ]]; then
-        cat > .gitignore << 'EOF'
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
-# Virtual Environment
-.venv/
-venv/
-ENV/
-env/
+    print_header "Initialization Complete!"
+    print_status "Sapheneia environment is ready!"
+    echo
+    print_status "Next steps:"
+    echo "  1. Edit .env file and set your API_SECRET_KEY"
+    echo "  2. Run API: ./setup.sh run-venv api"
+    echo "  3. Run UI: ./setup.sh run-venv ui"
+    echo "  4. Or run both: ./setup.sh run-venv all"
+    echo "  5. Run tests: ./setup.sh test"
+    echo
+}
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Function to run API with venv
+run_api_venv() {
+    print_header "Starting API Server (Virtual Environment)"
 
-# Data and Results
-data/
-logs/
-webapp/uploads/
-webapp/results/
-*.csv
-*.json
-*.pkl
-*.png
-*.jpg
+    kill_port $API_PORT
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+    print_status "Starting API on port $API_PORT..."
+    uv run uvicorn api.main:app --host 0.0.0.0 --port $API_PORT --reload &
 
-# OS
-.DS_Store
-Thumbs.db
+    sleep 3
 
-# Secrets
-.env
-config.json
-EOF
-        print_status ".gitignore created"
+    if port_in_use $API_PORT; then
+        print_status "✅ API server running at http://localhost:$API_PORT"
+        print_status "   Health: http://localhost:$API_PORT/health"
+        print_status "   Docs: http://localhost:$API_PORT/docs"
+    else
+        print_error "Failed to start API server"
+        exit 1
     fi
 }
 
+# Function to run UI with venv
+run_ui_venv() {
+    print_header "Starting UI Server (Virtual Environment)"
 
-# Function to display usage help
-show_help() {
-    cat << EOF
-Sapheneia TimesFM Setup Script
+    kill_port $UI_PORT
 
-USAGE:
-    ./setup.sh [OPTIONS]
+    print_status "Starting UI on port $UI_PORT..."
+    cd ui && uv run python app.py > /tmp/sapheneia_ui.log 2>&1 &
+    cd ..
 
-OPTIONS:
-    --local-only    Setup only for local development (notebooks, src modules)
-    --webapp-only   Setup only webapp dependencies
-    --help          Show this help message
+    sleep 3
 
-EXAMPLES:
-    ./setup.sh                    # Full setup (local + webapp)
-    ./setup.sh --local-only       # Only research environment
-    ./setup.sh --webapp-only      # Only web application
-
-REQUIREMENTS:
-    - Bash shell
-    - curl (for downloading UV)
-    - Internet connection
-
-The script will:
-1. Install UV package manager
-2. Create Python virtual environment
-3. Install TimesFM and dependencies (including Plotly for interactive visualizations)
-4. Setup project structure
-5. Verify installation
-
-For web application setup, it will additionally:
-- Install Flask and web dependencies
-- Install Plotly for interactive visualizations
-- Create webapp deployment files
-
-EOF
+    if port_in_use $UI_PORT; then
+        print_status "✅ UI server running at http://localhost:$UI_PORT"
+    else
+        print_error "Failed to start UI server"
+        exit 1
+    fi
 }
 
-# Main setup function
-main() {
-    print_header "Sapheneia TimesFM Setup"
-    
-    # Parse command line arguments
-    SETUP_TYPE="${1:-full}"
-    
-    case $SETUP_TYPE in
-        --help|-h)
-            show_help
-            exit 0
+# Function to run with venv
+cmd_run_venv() {
+    local service=$1
+
+    if [[ ! -d "$VENV_NAME" ]]; then
+        print_error "Virtual environment not found. Run: ./setup.sh init"
+        exit 1
+    fi
+
+    case $service in
+        api)
+            run_api_venv
             ;;
-        --local-only)
-            print_status "Setting up for local development only"
+        ui)
+            run_ui_venv
             ;;
-        --webapp-only)
-            print_status "Setting up webapp dependencies only"
-            ;;
-        full|"")
-            print_status "Setting up full environment (local + webapp)"
-            SETUP_TYPE="full"
+        all)
+            run_api_venv
+            echo
+            run_ui_venv
+            echo
+            print_header "All Services Started"
+            print_status "API: http://localhost:$API_PORT"
+            print_status "UI: http://localhost:$UI_PORT"
+            echo
+            print_status "Press Ctrl+C to stop (servers run in background)"
+            print_status "To stop all: ./setup.sh stop"
             ;;
         *)
-            print_error "Unknown option: $SETUP_TYPE"
-            echo "Use --help for usage information"
+            print_error "Unknown service: $service"
+            print_error "Usage: ./setup.sh run-venv [api|ui|all]"
             exit 1
             ;;
     esac
-    
-    # Check if we're in the right directory
-    if [[ ! -f "CLAUDE.md" ]] || [[ ! -d "src" ]]; then
-        print_error "Please run this script from the sapheneia project root directory"
-        print_error "Expected files: CLAUDE.md, src/ directory"
+}
+
+# Function to run with Docker
+cmd_run_docker() {
+    local service=$1
+
+    if ! command_exists docker; then
+        print_error "Docker is not installed. Please install Docker first."
         exit 1
     fi
-    
-    # Detect system
-    detect_system
-    
-    # Install UV package manager
-    install_uv
-    
-    # Setup Python environment
-    setup_python_env
-    
-    # Install core dependencies (always needed)
-    install_core_dependencies
-    
-    # Install webapp dependencies if needed
-    if [[ "$SETUP_TYPE" == "full" ]] || [[ "$SETUP_TYPE" == "--webapp-only" ]]; then
-        install_webapp_dependencies
+
+    # Set Docker context to desktop-linux for Docker Desktop on macOS
+    export DOCKER_CONTEXT=desktop-linux
+
+    # Check for docker compose (new) or docker-compose (legacy)
+    if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
+        print_error "Docker Compose is not installed. Please install Docker Compose first."
+        exit 1
     fi
-    
-    # Setup project structure
-    setup_project_structure
-    
-    
-    
-    # Verify installation
-    verify_installation
-    
-    # Success message
-    print_header "Setup Complete!"
-    print_status "Sapheneia TimesFM environment is ready!"
-    echo
-    print_status "Next steps:"
-    echo "  1. Activate environment: source $VENV_NAME/bin/activate"
-    echo "  2. Start Jupyter: uv run jupyter notebook"
-    echo "  3. Open demo notebook: notebooks/sapheneia_timesfm_demo.ipynb"
-    
-    if [[ "$SETUP_TYPE" == "full" ]] || [[ "$SETUP_TYPE" == "--webapp-only" ]]; then
-        echo "  4. Run webapp: cd webapp && python app.py"
-        echo "  5. Open browser: http://localhost:8080"
+
+    # Use docker compose (new) if available, otherwise docker-compose (legacy)
+    local COMPOSE_CMD="docker compose"
+    if ! docker compose version >/dev/null 2>&1; then
+        COMPOSE_CMD="docker-compose"
     fi
-    
-    
-    echo
-    print_status "Documentation: README.md"
-    print_status "Configuration: CLAUDE.md"
+
+    print_header "Starting Services with Docker"
+
+    case $service in
+        api)
+            print_status "Building and starting API container..."
+            $COMPOSE_CMD up -d api
+            sleep 3
+            print_status "✅ API running at http://localhost:$API_PORT"
+            ;;
+        ui)
+            print_status "Building and starting UI container..."
+            $COMPOSE_CMD up -d ui
+            sleep 3
+            print_status "✅ UI running at http://localhost:$UI_PORT"
+            ;;
+        all)
+            print_status "Building and starting all containers..."
+            $COMPOSE_CMD up -d
+            sleep 5
+            print_status "✅ API running at http://localhost:$API_PORT"
+            print_status "✅ UI running at http://localhost:$UI_PORT"
+            echo
+            print_status "View logs: $COMPOSE_CMD logs -f"
+            print_status "To stop: ./setup.sh stop"
+            ;;
+        *)
+            print_error "Unknown service: $service"
+            print_error "Usage: ./setup.sh run-docker [api|ui|all]"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to run tests
+cmd_test() {
+    print_header "Running Tests"
+
+    if ! command_exists uv; then
+        print_error "uv is not installed. Run: ./setup.sh init"
+        exit 1
+    fi
+
+    print_status "Running test suite with pytest..."
+    uv run pytest "$@"
+}
+
+# Function to stop all services
+cmd_stop() {
+    print_header "Stopping All Services"
+
+    # Stop Docker services
+    if command_exists docker; then
+        print_status "Stopping Docker containers..."
+        # Stop and remove containers by name
+        docker stop sapheneia-api sapheneia-ui 2>/dev/null || true
+        docker rm sapheneia-api sapheneia-ui 2>/dev/null || true
+        print_status "Docker containers stopped and removed"
+    fi
+
+    print_status "Stopping venv ports..."
+    # Stop venv services
+    kill_port $API_PORT
+    kill_port $UI_PORT
+
+    print_status "✅ All services stopped"
+}
+
+# Function to show help
+show_help() {
+    cat << EOF
+${BLUE}Sapheneia FastAPI Setup Script${NC}
+
+${GREEN}USAGE:${NC}
+    ./setup.sh COMMAND [OPTIONS]
+
+${GREEN}COMMANDS:${NC}
+    init                      Initialize environment and install dependencies (including tests)
+    run-venv [api|ui|all]    Run services with virtual environment
+    run-docker [api|ui|all]  Run services with Docker
+    test                      Run test suite with pytest
+    stop                      Stop all running services
+    --help, -h               Show this help message
+
+${GREEN}EXAMPLES:${NC}
+    ${BLUE}# Initialize environment${NC}
+    ./setup.sh init
+
+    ${BLUE}# Run with virtual environment${NC}
+    ./setup.sh run-venv api      # Run only API server
+    ./setup.sh run-venv ui       # Run only UI server
+    ./setup.sh run-venv all      # Run both API and UI
+
+    ${BLUE}# Run with Docker${NC}
+    ./setup.sh run-docker api    # Run only API container
+    ./setup.sh run-docker ui     # Run only UI container
+    ./setup.sh run-docker all    # Run both with Docker Compose
+
+    ${BLUE}# Run tests${NC}
+    ./setup.sh test              # Run test suite
+
+    ${BLUE}# Stop all services${NC}
+    ./setup.sh stop
+
+${GREEN}REQUIREMENTS:${NC}
+    - Bash shell
+    - curl (for downloading UV)
+    - Internet connection
+    - Docker & Docker Compose (optional, for Docker deployment)
+
+${GREEN}PORTS:${NC}
+    - API Server: $API_PORT
+    - UI Server: $UI_PORT
+
+${GREEN}ENVIRONMENT:${NC}
+    - Python Version: $PYTHON_VERSION
+    - Virtual Environment: $VENV_NAME
+    - Configuration: .env file
+
+EOF
+}
+
+# Main function
+main() {
+    case "${1:-}" in
+        init)
+            cmd_init
+            ;;
+        run-venv)
+            cmd_run_venv "${2:-}"
+            ;;
+        run-docker)
+            cmd_run_docker "${2:-}"
+            ;;
+        test)
+            cmd_test "${@:2}"
+            ;;
+        stop)
+            cmd_stop
+            ;;
+        --help|-h|help)
+            show_help
+            ;;
+        "")
+            print_error "No command specified"
+            echo
+            show_help
+            exit 1
+            ;;
+        *)
+            print_error "Unknown command: $1"
+            echo
+            show_help
+            exit 1
+            ;;
+    esac
 }
 
 # Run main function with all arguments

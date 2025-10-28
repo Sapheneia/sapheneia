@@ -1,9 +1,0 @@
-{
-  "btc_price": "target",
-  "eth_price": "dynamic_numerical",
-  "sp500_price": "dynamic_numerical",
-  "vix_index": "dynamic_numerical",
-  "quarter": "dynamic_categorical",
-  "asset_category": "static_categorical",
-  "base_volatility": "static_numerical"
-}
