@@ -1,4 +1,4 @@
-# Sapheneia v2.0
+# Sapheneia v1.0
 
 A scalable, multi-model time series forecasting platform built on FastAPI. Currently supports Google's TimesFM-2.0 with architecture ready for multiple models (Chronos, Prophet, etc.). Designed for production deployments with REST API, Docker support, and MLOps integration.
 
