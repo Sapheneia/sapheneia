@@ -1,0 +1,108 @@
+services:
+  # FastAPI Backend - Main API (serves all models)
+  # NOTE: Uses module-level state - MUST run with single worker (UVICORN_WORKERS=1)
+  # For parallel processing, implement Redis state backend (see REMEDIATION_PLAN.md Phase 4)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        MODEL_NAME: all
+        MODEL_PORT: 8000
+    container_name: sapheneia-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=all
+      - PYTHONPATH=/app
+    volumes:
+      - ./api:/app/api
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - api_models_timesfm20:/app/api/models/timesfm20/local
+    networks:
+      - sapheneia-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s  # Extended for model loading time
+
+  # Optional: Separate TimesFM-2.0 API Service (uncomment to run as separate service)
+  # api-timesfm20:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.api
+  #     args:
+  #       MODEL_NAME: timesfm20
+  #       MODEL_PORT: 8001
+  #   container_name: sapheneia-api-timesfm20
+  #   ports:
+  #     - "${TIMESFM20_MODEL_PORT:-8001}:8001"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - API_HOST=0.0.0.0
+  #     - API_PORT=8001
+  #     - MODEL_NAME=timesfm20
+  #     - PYTHONPATH=/app
+  #   volumes:
+  #     - ./api:/app/api
+  #     - ./data:/app/data
+  #     - ./logs:/app/logs
+  #     - api_models_timesfm20:/app/api/models/timesfm20/local
+  #   networks:
+  #     - sapheneia-network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 120s
+
+  # Flask UI
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: sapheneia-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - UI_API_BASE_URL=http://api:8000
+      - UI_PORT=8080
+      - PYTHONPATH=/app
+    volumes:
+      - ./ui:/app/ui
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ui_results:/app/ui/results
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - sapheneia-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  sapheneia-network:
+    driver: bridge
+
+volumes:
+  api_models_timesfm20:
+    driver: local
+  ui_results:
+    driver: local
