@@ -25,13 +25,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-try:
-    import quantstats as qs
-    QUANTSTATS_AVAILABLE = True
-except ImportError:
-    QUANTSTATS_AVAILABLE = False
-    logger.warning("quantstats not available. Install with: pip install quantstats")
-
+import quantstats as qs
 
 # --- Performance Thresholds ---
 # These provide interpretation guidance for metric values
@@ -158,8 +152,6 @@ def calculate_sharpe_ratio(
         > 0.5: Acceptable
         < 0.5: Poor
     """
-    if not QUANTSTATS_AVAILABLE:
-        raise ImportError("quantstats is required for metrics calculation")
 
     returns = _validate_returns(returns)
 
@@ -189,8 +181,6 @@ def calculate_max_drawdown(returns: Union[pd.Series, np.ndarray, List]) -> float
         < -0.20: Significant risk
         < -0.50: Very high risk
     """
-    if not QUANTSTATS_AVAILABLE:
-        raise ImportError("quantstats is required for metrics calculation")
 
     returns = _validate_returns(returns)
 
@@ -223,9 +213,6 @@ def calculate_cagr(
         > 0.15: Strong performance
         > 0.30: Exceptional performance
     """
-    if not QUANTSTATS_AVAILABLE:
-        raise ImportError("quantstats is required for metrics calculation")
-
     returns = _validate_returns(returns)
 
     try:
@@ -259,9 +246,6 @@ def calculate_calmar_ratio(
         > 0.5: Decent
         < 0.5: Poor
     """
-    if not QUANTSTATS_AVAILABLE:
-        raise ImportError("quantstats is required for metrics calculation")
-
     returns = _validate_returns(returns)
 
     try:
@@ -348,12 +332,6 @@ def calculate_performance_metrics(
         >>> print(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
         >>> print(f"Max Drawdown: {metrics['max_drawdown']:.2%}")
     """
-    if not QUANTSTATS_AVAILABLE:
-        raise ImportError(
-            "quantstats is required for metrics calculation. "
-            "Install with: pip install quantstats"
-        )
-
     # Validate returns
     returns = _validate_returns(returns)
 
