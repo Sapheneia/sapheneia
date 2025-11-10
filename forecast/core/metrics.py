@@ -155,12 +155,8 @@ def calculate_sharpe_ratio(
 
     returns = _validate_returns(returns)
 
-    try:
-        sharpe = qs.stats.sharpe(returns, rf=risk_free_rate, periods=periods_per_year)
-        return float(sharpe) if not np.isnan(sharpe) else 0.0
-    except Exception as e:
-        logger.warning(f"Error calculating Sharpe ratio: {e}")
-        return 0.0
+    sharpe = qs.stats.sharpe(returns, rf=risk_free_rate, periods=periods_per_year)
+    return float(sharpe) if not np.isnan(sharpe) else 0.0
 
 
 def calculate_max_drawdown(returns: Union[pd.Series, np.ndarray, List]) -> float:
@@ -215,12 +211,8 @@ def calculate_cagr(
     """
     returns = _validate_returns(returns)
 
-    try:
-        cagr = qs.stats.cagr(returns, periods=periods_per_year)
-        return float(cagr) if not np.isnan(cagr) else 0.0
-    except Exception as e:
-        logger.warning(f"Error calculating CAGR: {e}")
-        return 0.0
+    cagr = qs.stats.cagr(returns, periods=periods_per_year)
+    return float(cagr) if not np.isnan(cagr) else 0.0
 
 
 def calculate_calmar_ratio(
@@ -248,12 +240,8 @@ def calculate_calmar_ratio(
     """
     returns = _validate_returns(returns)
 
-    try:
-        calmar = qs.stats.calmar(returns, periods=periods_per_year)
-        return float(calmar) if not np.isnan(calmar) else 0.0
-    except Exception as e:
-        logger.warning(f"Error calculating Calmar ratio: {e}")
-        return 0.0
+    calmar = qs.stats.calmar(returns, periods=periods_per_year)
+    return float(calmar) if not np.isnan(calmar) else 0.0
 
 
 def calculate_win_rate(returns: Union[pd.Series, np.ndarray, List]) -> float:
@@ -279,14 +267,10 @@ def calculate_win_rate(returns: Union[pd.Series, np.ndarray, List]) -> float:
     """
     returns = _validate_returns(returns)
 
-    try:
-        winning_periods = (returns > 0).sum()
-        total_periods = len(returns)
-        win_rate = winning_periods / total_periods if total_periods > 0 else 0.0
-        return float(win_rate)
-    except Exception as e:
-        logger.warning(f"Error calculating win rate: {e}")
-        return 0.0
+    winning_periods = (returns > 0).sum()
+    total_periods = len(returns)
+    win_rate = winning_periods / total_periods if total_periods > 0 else 0.0
+    return float(win_rate)
 
 
 # --- Main Function ---
