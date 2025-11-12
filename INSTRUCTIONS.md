@@ -15,7 +15,7 @@ Before proceeding, access and read the files and folders of the broader project 
 
 This new application will be developed under `/trading` in the root directory.
 
-Store all your progress in our development in CLAUDE.md in the root directory.
+Store all your progress in our development in CLAUDE.md in the root directory througout the development of the application.
 
 ## 2. Basic Implementation Instructions
 
@@ -197,3 +197,7 @@ Please follow these standards when writing Python code:
 
 - A standard Python `.gitignore` file that ignores `__pycache__`, `.venv`, `.env`, and IDE-specific folders.
 - Edit and adjust `README.md` to explain the applications's purpose and provide clear instructions on how to use the `setup.sh` script. Include `curl` examples for testing the API, and explicit instrucation on how to run this code.
+
+## 17. Implementation Plan
+
+CRITICAL: Create a comprehensive planning document IMPLEMENTATIONPLAN.md in the root directory. Do not change or add any code at first, I will evaluate the implementation plan. Only proceed with code implementation once I give the go signal.
