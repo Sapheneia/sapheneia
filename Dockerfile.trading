@@ -1,0 +1,49 @@
+# Sapheneia Trading Strategies Dockerfile
+# FastAPI backend for trading strategy execution
+#
+# Examples:
+#   docker build -f Dockerfile.trading -t sapheneia-trading .
+
+FROM python:3.11-slim
+
+LABEL maintainer="Sapheneia Team"
+LABEL description="Sapheneia Trading Strategies API"
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+ENV UV_HOME=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
+    mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+
+# Verify uv is installed
+RUN which uv && uv --version
+
+# Copy project files
+COPY pyproject.toml ./
+COPY trading/ ./trading/
+COPY .env .env
+
+# Install base dependencies
+RUN uv pip install --system --no-cache -e .
+
+# Create necessary directories
+RUN mkdir -p logs
+
+# Expose port 9000
+EXPOSE 9000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:9000/health || exit 1
+
+# Run trading API server on port 9000
+CMD uvicorn trading.main:app --host 0.0.0.0 --port 9000
+

@@ -13,6 +13,7 @@ A scalable, multi-model time series forecasting platform built on FastAPI. Curre
 - **Unified Management**: Single `setup.sh` script for all operations
 - **Production Ready**: Health checks, logging, error handling, and CORS
 - **Optimized Defaults**: context_len set to **64** for best performance
+- **Trading Strategies API**: New trading strategies application for investment strategy execution (v2.1)
 
 ## 🚀 Quick Start
 
@@ -24,66 +25,116 @@ git clone https://github.com/labrem/sapheneia.git
 cd sapheneia
 
 # 2. Initialize environment (installs dependencies, creates .env)
-./setup.sh init
+# For forecast application (default)
+./setup.sh init forecast
 
-# 3. Edit .env file and set your API_SECRET_KEY
-nano .env  # IMPORTANT: Change the default API key!
+# For trading application
+./setup.sh init trading
+
+# 3. Edit .env file and set your API keys
+nano .env  # IMPORTANT: Change default API keys!
+# - API_SECRET_KEY (for forecast API)
+# - TRADING_API_KEY (for trading API, min 32 chars in production)
 ```
 
-### Running the Application
+### Running the Applications
+
+Sapheneia includes two independent applications:
+- **Forecast Application**: Time series forecasting API and UI (ports 8000, 8080)
+- **Trading Application**: Trading strategies API (port 9000)
 
 **Option 1: Virtual Environment (Recommended for Development)**
+
+**Forecast Application:**
 ```bash
 # Run both API and UI
-./setup.sh run-venv all
+./setup.sh run-venv forecast all
 
 # Or run individually
-./setup.sh run-venv api      # API only on port 8000
-./setup.sh run-venv ui       # UI only on port 8080
+./setup.sh run-venv forecast api      # API only on port 8000
+./setup.sh run-venv forecast ui       # UI only on port 8080
+```
 
-# Stop all services
-./setup.sh stop
+**Trading Application:**
+```bash
+# Run trading API
+./setup.sh run-venv trading           # Trading API on port 9000
+```
+
+**Stop Services:**
+```bash
+./setup.sh stop forecast              # Stop forecast services
+./setup.sh stop trading               # Stop trading services
 ```
 
 **Option 2: Docker (Recommended for Production)**
+
+**Forecast Application:**
 ```bash
 # Run both API and UI
-./setup.sh run-docker all
+./setup.sh run-docker forecast all
 
 # Or run individually
-./setup.sh run-docker api
-./setup.sh run-docker ui
+./setup.sh run-docker forecast api
+./setup.sh run-docker forecast ui
+```
 
-# Stop all services
-./setup.sh stop
-# or
-docker stop sapheneia-api sapheneia-ui
-docker rm sapheneia-api sapheneia-ui
+**Trading Application:**
+```bash
+# Run trading API
+./setup.sh run-docker trading
+```
+
+**Stop Services:**
+```bash
+./setup.sh stop forecast              # Stop forecast services
+./setup.sh stop trading               # Stop trading services
 ```
 
 ### Available Commands
 
+**Forecast Application:**
 ```bash
-./setup.sh init              # Initialize environment and install dependencies
-./setup.sh run-venv api      # Run API with virtual environment
-./setup.sh run-venv ui       # Run UI with virtual environment
-./setup.sh run-venv all      # Run both API and UI
-./setup.sh run-docker api    # Run API with Docker
-./setup.sh run-docker ui     # Run UI with Docker
-./setup.sh run-docker all    # Run both with Docker Compose
-./setup.sh stop              # Stop all running services (venv and Docker)
-./setup.sh --help            # Show help
+./setup.sh init forecast                    # Initialize forecast application
+./setup.sh run-venv forecast api           # Run API with virtual environment
+./setup.sh run-venv forecast ui            # Run UI with virtual environment
+./setup.sh run-venv forecast all           # Run both API and UI
+./setup.sh run-docker forecast api         # Run API with Docker
+./setup.sh run-docker forecast ui          # Run UI with Docker
+./setup.sh run-docker forecast all         # Run both with Docker Compose
+./setup.sh stop forecast                   # Stop forecast services
+./setup.sh --help forecast                 # Help for forecast application
+```
+
+**Trading Application:**
+```bash
+./setup.sh init trading                    # Initialize trading application
+./setup.sh run-venv trading               # Run trading API with virtual environment
+./setup.sh run-docker trading             # Run trading API with Docker
+./setup.sh stop trading                    # Stop trading services
+./setup.sh --help trading                  # Help for trading application
+```
+
+**General:**
+```bash
+./setup.sh --help                          # General help (both applications)
 ```
 
 ## 📖 Access Points
 
-Once running, access:
-
+**Forecast Application:**
 - **API Documentation (Swagger)**: http://localhost:8000/docs
 - **API Documentation (ReDoc)**: http://localhost:8000/redoc
 - **API Health Check**: http://localhost:8000/health
 - **Model Registry**: http://localhost:8000/models
 - **Web UI**: http://localhost:8080
+
+**Trading Application:**
+- **API Documentation (Swagger)**: http://localhost:9000/docs
+- **API Documentation (ReDoc)**: http://localhost:9000/redoc
+- **API Health Check**: http://localhost:9000/health
+- **Trading Strategies**: http://localhost:9000/trading/strategies
+- **Trading Status**: http://localhost:9000/trading/status
 
 ## 🏗️ Architecture
 
@@ -113,8 +164,23 @@ sapheneia/
 │   ├── templates/                          # HTML templates
 │   └── static/                             # CSS/JS assets
 │
-├── ui/
-│   ├── visualization.py                    # Plotting utilities
+├── trading/                                # Trading Strategies API (NEW)
+│   ├── main.py                             # FastAPI application entry point
+│   ├── core/                               # Core infrastructure
+│   │   ├── config.py                       # Settings & environment vars
+│   │   ├── security.py                     # API key authentication
+│   │   ├── exceptions.py                   # Custom exception hierarchy
+│   │   └── rate_limit.py                   # Rate limiting configuration
+│   ├── routes/                             # API endpoints
+│   │   └── endpoints.py                    # Trading strategy endpoints
+│   ├── schemas/                            # Pydantic schemas
+│   │   └── schema.py                       # Request/response models
+│   ├── services/                           # Business logic
+│   │   └── trading.py                      # TradingStrategy class
+│   ├── tests/                              # Test suite
+│   │   ├── unit/                           # Unit tests
+│   │   └── integration/                    # Integration tests
+│   └── sample/                             # Sample code reference
 │
 ├── data/                                   # Shared data directory
 │   ├── uploads/                            # User uploaded files
@@ -125,6 +191,7 @@ sapheneia/
 │
 ├── Dockerfile.api                          # API Docker (multi-model)
 ├── Dockerfile.ui                           # UI Docker
+├── Dockerfile.trading                      # Trading API Docker (NEW)
 ├── docker-compose.yml                      # Service orchestration
 ├── setup.sh                                # Unified management script
 ├── .env                                    # Local configuration
@@ -293,13 +360,140 @@ curl -X POST http://localhost:8000/api/v1/timesfm20/shutdown \
   -H "Authorization: Bearer your_secret_key_change_me_in_production"
 ```
 
+## 📈 Trading Strategies Application
+
+The Trading Strategies API provides a stateless service for executing investment trading strategies. It supports three strategy types: threshold-based, return-based, and quantile-based strategies.
+
+### Quick Start
+
+```bash
+# 1. Initialize trading application
+./setup.sh init trading
+
+# 2. Set TRADING_API_KEY in .env (min 32 characters)
+nano .env
+
+# 3. Run trading API
+./setup.sh run-venv trading
+
+# Or with Docker
+./setup.sh run-docker trading
+```
+
+### API Usage Examples
+
+#### 1. List Available Strategies
+
+```bash
+curl http://localhost:9000/trading/strategies
+```
+
+#### 2. Execute Threshold Strategy
+
+```bash
+curl -X POST http://localhost:9000/trading/execute \
+  -H "Authorization: Bearer $TRADING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy_type": "threshold",
+    "forecast_price": 105.0,
+    "current_price": 100.0,
+    "current_position": 0.0,
+    "available_cash": 100000.0,
+    "initial_capital": 100000.0,
+    "threshold_type": "absolute",
+    "threshold_value": 0.0,
+    "execution_size": 100.0
+  }'
+```
+
+**Response:**
+```json
+{
+  "action": "buy",
+  "size": 100.0,
+  "value": 10000.0,
+  "reason": "Forecast 105.00 > Price 100.00, magnitude 5.0000 > threshold 0.0000",
+  "available_cash": 90000.0,
+  "position_after": 100.0,
+  "stopped": false
+}
+```
+
+#### 3. Execute Return Strategy
+
+```bash
+curl -X POST http://localhost:9000/trading/execute \
+  -H "Authorization: Bearer $TRADING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy_type": "return",
+    "forecast_price": 108.0,
+    "current_price": 100.0,
+    "current_position": 0.0,
+    "available_cash": 100000.0,
+    "initial_capital": 100000.0,
+    "position_sizing": "fixed",
+    "threshold_value": 0.05,
+    "execution_size": 10.0
+  }'
+```
+
+#### 4. Execute Quantile Strategy
+
+```bash
+curl -X POST http://localhost:9000/trading/execute \
+  -H "Authorization: Bearer $TRADING_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy_type": "quantile",
+    "forecast_price": 92.0,
+    "current_price": 100.0,
+    "current_position": 0.0,
+    "available_cash": 100000.0,
+    "initial_capital": 100000.0,
+    "which_history": "close",
+    "window_history": 20,
+    "quantile_signals": {
+      "1": {"range": [0, 20], "signal": "buy", "multiplier": 1.0},
+      "2": {"range": [80, 100], "signal": "sell", "multiplier": 1.0}
+    },
+    "position_sizing": "fixed",
+    "execution_size": 10.0,
+    "open_history": [100.0, 101.0, 99.0, ...],
+    "high_history": [105.0, 106.0, 104.0, ...],
+    "low_history": [95.0, 96.0, 94.0, ...],
+    "close_history": [100.0, 101.0, 99.0, ...]
+  }'
+```
+
+### Strategy Types
+
+- **Threshold Strategy**: Price difference-based with configurable thresholds (absolute, percentage, std_dev, ATR)
+- **Return Strategy**: Expected return-based with position sizing (fixed, proportional, normalized)
+- **Quantile Strategy**: Empirical quantile-based using historical price distribution
+
+### Documentation
+
+For detailed documentation, see:
+- **API Usage Guide**: [trading/API_USAGE.md](trading/API_USAGE.md)
+- **Strategy Guide**: [trading/STRATEGIES.md](trading/STRATEGIES.md)
+- **Deployment Guide**: [trading/DEPLOYMENT.md](trading/DEPLOYMENT.md)
+- **Quick Reference**: [trading/QUICK_REFERENCE.md](trading/QUICK_REFERENCE.md)
+- **Examples**: [trading/EXAMPLES.md](trading/EXAMPLES.md)
+
 ## ⚙️ Configuration
 
 ### Environment Variables (`.env`)
 
-**Required:**
+**Forecast Application - Required:**
 ```bash
 API_SECRET_KEY=your_secret_key_change_me_in_production  # CHANGE THIS!
+```
+
+**Trading Application - Required:**
+```bash
+TRADING_API_KEY=your_trading_api_key_min_32_chars_in_production  # CHANGE THIS! (min 32 chars)
 ```
 
 **API Settings:**
@@ -322,6 +516,24 @@ TIMESFM20_DEFAULT_BACKEND=cpu
 TIMESFM20_DEFAULT_CONTEXT_LEN=64
 TIMESFM20_DEFAULT_HORIZON_LEN=24
 TIMESFM20_DEFAULT_CHECKPOINT=google/timesfm-2.0-500m-pytorch
+```
+
+**Trading Application Settings:**
+```bash
+TRADING_API_HOST=0.0.0.0
+TRADING_API_PORT=9000
+ENVIRONMENT=development  # development, staging, or production
+LOG_LEVEL=INFO
+
+# CORS Settings
+CORS_ALLOWED_ORIGINS=http://localhost:8080,http://localhost:3000
+CORS_ALLOW_CREDENTIALS=true
+CORS_ALLOW_METHODS=GET,POST
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=60
+RATE_LIMIT_EXECUTE_PER_MINUTE=10  # Stricter limit for execute endpoint
 ```
 
 **UI Settings:**

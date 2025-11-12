@@ -75,7 +75,7 @@ exclude = ["*.tests", "*.tests.*", "tests.*", "tests"]
 
 # Pytest configuration (Phase 6: Testing Infrastructure)
 [tool.pytest.ini_options]
-testpaths = ["tests", "api/models"]
+testpaths = ["tests", "api/models", "trading/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -84,6 +84,7 @@ addopts = [
     "--strict-markers",
     "--tb=short",
     "--cov=api",
+    "--cov=trading",
     "--cov-report=html",
     "--cov-report=term",
     "--cov-report=xml",
@@ -101,7 +102,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["api"]
+source = ["api", "trading"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

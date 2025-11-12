@@ -97,6 +97,36 @@ services:
       retries: 3
       start_period: 10s
 
+  # Trading Strategies API
+  trading:
+    build:
+      context: .
+      dockerfile: Dockerfile.trading
+    container_name: sapheneia-trading
+    ports:
+      - "${TRADING_API_PORT:-9000}:9000"
+    env_file:
+      - .env
+    environment:
+      - TRADING_API_KEY=${TRADING_API_KEY}
+      - TRADING_API_HOST=0.0.0.0
+      - TRADING_API_PORT=9000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - PYTHONPATH=/app
+    volumes:
+      - ./trading:/app/trading
+      - ./logs:/app/logs
+    networks:
+      - sapheneia-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 networks:
   sapheneia-network:
     driver: bridge
