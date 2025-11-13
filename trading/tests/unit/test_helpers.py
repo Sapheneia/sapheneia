@@ -106,6 +106,40 @@ class TestReturnsCalculation:
         assert len(returns) == 3
         assert all(returns < 0)  # All negative returns
 
+    def test_calculate_returns_zero_value_raises_error(self):
+        """Test that zero values in timeseries raise InvalidParametersError."""
+        from trading.core.exceptions import InvalidParametersError
+
+        timeseries = np.array([100.0, 0.0, 110.0])
+
+        with pytest.raises(InvalidParametersError) as exc_info:
+            TradingStrategy._calculate_returns(timeseries)
+
+        assert "zero or negative values" in exc_info.value.message.lower()
+        # Check details dict for parameter name
+        if exc_info.value.details and "parameter" in exc_info.value.details:
+            assert "timeseries" in exc_info.value.details["parameter"].lower()
+        else:
+            # Parameter may be in message or details
+            assert "timeseries" in str(exc_info.value).lower()
+
+    def test_calculate_returns_negative_value_raises_error(self):
+        """Test that negative values in timeseries raise InvalidParametersError."""
+        from trading.core.exceptions import InvalidParametersError
+
+        timeseries = np.array([100.0, -5.0, 110.0])
+
+        with pytest.raises(InvalidParametersError) as exc_info:
+            TradingStrategy._calculate_returns(timeseries)
+
+        assert "zero or negative values" in exc_info.value.message.lower()
+        # Check details dict for parameter name
+        if exc_info.value.details and "parameter" in exc_info.value.details:
+            assert "timeseries" in exc_info.value.details["parameter"].lower()
+        else:
+            # Parameter may be in message or details
+            assert "timeseries" in str(exc_info.value).lower()
+
 
 class TestThresholdCalculation:
     """Test threshold calculation for different types."""

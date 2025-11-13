@@ -2,6 +2,8 @@
 
 A scalable, multi-model time series forecasting platform built on FastAPI. Currently supports Google's TimesFM-2.0 with architecture ready for multiple models (Chronos, Prophet, etc.). Designed for production deployments with REST API, Docker support, and MLOps integration.
 
+**📋 [Changelog](CHANGELOG.md)** | **🏗️ [Trading Architecture](trading/documentation/ARCHITECTURE.md)**
+
 ## 🎯 What's New in v2.0
 
 - **Multi-Model Architecture**: Extensible framework supporting multiple forecasting models
@@ -476,11 +478,13 @@ curl -X POST http://localhost:9000/trading/execute \
 ### Documentation
 
 For detailed documentation, see:
-- **API Usage Guide**: [trading/API_USAGE.md](trading/API_USAGE.md)
-- **Strategy Guide**: [trading/STRATEGIES.md](trading/STRATEGIES.md)
-- **Deployment Guide**: [trading/DEPLOYMENT.md](trading/DEPLOYMENT.md)
-- **Quick Reference**: [trading/QUICK_REFERENCE.md](trading/QUICK_REFERENCE.md)
-- **Examples**: [trading/EXAMPLES.md](trading/EXAMPLES.md)
+- **Architecture**: [trading/documentation/ARCHITECTURE.md](trading/documentation/ARCHITECTURE.md) - System architecture, component diagrams, and design decisions
+- **API Usage Guide**: [trading/documentation/API_USAGE.md](trading/documentation/API_USAGE.md)
+- **Strategy Guide**: [trading/documentation/STRATEGIES.md](trading/documentation/STRATEGIES.md)
+- **Deployment Guide**: [trading/documentation/DEPLOYMENT.md](trading/documentation/DEPLOYMENT.md)
+- **Quick Reference**: [trading/documentation/QUICK_REFERENCE.md](trading/documentation/QUICK_REFERENCE.md)
+- **Examples**: [trading/documentation/EXAMPLES.md](trading/documentation/EXAMPLES.md)
+- **Changelog**: [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 
 ## ⚙️ Configuration
 

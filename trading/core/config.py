@@ -57,6 +57,16 @@ class TradingSettings(BaseSettings):
     DEFAULT_MIN_HISTORY_LENGTH: int = 2  # Minimum history length required
     DEFAULT_EXECUTION_SIZE: float = 1.0  # Default execution size
 
+    # --- Performance Monitoring Settings ---
+    SLOW_REQUEST_THRESHOLD_MS: int = (
+        100  # Threshold for slow request logging (milliseconds)
+    )
+
+    # --- Trading Strategy Constants ---
+    MAX_HISTORY_WINDOW: int = 10000  # Maximum window size for history calculations
+    DEFAULT_WINDOW_SIZE: int = 20  # Default window size for calculations
+    MAX_ARRAY_SIZE: int = 10000  # Maximum size for history arrays
+
     @field_validator("TRADING_API_KEY")
     @classmethod
     def validate_api_key(cls, v: str, info) -> str:

@@ -233,6 +233,64 @@ class TestThresholdStrategy:
             assert result["size"] > 0
             assert result["size"] * 100.0 <= 50.0  # Can't spend more than available
 
+    def test_zero_current_price_raises_error(self, base_params):
+        """Test that zero current_price raises InvalidParametersError."""
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "threshold",
+                "current_price": 0.0,  # Zero price
+                "threshold_type": "absolute",
+                "threshold_value": 0.0,
+                "execution_size": 100.0,
+            }
+        )
+
+        with pytest.raises(InvalidParametersError) as exc_info:
+            TradingStrategy.execute_trading_signal(params)
+
+        # Error message may come from _validate_common_params or our defensive check
+        assert "current_price" in exc_info.value.message.lower()
+        assert (
+            "positive" in exc_info.value.message.lower()
+            or "positive number" in exc_info.value.message.lower()
+        )
+        # Check details if available
+        if exc_info.value.details:
+            assert (
+                exc_info.value.details.get("parameter") == "current_price"
+                or exc_info.value.details.get("value") == 0.0
+            )
+
+    def test_negative_current_price_raises_error(self, base_params):
+        """Test that negative current_price raises InvalidParametersError."""
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "threshold",
+                "current_price": -10.0,  # Negative price
+                "threshold_type": "absolute",
+                "threshold_value": 0.0,
+                "execution_size": 100.0,
+            }
+        )
+
+        with pytest.raises(InvalidParametersError) as exc_info:
+            TradingStrategy.execute_trading_signal(params)
+
+        # Error message may come from _validate_common_params or our defensive check
+        assert "current_price" in exc_info.value.message.lower()
+        assert (
+            "positive" in exc_info.value.message.lower()
+            or "positive number" in exc_info.value.message.lower()
+        )
+        # Check details if available
+        if exc_info.value.details:
+            assert (
+                exc_info.value.details.get("parameter") == "current_price"
+                or exc_info.value.details.get("value") == -10.0
+            )
+
     def test_no_position_to_sell(self, base_params):
         """Test no position to sell scenario."""
         params = base_params.copy()

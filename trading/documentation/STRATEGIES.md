@@ -135,7 +135,7 @@ Uses Average True Range from OHLC data to set volatility-based thresholds.
 **Optional:**
 - `threshold_value`: Threshold value or multiplier (default: 0.0)
 - `which_history`: History type for std_dev (`"open"`, `"high"`, `"low"`, `"close"`, default: `"close"`)
-- `window_history`: Number of periods to use (default: 20)
+- `window_history`: Number of periods to use (default: 20, max: 10,000)
 - `min_history_length`: Minimum history required (default: 2)
 - OHLC histories: Required for ATR, optional for std_dev
 
@@ -223,9 +223,11 @@ Position size normalized by historical return volatility.
 - `max_position_size`: Maximum position size constraint
 - `min_position_size`: Minimum position size constraint
 - `which_history`: History type for normalized sizing
-- `window_history`: Number of periods to use
+- `window_history`: Number of periods to use (default: 20, max: 10,000)
 - `min_history_length`: Minimum history required
 - OHLC histories: Required for normalized sizing
+
+**Note:** Large `window_history` values (>1000) may impact performance. The maximum allowed value is 10,000 to prevent performance degradation.
 
 ### Signal Logic
 
@@ -282,9 +284,11 @@ Quantile signals are configured as ranges (0-100 percentile) with associated act
 
 **Required:**
 - `which_history`: OHLC history type (`"open"`, `"high"`, `"low"`, `"close"`)
-- `window_history`: Number of periods to use
+- `window_history`: Number of periods to use (max: 10,000)
 - `quantile_signals`: Dictionary of quantile signal configurations
 - All OHLC histories: `open_history`, `high_history`, `low_history`, `close_history`
+
+**Note:** Large `window_history` values (>1000) may impact performance. The maximum allowed value is 10,000 to prevent performance degradation.
 
 **Optional:**
 - `position_sizing`: `"fixed"` or `"normalized"` (default: `"fixed"`)
@@ -304,8 +308,10 @@ Quantile signals are configured as ranges (0-100 percentile) with associated act
 
 - Ranges must be 0-100 percentile
 - Range min < range max
-- Ranges can overlap (first match wins)
+- **Ranges must not overlap** - Each percentile value should map to exactly one signal configuration
 - Multiplier typically 0.0-1.0 (can be > 1.0 for leverage)
+
+**Note**: Overlapping ranges are not allowed. If ranges overlap, the API will return a validation error (422). This ensures predictable behavior and prevents ambiguous signal generation.
 
 ## Strategy Selection Guide
 

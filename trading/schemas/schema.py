@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Literal, Dict, List, Optional, Union, Any
 from enum import Enum
 
+# Import settings for constants
+from ..core.config import settings
+
 
 # ========== ENUM CLASSES ==========
 
@@ -102,9 +105,10 @@ class ThresholdStrategyRequest(BaseStrategyRequest):
         description="History type to use for std_dev threshold calculations",
     )
     window_history: Optional[int] = Field(
-        default=20,
+        default=settings.DEFAULT_WINDOW_SIZE,
         gt=0,
-        description="Window size for std_dev/atr calculations (must be positive)",
+        le=settings.MAX_HISTORY_WINDOW,
+        description=f"Window size for std_dev/atr calculations (must be positive, max: {settings.MAX_HISTORY_WINDOW})",
     )
     min_history_length: Optional[int] = Field(
         default=2,
@@ -149,8 +153,10 @@ class ThresholdStrategyRequest(BaseStrategyRequest):
         """Validate that history arrays have reasonable lengths."""
         if v is not None and len(v) == 0:
             raise ValueError("History arrays cannot be empty")
-        if v is not None and len(v) > 10000:
-            raise ValueError("History arrays cannot exceed 10,000 elements")
+        if v is not None and len(v) > settings.MAX_ARRAY_SIZE:
+            raise ValueError(
+                f"History arrays cannot exceed {settings.MAX_ARRAY_SIZE} elements"
+            )
         return v
 
     class Config:
@@ -209,9 +215,10 @@ class ReturnStrategyRequest(BaseStrategyRequest):
         description="History type to use for normalized position sizing",
     )
     window_history: Optional[int] = Field(
-        default=20,
+        default=settings.DEFAULT_WINDOW_SIZE,
         gt=0,
-        description="Window size for normalized sizing calculations (must be positive)",
+        le=settings.MAX_HISTORY_WINDOW,
+        description=f"Window size for normalized sizing calculations (must be positive, max: {settings.MAX_HISTORY_WINDOW})",
     )
     min_history_length: Optional[int] = Field(
         default=2,
@@ -322,7 +329,10 @@ class QuantileStrategyRequest(BaseStrategyRequest):
         ..., description="History type to use for quantile calculation"
     )
     window_history: int = Field(
-        ..., gt=0, description="Window size for quantile calculation (must be positive)"
+        ...,
+        gt=0,
+        le=settings.MAX_HISTORY_WINDOW,
+        description=f"Window size for quantile calculation (must be positive, max: {settings.MAX_HISTORY_WINDOW})",
     )
     quantile_signals: Dict[int, QuantileSignalConfig] = Field(
         ..., description="Quantile signal configuration dictionary"
@@ -381,6 +391,33 @@ class QuantileStrategyRequest(BaseStrategyRequest):
             raise ValueError(
                 "max_position_size must be >= min_position_size when both are provided"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_no_overlapping_ranges(self):
+        """Ensure quantile signal ranges don't overlap."""
+        if not self.quantile_signals:
+            return self
+
+        # Collect all ranges with their keys for error reporting
+        ranges = []
+        for key, signal_config in self.quantile_signals.items():
+            ranges.append((key, signal_config.range))
+
+        # Check for overlaps between all pairs of ranges
+        for i, (key1, range1) in enumerate(ranges):
+            min1, max1 = range1
+            for key2, range2 in ranges[i + 1 :]:
+                min2, max2 = range2
+                # Check if ranges overlap
+                # Ranges overlap if: not (max1 <= min2 or max2 <= min1)
+                if not (max1 <= min2 or max2 <= min1):
+                    raise ValueError(
+                        f"Quantile signal ranges overlap: "
+                        f"signal {key1} range [{min1}, {max1}] overlaps with "
+                        f"signal {key2} range [{min2}, {max2}]. "
+                        f"Ranges must be non-overlapping."
+                    )
         return self
 
     class Config:

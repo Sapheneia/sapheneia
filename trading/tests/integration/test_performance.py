@@ -22,7 +22,7 @@ class TestPerformance:
         return {"Authorization": f"Bearer {settings.TRADING_API_KEY}"}
 
     def test_threshold_strategy_performance(self, auth_headers):
-        """Test threshold strategy response time <100ms."""
+        """Test threshold strategy response time <100ms and X-Process-Time header."""
         payload = {
             "strategy_type": "threshold",
             "forecast_price": 105.0,
@@ -43,6 +43,12 @@ class TestPerformance:
 
         assert response.status_code == 200
         assert elapsed_time < 100, f"Response time {elapsed_time:.2f}ms exceeds 100ms"
+
+        # Verify X-Process-Time header is present
+        assert "X-Process-Time" in response.headers
+        process_time = float(response.headers["X-Process-Time"])
+        assert process_time > 0, "Process time should be positive"
+        assert process_time < 200, "Process time should be reasonable (<200ms)"
 
     def test_return_strategy_performance(self, auth_headers):
         """Test return strategy response time <100ms."""
@@ -108,7 +114,7 @@ class TestPerformance:
         assert elapsed_time < 100, f"Response time {elapsed_time:.2f}ms exceeds 100ms"
 
     def test_strategies_endpoint_performance(self):
-        """Test strategies endpoint response time <50ms."""
+        """Test strategies endpoint response time <50ms and X-Process-Time header."""
         start_time = time.time()
         response = test_client.get("/trading/strategies")
         elapsed_time = (time.time() - start_time) * 1000
@@ -116,8 +122,14 @@ class TestPerformance:
         assert response.status_code == 200
         assert elapsed_time < 50, f"Response time {elapsed_time:.2f}ms exceeds 50ms"
 
+        # Verify X-Process-Time header is present
+        assert "X-Process-Time" in response.headers
+        process_time = float(response.headers["X-Process-Time"])
+        assert process_time > 0, "Process time should be positive"
+        assert process_time < 100, "Process time should be reasonable (<100ms)"
+
     def test_health_endpoint_performance(self):
-        """Test health endpoint response time <50ms."""
+        """Test health endpoint response time <50ms and X-Process-Time header."""
         start_time = time.time()
         response = test_client.get("/health")
         elapsed_time = (time.time() - start_time) * 1000
@@ -125,3 +137,47 @@ class TestPerformance:
         assert response.status_code == 200
         assert elapsed_time < 50, f"Response time {elapsed_time:.2f}ms exceeds 50ms"
 
+        # Verify X-Process-Time header is present
+        assert "X-Process-Time" in response.headers
+        process_time = float(response.headers["X-Process-Time"])
+        assert process_time > 0, "Process time should be positive"
+        assert process_time < 100, "Process time should be reasonable (<100ms)"
+
+    def test_process_time_header_format(self, auth_headers):
+        """Test that X-Process-Time header is properly formatted."""
+        response = test_client.get("/health")
+
+        assert response.status_code == 200
+        assert "X-Process-Time" in response.headers
+
+        process_time_str = response.headers["X-Process-Time"]
+        # Should be a float string with up to 3 decimal places
+        process_time = float(process_time_str)
+        assert process_time >= 0, "Process time should be non-negative"
+        assert (
+            "." in process_time_str or process_time == 0
+        ), "Should have decimal format"
+
+    def test_process_time_header_present_in_all_responses(self, auth_headers):
+        """Test that X-Process-Time header is present in all endpoint responses."""
+        endpoints = [
+            ("GET", "/health"),
+            ("GET", "/"),
+            ("GET", "/trading/strategies"),
+            ("GET", "/trading/status"),
+        ]
+
+        for method, path in endpoints:
+            if method == "GET":
+                response = test_client.get(path, headers=auth_headers)
+            else:
+                response = test_client.post(path, headers=auth_headers)
+
+            assert response.status_code in [200, 429], f"Failed for {method} {path}"
+            assert (
+                "X-Process-Time" in response.headers
+            ), f"Missing X-Process-Time for {path}"
+
+            # Verify it's a valid float
+            process_time = float(response.headers["X-Process-Time"])
+            assert process_time >= 0, f"Process time should be non-negative for {path}"

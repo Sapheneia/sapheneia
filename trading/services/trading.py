@@ -152,6 +152,15 @@ class TradingStrategy:
         available_cash = params["available_cash"]
         current_price = params["current_price"]
 
+        # Defensive check: Ensure current_price is positive before any division operations
+        # While Pydantic validates current_price > 0, this provides an extra layer of protection
+        # against floating-point precision issues or theoretical race conditions
+        if current_price <= 0:
+            raise InvalidParametersError(
+                message="current_price must be positive (got {})".format(current_price),
+                details={"parameter": "current_price", "value": current_price},
+            )
+
         # Check if already stopped (no capital left)
         if available_cash <= 0 and current_position <= 0:
             logger.warning("Strategy stopped: no capital remaining")
@@ -392,7 +401,7 @@ class TradingStrategy:
             low_history,
             close_history,
             params.get("which_history", "close"),
-            params.get("window_history", 20),
+            params.get("window_history", settings.DEFAULT_WINDOW_SIZE),
             min_history_length,
             current_price,
         )
@@ -1036,9 +1045,23 @@ class TradingStrategy:
 
         Returns:
             Numpy array of returns (one less element than input)
+
+        Raises:
+            InvalidParametersError: If timeseries contains zero or negative values
         """
         if len(timeseries) < 2:
             return np.array([])
+
+        # Defensive check: Ensure no zero or negative values before division
+        if np.any(timeseries[:-1] <= 0):
+            zero_indices = np.where(timeseries[:-1] <= 0)[0]
+            raise InvalidParametersError(
+                message=(
+                    f"timeseries contains zero or negative values at indices {zero_indices.tolist()}. "
+                    "All price values must be positive for return calculation."
+                ),
+                details={"parameter": "timeseries", "indices": zero_indices.tolist()},
+            )
 
         returns = np.diff(timeseries) / timeseries[:-1]
         return returns

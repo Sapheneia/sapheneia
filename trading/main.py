@@ -11,6 +11,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 import uvicorn
+import uuid
+import time
 
 # Import core settings (this also configures logging)
 from .core.config import settings, logger
@@ -83,6 +85,59 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 logger.info("GZip compression middleware configured (min_size=1000 bytes)")
 
 
+# --- Request ID Middleware ---
+# This middleware must run before other middleware to ensure request ID is available
+@app.middleware("http")
+async def add_request_id_middleware(request: Request, call_next):
+    """
+    Add unique request ID to each request for tracking and correlation.
+
+    Generates a UUID4 for each request and stores it in request.state for access
+    throughout the request lifecycle. Adds X-Request-ID header to all responses.
+    """
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+
+    logger.info(f"[{request_id}] Request started: {request.method} {request.url.path}")
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+
+    logger.info(f"[{request_id}] Request completed: {response.status_code}")
+    return response
+
+
+# --- Performance Monitoring Middleware ---
+@app.middleware("http")
+async def add_process_time_middleware(request: Request, call_next):
+    """
+    Track request processing time and add X-Process-Time header.
+
+    Measures the time taken to process each request and logs warnings
+    for requests exceeding the configured threshold.
+    """
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+
+    # Add process time header (formatted to 3 decimal places)
+    response.headers["X-Process-Time"] = f"{process_time:.3f}"
+
+    # Get request ID if available (from request ID middleware)
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    # Log slow requests as warnings
+    if process_time > settings.SLOW_REQUEST_THRESHOLD_MS:
+        logger.warning(
+            f"[{request_id}] Slow request: {request.method} {request.url.path} "
+            f"took {process_time:.3f}ms (threshold: {settings.SLOW_REQUEST_THRESHOLD_MS}ms)"
+        )
+    else:
+        logger.debug(f"[{request_id}] Request processed in {process_time:.3f}ms")
+
+    return response
+
+
 # --- Request Size Limit Middleware ---
 
 
@@ -103,8 +158,9 @@ async def request_size_limit_middleware(request: Request, call_next):
                 # Default max size: 10MB (can be configured in settings if needed)
                 max_size = 10 * 1024 * 1024  # 10MB
                 if content_length > max_size:
+                    request_id = getattr(request.state, "request_id", "unknown")
                     logger.warning(
-                        f"Request rejected: size {content_length} bytes exceeds maximum "
+                        f"[{request_id}] Request rejected: size {content_length} bytes exceeds maximum "
                         f"{max_size} bytes"
                     )
                     return JSONResponse(
@@ -120,8 +176,9 @@ async def request_size_limit_middleware(request: Request, call_next):
                     )
             except ValueError:
                 # Invalid content-length header
+                request_id = getattr(request.state, "request_id", "unknown")
                 logger.warning(
-                    f"Invalid content-length header: {request.headers.get('content-length')}"
+                    f"[{request_id}] Invalid content-length header: {request.headers.get('content-length')}"
                 )
 
     response = await call_next(request)
@@ -143,13 +200,25 @@ async def trading_exception_handler(
     Handle TradingException and convert to HTTP response.
 
     Provides consistent error format across all API endpoints.
+    Includes request ID for support ticket correlation.
     Note: Router-level handlers may also catch these, but this provides global fallback.
     """
-    logger.error(f"TradingException: {exc.error_code} - {exc.message}")
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.error(f"[{request_id}] TradingException: {exc.error_code} - {exc.message}")
     if exc.details:
-        logger.error(f"   Details: {exc.details}")
+        logger.error(f"[{request_id}]    Details: {exc.details}")
 
-    return JSONResponse(status_code=exc.suggested_status_code, content=exc.to_dict())
+    # Include request ID in error response details
+    error_dict = exc.to_dict()
+    if "details" not in error_dict:
+        error_dict["details"] = {}
+    error_dict["details"]["request_id"] = request_id
+
+    response = JSONResponse(status_code=exc.suggested_status_code, content=error_dict)
+    # Ensure request ID header is present
+    if hasattr(request.state, "request_id"):
+        response.headers["X-Request-ID"] = request.state.request_id
+    return response
 
 
 @app.exception_handler(Exception)
@@ -158,17 +227,26 @@ async def generic_exception_handler(request: Request, exc: Exception):
     Handle unexpected exceptions not caught by specific handlers.
 
     Logs full traceback for debugging while returning safe error message to user.
+    Includes request ID for support ticket correlation.
     """
-    logger.exception("Unexpected error occurred")
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.exception(f"[{request_id}] Unexpected error occurred")
 
-    return JSONResponse(
+    response = JSONResponse(
         status_code=500,
         content={
             "error": "INTERNAL_ERROR",
             "message": "An unexpected error occurred. Please contact support.",
-            "details": {"error_type": type(exc).__name__},
+            "details": {
+                "error_type": type(exc).__name__,
+                "request_id": request_id,
+            },
         },
     )
+    # Ensure request ID header is present
+    if hasattr(request.state, "request_id"):
+        response.headers["X-Request-ID"] = request.state.request_id
+    return response
 
 
 logger.info("Custom exception handlers configured")

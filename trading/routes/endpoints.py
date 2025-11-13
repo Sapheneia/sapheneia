@@ -124,8 +124,9 @@ async def execute_strategy(
     }
     ```
     """
+    request_id = getattr(request.state, "request_id", "unknown")
     logger.info(
-        f"📥 Received execute request: strategy_type={strategy_request.strategy_type}"
+        f"[{request_id}] 📥 Received execute request: strategy_type={strategy_request.strategy_type}"
     )
 
     try:
@@ -143,7 +144,7 @@ async def execute_strategy(
         response_obj = StrategyResponse(**result)
 
         logger.info(
-            f"✅ Strategy executed successfully: action={response_obj.action}, "
+            f"[{request_id}] ✅ Strategy executed successfully: action={response_obj.action}, "
             f"size={response_obj.size:.2f}, value=${response_obj.value:.2f}"
         )
 
@@ -156,12 +157,16 @@ async def execute_strategy(
         StrategyStoppedError,
     ) as e:
         # These are expected exceptions, already logged in TradingStrategy
-        logger.warning(f"Strategy execution failed: {e.error_code} - {e.message}")
+        request_id = getattr(request.state, "request_id", "unknown")
+        logger.warning(
+            f"[{request_id}] Strategy execution failed: {e.error_code} - {e.message}"
+        )
         raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict())
 
     except TradingException as e:
         # Other trading exceptions
-        logger.error(f"Trading exception: {e.error_code} - {e.message}")
+        request_id = getattr(request.state, "request_id", "unknown")
+        logger.error(f"[{request_id}] Trading exception: {e.error_code} - {e.message}")
         raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict())
 
     except Exception as e:
@@ -211,7 +216,8 @@ async def list_strategies(request: Request, response: Response) -> StrategyListR
     }
     ```
     """
-    logger.debug("Listing available strategies")
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.debug(f"[{request_id}] Listing available strategies")
 
     strategies = [
         StrategyInfo(
@@ -336,7 +342,8 @@ async def get_status(request: Request, response: Response) -> Dict[str, Any]:
     }
     ```
     """
-    logger.debug("Status check requested")
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.debug(f"[{request_id}] Status check requested")
 
     return {
         "status": "healthy",
