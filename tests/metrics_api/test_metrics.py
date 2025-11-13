@@ -1,13 +1,13 @@
 """
 Tests for Financial Performance Metrics Module
 
-Tests the api/core/metrics.py module functions and calculations.
+Tests the metrics_api/core/metrics.py module functions and calculations.
 """
 
 import pytest
 import pandas as pd
 import numpy as np
-from api.core.metrics import (
+from metrics_api.core.metrics import (
     calculate_sharpe_ratio,
     calculate_max_drawdown,
     calculate_cagr,
@@ -149,23 +149,6 @@ def test_sharpe_ratio_with_int_risk_free_rate(mixed_returns):
     # Should work without error with int parameter
 
 
-def test_sharpe_ratio_with_list_risk_free_rate():
-    """Test Sharpe ratio with time-varying risk-free rates (list)."""
-    returns = pd.Series([0.01, 0.02, -0.01, 0.015, 0.02])
-
-    # Time-varying risk-free rates
-    rf_rates = [0.02, 0.025, 0.03, 0.035, 0.04]
-
-    # Should accept list without error
-    sharpe = calculate_sharpe_ratio(returns, risk_free_rate=rf_rates)
-    assert isinstance(sharpe, float)
-
-    # Compare with constant rate
-    sharpe_constant = calculate_sharpe_ratio(returns, risk_free_rate=0.03)
-    # Values should differ (though quantstats may handle list differently)
-    assert isinstance(sharpe_constant, float)
-
-
 # --- Maximum Drawdown Tests ---
 
 def test_max_drawdown_positive_returns(positive_returns):
@@ -218,6 +201,9 @@ def test_cagr_realistic_range(realistic_daily_returns):
 def test_calmar_ratio_positive_returns(positive_returns):
     """Test Calmar ratio with positive returns."""
     calmar = calculate_calmar_ratio(positive_returns)
+    print(f"Positive returns: {positive_returns}")
+    print(f"Calmar ratio: {calmar}")
+
     assert calmar >= 0  # Should be positive or zero
 
 

@@ -34,6 +34,7 @@ PROJECT_NAME="sapheneia"
 PYTHON_VERSION="3.11"
 VENV_NAME=".venv"
 API_PORT=8000
+METRICS_API_PORT=8001
 UI_PORT=8080
 
 # Function to print colored output
@@ -243,6 +244,27 @@ run_api_venv() {
     fi
 }
 
+# Function to run Metrics API with venv
+run_metrics_api_venv() {
+    print_header "Starting Metrics API Server (Virtual Environment)"
+
+    kill_port $METRICS_API_PORT
+
+    print_status "Starting Metrics API on port $METRICS_API_PORT..."
+    uv run uvicorn metrics_api.main:app --host 0.0.0.0 --port $METRICS_API_PORT --reload &
+
+    sleep 3
+
+    if port_in_use $METRICS_API_PORT; then
+        print_status "✅ Metrics API server running at http://localhost:$METRICS_API_PORT"
+        print_status "   Health: http://localhost:$METRICS_API_PORT/health"
+        print_status "   Docs: http://localhost:$METRICS_API_PORT/docs"
+    else
+        print_error "Failed to start Metrics API server"
+        exit 1
+    fi
+}
+
 # Function to run UI with venv
 run_ui_venv() {
     print_header "Starting UI Server (Virtual Environment)"
@@ -276,16 +298,22 @@ cmd_run_venv() {
         api)
             run_api_venv
             ;;
+        metrics-api)
+            run_metrics_api_venv
+            ;;
         ui)
             run_ui_venv
             ;;
         all)
             run_api_venv
             echo
+            run_metrics_api_venv
+            echo
             run_ui_venv
             echo
             print_header "All Services Started"
-            print_status "API: http://localhost:$API_PORT"
+            print_status "Forecasting API: http://localhost:$API_PORT"
+            print_status "Metrics API: http://localhost:$METRICS_API_PORT"
             print_status "UI: http://localhost:$UI_PORT"
             echo
             print_status "Press Ctrl+C to stop (servers run in background)"
@@ -293,7 +321,7 @@ cmd_run_venv() {
             ;;
         *)
             print_error "Unknown service: $service"
-            print_error "Usage: ./setup.sh run-venv [api|ui|all]"
+            print_error "Usage: ./setup.sh run-venv [api|metrics-api|ui|all]"
             exit 1
             ;;
     esac
@@ -332,6 +360,12 @@ cmd_run_docker() {
             sleep 3
             print_status "✅ API running at http://localhost:$API_PORT"
             ;;
+        metrics-api)
+            print_status "Building and starting Metrics API container..."
+            $COMPOSE_CMD up -d metrics-api
+            sleep 3
+            print_status "✅ Metrics API running at http://localhost:$METRICS_API_PORT"
+            ;;
         ui)
             print_status "Building and starting UI container..."
             $COMPOSE_CMD up -d ui
@@ -342,7 +376,8 @@ cmd_run_docker() {
             print_status "Building and starting all containers..."
             $COMPOSE_CMD up -d
             sleep 5
-            print_status "✅ API running at http://localhost:$API_PORT"
+            print_status "✅ Forecasting API running at http://localhost:$API_PORT"
+            print_status "✅ Metrics API running at http://localhost:$METRICS_API_PORT"
             print_status "✅ UI running at http://localhost:$UI_PORT"
             echo
             print_status "View logs: $COMPOSE_CMD logs -f"
@@ -350,7 +385,7 @@ cmd_run_docker() {
             ;;
         *)
             print_error "Unknown service: $service"
-            print_error "Usage: ./setup.sh run-docker [api|ui|all]"
+            print_error "Usage: ./setup.sh run-docker [api|metrics-api|ui|all]"
             exit 1
             ;;
     esac
@@ -377,14 +412,15 @@ cmd_stop() {
     if command_exists docker; then
         print_status "Stopping Docker containers..."
         # Stop and remove containers by name
-        docker stop sapheneia-api sapheneia-ui 2>/dev/null || true
-        docker rm sapheneia-api sapheneia-ui 2>/dev/null || true
+        docker stop sapheneia-api sapheneia-metrics-api sapheneia-ui 2>/dev/null || true
+        docker rm sapheneia-api sapheneia-metrics-api sapheneia-ui 2>/dev/null || true
         print_status "Docker containers stopped and removed"
     fi
 
     print_status "Stopping venv ports..."
     # Stop venv services
     kill_port $API_PORT
+    kill_port $METRICS_API_PORT
     kill_port $UI_PORT
 
     print_status "✅ All services stopped"
@@ -399,26 +435,28 @@ ${GREEN}USAGE:${NC}
     ./setup.sh COMMAND [OPTIONS]
 
 ${GREEN}COMMANDS:${NC}
-    init                      Initialize environment and install dependencies (including tests)
-    run-venv [api|ui|all]    Run services with virtual environment
-    run-docker [api|ui|all]  Run services with Docker
-    test                      Run test suite with pytest
-    stop                      Stop all running services
-    --help, -h               Show this help message
+    init                                 Initialize environment and install dependencies (including tests)
+    run-venv [api|metrics-api|ui|all]   Run services with virtual environment
+    run-docker [api|metrics-api|ui|all] Run services with Docker
+    test                                  Run test suite with pytest
+    stop                                  Stop all running services
+    --help, -h                           Show this help message
 
 ${GREEN}EXAMPLES:${NC}
     ${BLUE}# Initialize environment${NC}
     ./setup.sh init
 
     ${BLUE}# Run with virtual environment${NC}
-    ./setup.sh run-venv api      # Run only API server
-    ./setup.sh run-venv ui       # Run only UI server
-    ./setup.sh run-venv all      # Run both API and UI
+    ./setup.sh run-venv api          # Run only Forecasting API server
+    ./setup.sh run-venv metrics-api  # Run only Metrics API server
+    ./setup.sh run-venv ui           # Run only UI server
+    ./setup.sh run-venv all          # Run all services (API + Metrics API + UI)
 
     ${BLUE}# Run with Docker${NC}
-    ./setup.sh run-docker api    # Run only API container
-    ./setup.sh run-docker ui     # Run only UI container
-    ./setup.sh run-docker all    # Run both with Docker Compose
+    ./setup.sh run-docker api          # Run only Forecasting API container
+    ./setup.sh run-docker metrics-api  # Run only Metrics API container
+    ./setup.sh run-docker ui           # Run only UI container
+    ./setup.sh run-docker all          # Run all with Docker Compose
 
     ${BLUE}# Run tests${NC}
     ./setup.sh test              # Run test suite

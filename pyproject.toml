@@ -5,48 +5,53 @@ description = "Scalable FastAPI application for time series forecasting with Tim
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    # Core ML Dependencies
-    "jax>=0.7.0",
-    "jaxlib>=0.7.0",
-    "timesfm>=1.3.0",
+    # Shared Dependencies (used across all services)
     "numpy>=1.24.0",
     "pandas>=2.0.0",
-    "scikit-learn>=1.3.0",
-
-    # Visualization
-    "matplotlib>=3.10.5",
-    "seaborn>=0.13.2",
-    "plotly>=5.18.0",
-
-    # API Framework
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-dotenv>=1.0.0",
+    "httpx>=0.25.0",  # For inter-service communication
+    "python-dateutil>=2.8.0",
+]
+
+[project.optional-dependencies]
+# Forecasting API dependencies
+forecasting = [
+    "jax>=0.7.0",
+    "jaxlib>=0.7.0",
+    "timesfm>=1.3.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.10.5",
+    "seaborn>=0.13.2",
+    "plotly>=5.18.0",
     "python-multipart>=0.0.6",
     "requests>=2.31.0",
     "slowapi>=0.1.9",
+]
 
-    # UI Framework (Flask)
+# Metrics API dependencies
+metrics = [
+    "quantstats>=0.0.62",
+]
+
+# UI dependencies
+ui = [
     "flask>=3.0.0",
     "werkzeug>=3.0.0",
     "python-magic>=0.4.27",
+]
 
-    # Jupyter Notebook Support
+# Jupyter Notebook Support
+notebooks = [
     "jupyter>=1.1.1",
     "notebook>=7.0.0",
     "ipykernel>=6.25.0",
     "ipywidgets>=8.1.0",
-
-    # Utilities
-    "python-dateutil>=2.8.0",
-
-    # Financial Metrics
-    "quantstats>=0.0.62",
 ]
 
-[project.optional-dependencies]
 # MLOps dependencies (for Aleutian Local integration)
 mlops = [
     "mlflow>=2.10.0",
@@ -58,22 +63,21 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
-    "httpx>=0.25.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.5.0",
 ]
 
-# All optional dependencies
+# All service dependencies
 all = [
-    "sapheneia[mlops,dev]",
+    "sapheneia[forecasting,metrics,ui,notebooks,mlops,dev]",
 ]
 
 [tool.setuptools]
-# Use find to discover all packages under api and ui
+# Use find to discover all packages under api, metrics-api, and ui
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["api*", "ui*"]
+include = ["api*", "metrics_api*", "ui*"]
 exclude = ["*.tests", "*.tests.*", "tests.*", "tests"]
 
 # Pytest configuration (Phase 6: Testing Infrastructure)
@@ -104,7 +108,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["api"]
+source = ["api", "metrics_api"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
