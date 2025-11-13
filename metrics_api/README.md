@@ -422,8 +422,6 @@ docker-compose ps
 
 ## Related Documentation
 
-- **Technical Documentation**: [.claude/METRICS_DOCUMENTATION.md](../.claude/METRICS_DOCUMENTATION.md)
-- **PR Description**: [.claude/PR_METRICS.md](../.claude/PR_METRICS.md)
 - **Main README**: [../README.md](../README.md)
 
 ## Support
