@@ -287,8 +287,7 @@ def calculate_performance_metrics(
 
     Args:
         returns: Return series (daily, weekly, or monthly returns)
-        risk_free_rate: Annual risk-free rate for Sharpe calculation (default: 0). Can be:
-            - float: Single rate (e.g., 0.04 for 4%)
+        risk_free_rate: Annual risk-free rate for Sharpe calculation (default: 0.0, e.g., 0.04 for 4%)
         periods_per_year: Trading periods per year (252=daily, 52=weekly, 12=monthly)
         include_interpretation: Whether to include interpretation of metric values
 
@@ -332,7 +331,7 @@ def calculate_performance_metrics(
         "calmar_ratio": calmar,
         "win_rate": win_rate,
         "metadata": {
-            "risk_free_rate": risk_free_rate,
+            "risk_free_rate": float(risk_free_rate),
             "periods_per_year": periods_per_year,
             "total_periods": len(returns),
             "profitable_periods": int((returns > 0).sum()),

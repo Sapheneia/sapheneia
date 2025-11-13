@@ -5,7 +5,7 @@ REST API endpoints for financial performance metrics calculation.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Union, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from metrics_api.core import metrics
 
 router = APIRouter(prefix="/metrics", tags=["Metrics"])
@@ -16,9 +16,9 @@ router = APIRouter(prefix="/metrics", tags=["Metrics"])
 class PerformanceMetricsRequest(BaseModel):
     """Request model for performance metrics calculation."""
     returns: List[float] = Field(..., description="Return series (e.g., daily returns)")
-    risk_free_rate: Union[int, float, List[float]] = Field(
+    risk_free_rate: float = Field(
         default=0.0,
-        description="Annual risk-free rate (single value or time-series)"
+        description="Annual risk-free rate (e.g., 0.04 for 4%)"
     )
     periods_per_year: int = Field(
         default=252,
@@ -53,11 +53,36 @@ class PerformanceMetricsResponse(BaseModel):
     interpretation: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any]
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "sharpe_ratio": 1.23,
+                "max_drawdown": -0.15,
+                "cagr": 0.25,
+                "calmar_ratio": 1.67,
+                "win_rate": 0.6,
+                "interpretation": {
+                    "sharpe_ratio": "Good",
+                    "calmar_ratio": "Good",
+                    "win_rate": "High win rate",
+                    "overall_assessment": "Good: Solid performance with acceptable risk profile"
+                },
+                "metadata": {
+                    "risk_free_rate": 0.0,
+                    "periods_per_year": 252,
+                    "total_periods": 5,
+                    "profitable_periods": 3,
+                    "losing_periods": 1
+                }
+            }
+        }
+    }
+
 
 class SharpeRatioRequest(BaseModel):
     """Request model for Sharpe ratio calculation."""
     returns: List[float]
-    risk_free_rate: Union[int, float, List[float]] = 0.0
+    risk_free_rate: float = 0.0
     periods_per_year: int = 252
 
 
@@ -69,7 +94,7 @@ class MetricRequest(BaseModel):
 
 # --- Endpoints ---
 
-@router.post("/performance", response_model=PerformanceMetricsResponse)
+@router.post("/performance", response_model=PerformanceMetricsResponse, response_model_exclude_none=True)
 async def calculate_performance_metrics_endpoint(request: PerformanceMetricsRequest):
     """
     Calculate all performance metrics for a return series.
