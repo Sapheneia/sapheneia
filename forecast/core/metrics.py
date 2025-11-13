@@ -127,7 +127,7 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
 
 def calculate_sharpe_ratio(
     returns: Union[pd.Series, np.ndarray, List],
-    risk_free_rate: Union[int, float, List[float]] = 0,
+    risk_free_rate: float = 0.0,
     periods_per_year: int = 252
 ) -> float:
     """
@@ -137,10 +137,8 @@ def calculate_sharpe_ratio(
 
     Args:
         returns: Return series (e.g., daily returns)
-        risk_free_rate: Annual risk-free rate (default: 0). Can be:
-            - int: Single rate applied to all periods (e.g., 0 for 0%)
+        risk_free_rate: Annual risk-free rate (default: 0). 
             - float: Single rate (e.g., 0.04 for 4%)
-            - List[float]: Time-varying risk-free rates matching returns length
         periods_per_year: Number of periods per year (252 for daily, 52 for weekly, 12 for monthly)
 
     Returns:
@@ -277,7 +275,7 @@ def calculate_win_rate(returns: Union[pd.Series, np.ndarray, List]) -> float:
 
 def calculate_performance_metrics(
     returns: Union[pd.Series, np.ndarray, List],
-    risk_free_rate: Union[int, float, List[float]] = 0,
+    risk_free_rate: float = 0.0,
     periods_per_year: int = 252,
     include_interpretation: bool = True
 ) -> Dict[str, Any]:
@@ -290,9 +288,7 @@ def calculate_performance_metrics(
     Args:
         returns: Return series (daily, weekly, or monthly returns)
         risk_free_rate: Annual risk-free rate for Sharpe calculation (default: 0). Can be:
-            - int: Single rate (e.g., 0 for 0%)
             - float: Single rate (e.g., 0.04 for 4%)
-            - List[float]: Time-varying risk-free rates matching returns length
         periods_per_year: Trading periods per year (252=daily, 52=weekly, 12=monthly)
         include_interpretation: Whether to include interpretation of metric values
 
