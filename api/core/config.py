@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     TIMESFM20_DEFAULT_CONTEXT_LEN: int = 64  # Changed from 100 to 64 as requested
     TIMESFM20_DEFAULT_HORIZON_LEN: int = 24
     TIMESFM20_DEFAULT_CHECKPOINT: Optional[str] = "google/timesfm-2.0-500m-pytorch"  # HF checkpoint
-    TIMESFM20_DEFAULT_LOCAL_PATH: Optional[str] = None  # Relative path in api/models/timesfm20/local/
+    TIMESFM20_DEFAULT_LOCAL_PATH: Optional[str] = None  # Relative path in forecast/models/timesfm20/local/
     TIMESFM20_DEFAULT_MLFLOW_NAME: Optional[str] = "timesfm20-production"  # Example MLflow model name
     TIMESFM20_DEFAULT_MLFLOW_STAGE: str = "Production"
 

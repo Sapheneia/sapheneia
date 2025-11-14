@@ -32,7 +32,7 @@ class TradingSettings(BaseSettings):
     )
     LOG_LEVEL: str = "INFO"
     TRADING_API_PORT: int = (
-        9000  # Default port for Trading API (separate from api/ on 8000+)
+        9000  # Default port for Trading API (separate from forecast/ on 8000+)
     )
     TRADING_API_HOST: str = "0.0.0.0"  # Listen on all interfaces, crucial for Docker
     ENVIRONMENT: str = "development"  # Can be: development, staging, production

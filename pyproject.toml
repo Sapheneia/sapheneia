@@ -67,15 +67,15 @@ all = [
 ]
 
 [tool.setuptools]
-# Use find to discover all packages under api and ui
+# Use find to discover all packages under forecast and ui
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["api*", "ui*"]
+include = ["forecast*", "ui*"]
 exclude = ["*.tests", "*.tests.*", "tests.*", "tests"]
 
 # Pytest configuration (Phase 6: Testing Infrastructure)
 [tool.pytest.ini_options]
-testpaths = ["tests", "api/models", "trading/tests"]
+testpaths = ["tests", "forecast/models", "trading/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -83,7 +83,7 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov=api",
+    "--cov=forecast",
     "--cov=trading",
     "--cov-report=html",
     "--cov-report=term",
@@ -102,7 +102,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["api", "trading"]
+source = ["forecast", "trading"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

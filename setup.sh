@@ -220,7 +220,7 @@ cmd_init() {
             setup_env_file
 
             # Create necessary directories
-            mkdir -p api/models/timesfm20/local
+            mkdir -p forecast/models/timesfm20/local
             mkdir -p data/uploads
             mkdir -p data/results
             mkdir -p logs
@@ -274,23 +274,23 @@ cmd_init() {
     esac
 }
 
-# Function to run API with venv
+# Function to run Forecast API with venv
 run_api_venv() {
-    print_header "Starting API Server (Virtual Environment)"
+    print_header "Starting Forecast API Server (Virtual Environment)"
 
     kill_port $API_PORT
 
-    print_status "Starting API on port $API_PORT..."
-    uv run uvicorn api.main:app --host 0.0.0.0 --port $API_PORT --reload &
+    print_status "Starting Forecast API on port $API_PORT..."
+    uv run uvicorn forecast.main:app --host 0.0.0.0 --port $API_PORT --reload &
 
     sleep 3
 
     if port_in_use $API_PORT; then
-        print_status "✅ API server running at http://localhost:$API_PORT"
+        print_status "✅ Forecast API server running at http://localhost:$API_PORT"
         print_status "   Health: http://localhost:$API_PORT/health"
         print_status "   Docs: http://localhost:$API_PORT/docs"
     else
-        print_error "Failed to start API server"
+        print_error "Failed to start Forecast API server"
         exit 1
     fi
 }
@@ -361,7 +361,7 @@ cmd_run_venv() {
                     run_ui_venv
                     echo
                     print_header "All Forecast Services Started"
-                    print_status "API: http://localhost:$API_PORT"
+                    print_status "Forecast API: http://localhost:$API_PORT"
                     print_status "UI: http://localhost:$UI_PORT"
                     echo
                     print_status "Press Ctrl+C to stop (servers run in background)"
@@ -426,10 +426,10 @@ cmd_run_docker() {
         forecast)
             case $service in
                 api)
-                    print_status "Building and starting API container..."
-                    $COMPOSE_CMD up -d api
+                    print_status "Building and starting Forecast API container..."
+                    $COMPOSE_CMD up -d forecast
                     sleep 3
-                    print_status "✅ API running at http://localhost:$API_PORT"
+                    print_status "✅ Forecast API running at http://localhost:$API_PORT"
                     ;;
                 ui)
                     print_status "Building and starting UI container..."
@@ -439,9 +439,9 @@ cmd_run_docker() {
                     ;;
                 all)
                     print_status "Building and starting forecast containers..."
-                    $COMPOSE_CMD up -d api ui
+                    $COMPOSE_CMD up -d forecast ui
                     sleep 5
-                    print_status "✅ API running at http://localhost:$API_PORT"
+                    print_status "✅ Forecast API running at http://localhost:$API_PORT"
                     print_status "✅ UI running at http://localhost:$UI_PORT"
                     echo
                     print_status "View logs: $COMPOSE_CMD logs -f"
@@ -511,8 +511,8 @@ cmd_stop() {
             # Stop Docker services
             if command_exists docker; then
                 print_status "Stopping Docker containers..."
-                docker stop sapheneia-api sapheneia-ui 2>/dev/null || true
-                docker rm sapheneia-api sapheneia-ui 2>/dev/null || true
+                docker stop sapheneia-forecast sapheneia-ui 2>/dev/null || true
+                docker rm sapheneia-forecast sapheneia-ui 2>/dev/null || true
                 print_status "Docker containers stopped and removed"
             fi
 
@@ -579,7 +579,7 @@ ${GREEN}EXAMPLES:${NC}
     ./setup.sh stop forecast
 
 ${GREEN}PORTS:${NC}
-    - API Server: $API_PORT
+    - Forecast API Server: $API_PORT
     - UI Server: $UI_PORT
 
 ${GREEN}ENVIRONMENT:${NC}

@@ -425,7 +425,7 @@ import requests
 
 # Get forecast from forecast API
 forecast_response = requests.post(
-    "http://localhost:8000/api/v1/timesfm20/inference",
+    "http://localhost:8000/forecast/v1/timesfm20/inference",
     headers={"Authorization": f"Bearer {FORECAST_API_KEY}"},
     json=forecast_params
 )
@@ -469,7 +469,7 @@ class TradingOrchestrator:
     def get_forecast(self, data_source):
         """Get price forecast from forecast API."""
         response = requests.post(
-            f"{self.forecast_api_url}/api/v1/timesfm20/inference",
+            f"{self.forecast_api_url}/forecast/v1/timesfm20/inference",
             headers={"Authorization": f"Bearer {self.forecast_key}"},
             json={"data_source_url_or_path": data_source, ...}
         )

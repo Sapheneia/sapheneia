@@ -144,7 +144,7 @@ Sapheneia includes two independent applications:
 
 ```
 sapheneia/
-├── api/                                    # FastAPI Backend
+├── forecast/                               # FastAPI Backend (forecasting models)
 │   ├── main.py                             # Application entry point
 │   ├── core/                               # Shared infrastructure
 │   │   ├── config.py                       # Settings & environment vars
@@ -191,7 +191,7 @@ sapheneia/
 ├── notebooks/                              # Jupyter notebooks
 ├── logs/                                   # Application logs
 │
-├── Dockerfile.api                          # API Docker (multi-model)
+├── Dockerfile.forecast                     # Forecast API Docker (multi-model)
 ├── Dockerfile.ui                           # UI Docker
 ├── Dockerfile.trading                      # Trading API Docker (NEW)
 ├── docker-compose.yml                      # Service orchestration
@@ -217,7 +217,7 @@ The architecture supports running multiple forecasting models simultaneously:
 
 1. **Single API Gateway** (Default)
    - All models accessible via http://localhost:8000
-   - Endpoints: `/api/v1/timesfm20/*`, `/api/v1/chronos/*`, etc.
+   - Endpoints: `/forecast/v1/timesfm20/*`, `/forecast/v1/chronos/*`, etc.
    - Easiest for orchestrators and load balancers
 
 2. **Separate Model Services** (Optional)
@@ -238,7 +238,7 @@ The architecture supports running multiple forecasting models simultaneously:
 
 ### TimesFM-2.0 Model
 
-**Base Path**: `/api/v1/timesfm20/`
+**Base Path**: `/forecast/v1/timesfm20/`
 
 All endpoints require API authentication:
 ```bash
@@ -250,7 +250,7 @@ Authorization: Bearer YOUR_API_SECRET_KEY
 Load TimesFM model into memory:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/timesfm20/initialization \
+curl -X POST http://localhost:8000/forecast/v1/timesfm20/initialization \
   -H "Authorization: Bearer your_secret_key_change_me_in_production" \
   -H "Content-Type: application/json" \
   -d '{
@@ -278,7 +278,7 @@ curl -X POST http://localhost:8000/api/v1/timesfm20/initialization \
 #### 2. Check Model Status
 
 ```bash
-curl http://localhost:8000/api/v1/timesfm20/status \
+curl http://localhost:8000/forecast/v1/timesfm20/status \
   -H "Authorization: Bearer your_secret_key_change_me_in_production"
 ```
 
@@ -297,7 +297,7 @@ curl http://localhost:8000/api/v1/timesfm20/status \
 - **Docker mode**: Use absolute paths like `/app/data/uploads/file.csv`
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/timesfm20/inference \
+curl -X POST http://localhost:8000/forecast/v1/timesfm20/inference \
   -H "Authorization: Bearer your_secret_key_change_me_in_production" \
   -H "Content-Type: application/json" \
   -d '{
@@ -358,7 +358,7 @@ curl -X POST http://localhost:8000/api/v1/timesfm20/inference \
 Unload model from memory:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/timesfm20/shutdown \
+curl -X POST http://localhost:8000/forecast/v1/timesfm20/shutdown \
   -H "Authorization: Bearer your_secret_key_change_me_in_production"
 ```
 
@@ -627,7 +627,7 @@ To run models as separate services, edit `docker-compose.yml`:
 api-timesfm20:
   build:
     context: .
-    dockerfile: Dockerfile.api
+    dockerfile: Dockerfile.forecast
     args:
       MODEL_NAME: timesfm20
       MODEL_PORT: 8001
@@ -737,7 +737,7 @@ Set `API_SECRET_KEY` in `.env` file.
 1. **Change the default API key** immediately after setup
 2. **Use environment variables** for all secrets
 3. **Use HTTPS** in production (configure reverse proxy)
-4. **Restrict CORS** to specific origins (edit `api/main.py`)
+4. **Restrict CORS** to specific origins (edit `forecast/main.py`)
 5. **Implement rate limiting** for production
 6. **Keep dependencies updated** regularly
 7. **Never commit `.env`** to version control
@@ -772,7 +772,7 @@ print(response.json())
 
 # Initialize TimesFM
 response = requests.post(
-    f"{API_URL}/api/v1/timesfm20/initialization",
+    f"{API_URL}/forecast/v1/timesfm20/initialization",
     headers=headers,
     json={
         "backend": "cpu",
@@ -784,7 +784,7 @@ print(response.json())
 
 # Run inference
 response = requests.post(
-    f"{API_URL}/api/v1/timesfm20/inference",
+    f"{API_URL}/forecast/v1/timesfm20/inference",
     headers=headers,
     json={
         "data_source_url_or_path": "data/uploads/sample.csv",
@@ -802,7 +802,7 @@ print(response.json())
 
 ### Jupyter Notebooks
 
-Note: The `src/` directory has been migrated to `api/` and `ui/` modules. For existing notebooks, please update imports to use the new module structure.
+Note: The `src/` directory has been migrated to `forecast/` and `ui/` modules. For existing notebooks, please update imports to use the new module structure.
 
 ```bash
 # Activate environment
@@ -819,9 +819,9 @@ uv run jupyter notebook
 Update your notebooks to use the new module structure:
 
 ```python
-from api.core.model_wrapper import TimesFMModel
-from api.core.data_processing import DataProcessor
-from api.core.forecasting import Forecaster
+from forecast.core.model_wrapper import TimesFMModel
+from forecast.core.data_processing import DataProcessor
+from forecast.core.forecasting import Forecaster
 from ui.visualization import Visualizer
 
 # Updated code with proper module imports
@@ -835,25 +835,25 @@ from ui.visualization import Visualizer
 
 1. **Create model directory:**
 ```bash
-mkdir -p api/models/chronos/{routes,schemas,services,local}
+mkdir -p forecast/models/chronos/{routes,schemas,services,local}
 ```
 
 2. **Implement model code:**
-- Copy structure from `api/models/timesfm20/`
+- Copy structure from `forecast/models/timesfm20/`
 - Implement Chronos-specific logic
 - Update imports and schemas
 
 3. **Register in model registry:**
 ```python
-# api/models/__init__.py
+# forecast/models/__init__.py
 MODEL_REGISTRY = {
     # ... existing models ...
     "chronos": {
         "name": "Chronos",
         "version": "1.0",
         "description": "Amazon Chronos forecasting model",
-        "module": "api.models.chronos",
-        "router_path": "api.models.chronos.routes.endpoints",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
         "default_port": 8002,
         "status": "active"
     }
@@ -863,12 +863,12 @@ MODEL_REGISTRY = {
 4. **Import router in main.py:**
 ```python
 from .models.chronos.routes import endpoints as chronos_endpoints
-app.include_router(chronos_endpoints.router, prefix="/api/v1")
+app.include_router(chronos_endpoints.router, prefix="/forecast/v1")
 ```
 
 5. **Update Dockerfile (optional):**
 ```dockerfile
-# In Dockerfile.api
+# In Dockerfile.forecast
 RUN if [ "$MODEL_NAME" = "chronos" ] || [ "$MODEL_NAME" = "all" ]; then \
         uv pip install --system chronos-forecasting; \
     fi
