@@ -4,7 +4,7 @@ A scalable, multi-model time series forecasting platform built on FastAPI. Curre
 
 **📋 [Changelog](CHANGELOG.md)** | **🏗️ [Trading Architecture](trading/documentation/ARCHITECTURE.md)**
 
-## 🎯 What's New in v2.0
+## 🎯 What's New in v1.0
 
 - **Multi-Model Architecture**: Extensible framework supporting multiple forecasting models
 - **Model Registry**: Centralized catalog of available models with metadata
