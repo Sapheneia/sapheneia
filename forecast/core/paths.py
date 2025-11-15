@@ -23,7 +23,7 @@ IS_DOCKER = os.path.exists('/app')
 if IS_DOCKER:
     PROJECT_ROOT = Path('/app')
 else:
-    # In venv: go up from api/core/ to project root
+    # In venv: go up from forecast/core/ to project root
     PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # Base directories (consistent across environments)

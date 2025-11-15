@@ -41,7 +41,7 @@ RUN which uv && uv --version
 
 # Copy project files
 COPY pyproject.toml ./
-COPY api/ ./api/
+COPY forecast/ ./forecast/
 COPY .env .env
 
 # Install base dependencies
@@ -60,7 +60,7 @@ RUN if [ "$MODEL_NAME" = "timesfm20" ] || [ "$MODEL_NAME" = "all" ]; then \
 
 # Create necessary directories for all models
 RUN mkdir -p \
-    api/models/timesfm20/local \
+    forecast/models/timesfm20/local \
     data/uploads \
     logs
 
@@ -72,4 +72,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:${MODEL_PORT}/health || exit 1
 
 # Run API server on specified port
-CMD uvicorn api.main:app --host 0.0.0.0 --port ${MODEL_PORT}
+CMD uvicorn forecast.main:app --host 0.0.0.0 --port ${MODEL_PORT}

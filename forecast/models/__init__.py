@@ -2,7 +2,7 @@
 Sapheneia Model Registry
 
 Central registry for all forecasting models available in the API.
-Each model is a separate module under api/models/ with its own routes and services.
+Each model is a separate module under forecast/models/ with its own routes and services.
 """
 
 from typing import Dict, Any, List
@@ -13,9 +13,9 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "name": "TimesFM 2.0",
         "version": "2.0.500m",
         "description": "Google's TimesFM 2.0 - 500M parameter foundation model for time series forecasting",
-        "module": "api.models.timesfm20",
-        "router_path": "api.models.timesfm20.routes.endpoints",
-        "service_path": "api.models.timesfm20.services.model",
+        "module": "forecast.models.timesfm20",
+        "router_path": "forecast.models.timesfm20.routes.endpoints",
+        "service_path": "forecast.models.timesfm20.services.model",
         "default_port": 8001,
         "status": "active"
     },
@@ -24,9 +24,9 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
     #     "name": "Chronos",
     #     "version": "1.0",
     #     "description": "Amazon's Chronos - Transformer-based forecasting model",
-    #     "module": "api.models.chronos",
-    #     "router_path": "api.models.chronos.routes.endpoints",
-    #     "service_path": "api.models.chronos.services.model",
+    #     "module": "forecast.models.chronos",
+    #     "router_path": "forecast.models.chronos.routes.endpoints",
+    #     "service_path": "forecast.models.chronos.services.model",
     #     "default_port": 8002,
     #     "status": "planned"
     # },

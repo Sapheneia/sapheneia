@@ -12,7 +12,7 @@ import tempfile
 import shutil
 
 # Import the FastAPI app
-from api.main import app
+from forecast.main import app
 
 
 @pytest.fixture

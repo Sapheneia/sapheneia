@@ -50,7 +50,7 @@ class ModelInitInput(BaseModel):
 
     local_model_path: Optional[str] = Field(
         default=None,
-        description="Relative path to local model file (within api/timesfm20/local/)",
+        description="Relative path to local model file (within forecast/models/timesfm20/local/)",
         examples=["model.ckpt", "checkpoints/timesfm_v2.pt"]
     )
 

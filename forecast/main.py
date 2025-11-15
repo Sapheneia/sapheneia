@@ -255,15 +255,15 @@ async def shutdown_event():
 
 # --- Include Model Routers ---
 
-# TimesFM-2.0 routes under /api/v1/timesfm20
+# TimesFM-2.0 routes under /forecast/v1/timesfm20
 app.include_router(
     timesfm20_endpoints.router,
-    prefix="/api/v1"
+    prefix="/forecast/v1"
 )
-logger.info(f"✅ Included TimesFM-2.0 router at: /api/v1{timesfm20_endpoints.router.prefix}")
+logger.info(f"✅ Included TimesFM-2.0 router at: /forecast/v1{timesfm20_endpoints.router.prefix}")
 
 # Future models can be added here:
-# app.include_router(flowstate91m_endpoints.router, prefix="/api/v1")
+# app.include_router(flowstate91m_endpoints.router, prefix="/forecast/v1")
 
 
 # --- Root Endpoints ---
@@ -366,14 +366,14 @@ async def list_models(request: Request, response: Response):
 if __name__ == "__main__":
     logger.warning("=" * 80)
     logger.warning("Running Uvicorn server directly (DEVELOPMENT MODE)")
-    logger.warning("For production, use: uvicorn api.main:app --host 0.0.0.0 --port 8000")
+    logger.warning("For production, use: uvicorn forecast.main:app --host 0.0.0.0 --port 8000")
     logger.warning("=" * 80)
 
     uvicorn.run(
-        "api.main:app",
+        "forecast.main:app",
         host=settings.API_HOST,
         port=settings.API_PORT,
         log_level=settings.LOG_LEVEL.lower(),
         reload=True,  # Enable auto-reload for development
-        reload_dirs=["api"]  # Watch api directory
+        reload_dirs=["forecast"]  # Watch forecast directory
     )

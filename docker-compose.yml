@@ -1,15 +1,15 @@
 services:
-  # FastAPI Backend - Main API (serves all models)
+  # FastAPI Backend - Forecast API (serves all models)
   # NOTE: Uses module-level state - MUST run with single worker (UVICORN_WORKERS=1)
   # For parallel processing, implement Redis state backend (see REMEDIATION_PLAN.md Phase 4)
-  api:
+  forecast:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: Dockerfile.forecast
       args:
         MODEL_NAME: all
         MODEL_PORT: 8000
-    container_name: sapheneia-api
+    container_name: sapheneia-forecast
     ports:
       - "${API_PORT:-8000}:8000"
     env_file:
@@ -20,10 +20,10 @@ services:
       - MODEL_NAME=all
       - PYTHONPATH=/app
     volumes:
-      - ./api:/app/api
+      - ./forecast:/app/forecast
       - ./data:/app/data
       - ./logs:/app/logs
-      - api_models_timesfm20:/app/api/models/timesfm20/local
+      - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
     networks:
       - sapheneia-network
     restart: unless-stopped
@@ -76,7 +76,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - UI_API_BASE_URL=http://api:8000
+      - UI_API_BASE_URL=http://forecast:8000
       - UI_PORT=8080
       - PYTHONPATH=/app
     volumes:
@@ -85,7 +85,7 @@ services:
       - ./logs:/app/logs
       - ui_results:/app/ui/results
     depends_on:
-      api:
+      forecast:
         condition: service_healthy
     networks:
       - sapheneia-network
@@ -132,7 +132,7 @@ networks:
     driver: bridge
 
 volumes:
-  api_models_timesfm20:
+  forecast_models_timesfm20:
     driver: local
   ui_results:
     driver: local

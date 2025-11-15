@@ -57,14 +57,14 @@ class TestAuthentication:
     
     def test_model_status_requires_auth(self, client):
         """Test that status endpoint requires authentication."""
-        response = client.get("/api/v1/timesfm20/status")
+        response = client.get("/forecast/v1/timesfm20/status")
         
         # Should return 403 Forbidden without auth
         assert response.status_code in [403, 401]
     
     def test_model_status_with_auth(self, client, auth_headers):
         """Test status endpoint with authentication."""
-        response = client.get("/api/v1/timesfm20/status", headers=auth_headers)
+        response = client.get("/forecast/v1/timesfm20/status", headers=auth_headers)
         
         # Should succeed with proper auth
         assert response.status_code == 200
@@ -79,7 +79,7 @@ class TestAuthentication:
             "horizon_len": 24
         }
         response = client.post(
-            "/api/v1/timesfm20/initialization",
+            "/forecast/v1/timesfm20/initialization",
             json=payload
         )
         
@@ -94,7 +94,7 @@ class TestAuthentication:
             "parameters": {}
         }
         response = client.post(
-            "/api/v1/timesfm20/inference",
+            "/forecast/v1/timesfm20/inference",
             json=payload
         )
         
@@ -107,7 +107,7 @@ class TestModelStatusEndpoint:
     
     def test_status_without_model_initialized(self, client, auth_headers):
         """Test status when model is not initialized."""
-        response = client.get("/api/v1/timesfm20/status", headers=auth_headers)
+        response = client.get("/forecast/v1/timesfm20/status", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -115,7 +115,7 @@ class TestModelStatusEndpoint:
     
     def test_status_structure(self, client, auth_headers):
         """Test that status response has expected structure."""
-        response = client.get("/api/v1/timesfm20/status", headers=auth_headers)
+        response = client.get("/forecast/v1/timesfm20/status", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -137,7 +137,7 @@ class TestInputValidation:
         }
         
         response = client.post(
-            "/api/v1/timesfm20/inference",
+            "/forecast/v1/timesfm20/inference",
             headers=auth_headers,
             json=payload
         )
@@ -153,7 +153,7 @@ class TestInputValidation:
         }
         
         response = client.post(
-            "/api/v1/timesfm20/inference",
+            "/forecast/v1/timesfm20/inference",
             headers=auth_headers,
             json=payload
         )
@@ -172,7 +172,7 @@ class TestInputValidation:
         }
         
         response = client.post(
-            "/api/v1/timesfm20/inference",
+            "/forecast/v1/timesfm20/inference",
             headers=auth_headers,
             json=payload
         )
@@ -193,7 +193,7 @@ class TestErrorHandling:
         }
         
         response = client.post(
-            "/api/v1/timesfm20/inference",
+            "/forecast/v1/timesfm20/inference",
             headers=auth_headers,
             json=payload
         )
@@ -210,7 +210,7 @@ class TestErrorHandling:
         }
         
         response = client.post(
-            "/api/v1/timesfm20/initialization",
+            "/forecast/v1/timesfm20/initialization",
             headers=auth_headers,
             json=payload
         )
@@ -227,7 +227,7 @@ class TestErrorHandling:
         }
         
         response = client.post(
-            "/api/v1/timesfm20/initialization",
+            "/forecast/v1/timesfm20/initialization",
             headers=auth_headers,
             json=payload
         )
@@ -243,7 +243,7 @@ class TestEndToEnd:
     def test_complete_inference_workflow(self, client, auth_headers, sample_data_file):
         """Test complete inference workflow from start to finish."""
         # Step 1: Check initial status
-        status_response = client.get("/api/v1/timesfm20/status", headers=auth_headers)
+        status_response = client.get("/forecast/v1/timesfm20/status", headers=auth_headers)
         assert status_response.status_code == 200
         
         # Note: Full workflow would require model initialization
