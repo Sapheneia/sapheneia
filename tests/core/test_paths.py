@@ -1,7 +1,7 @@
 """
 Tests for path handling utilities.
 
-Tests the normalize_data_path function from api.core.paths to ensure:
+Tests the normalize_data_path function from forecast.core.paths to ensure:
 1. Correct resolution of different path formats
 2. Proper handling of Docker vs venv environments
 3. Security validation against path traversal attacks
@@ -10,7 +10,7 @@ Tests the normalize_data_path function from api.core.paths to ensure:
 import pytest
 from pathlib import Path
 from unittest.mock import patch
-from api.core.paths import normalize_data_path, IS_DOCKER, PROJECT_ROOT
+from forecast.core.paths import normalize_data_path, IS_DOCKER, PROJECT_ROOT
 
 
 class TestPathNormalization:
@@ -80,28 +80,28 @@ class TestSecurityValidation:
 class TestEnvironmentSpecificBehavior:
     """Test path resolution in different environments."""
     
-    @patch('api.core.paths.IS_DOCKER', False)
+    @patch('forecast.core.paths.IS_DOCKER', False)
     def test_venv_path_resolution(self):
         """Test path resolution in venv environment."""
-        with patch('api.core.paths.IS_DOCKER', False):
+        with patch('forecast.core.paths.IS_DOCKER', False):
             # Reload the module to get patched IS_DOCKER
             from importlib import reload
-            import api.core.paths
-            reload(api.core.paths)
+            import forecast.core.paths
+            reload(forecast.core.paths)
             
-            result = api.core.paths.normalize_data_path("test.csv")
+            result = forecast.core.paths.normalize_data_path("test.csv")
             assert not str(result).startswith('/app')
             assert "uploads" in str(result)
     
-    @patch('api.core.paths.IS_DOCKER', True)
+    @patch('forecast.core.paths.IS_DOCKER', True)
     def test_docker_path_resolution(self):
         """Test path resolution in Docker environment."""
-        with patch('api.core.paths.IS_DOCKER', True):
+        with patch('forecast.core.paths.IS_DOCKER', True):
             from importlib import reload
-            import api.core.paths
-            reload(api.core.paths)
+            import forecast.core.paths
+            reload(forecast.core.paths)
             
-            result = api.core.paths.normalize_data_path("test.csv")
+            result = forecast.core.paths.normalize_data_path("test.csv")
             assert str(result).startswith('/app/data/uploads')
     
     def test_cross_environment_path_conversion(self):

@@ -43,7 +43,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 sys.path.append(os.path.join(os.path.dirname(__file__)))  # Add ui/ to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # Add project root
 from visualization import InteractiveVisualizer
-from api.core.forecasting import process_quantile_bands
+from forecast.core.forecasting import process_quantile_bands
 from api_client import SapheneiaAPIClient
 
 # Configure logging
@@ -58,7 +58,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-pr
 from pathlib import Path as PathClass
 try:
     sys.path.append(str(PathClass(__file__).parent.parent))
-    from api.core.paths import IS_DOCKER, get_upload_path, get_result_path
+    from forecast.core.paths import IS_DOCKER, get_upload_path, get_result_path
     
     # Use centralized path utilities
     UPLOAD_FOLDER = str(get_upload_path('').resolve())

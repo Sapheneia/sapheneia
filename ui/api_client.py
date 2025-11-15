@@ -149,7 +149,7 @@ class SapheneiaAPIClient:
         Returns:
             Tuple of (success, status_data)
         """
-        return self._make_request('GET', '/api/v1/timesfm20/status', timeout=5)
+        return self._make_request('GET', '/forecast/v1/timesfm20/status', timeout=5)
 
     def initialize_model(
         self,
@@ -186,7 +186,7 @@ class SapheneiaAPIClient:
         logger.info(f"Initializing model: {data}")
         return self._make_request(
             'POST',
-            '/api/v1/timesfm20/initialization',
+            '/forecast/v1/timesfm20/initialization',
             data=data,
             timeout=300  # 5 minutes for model loading
         )
@@ -217,7 +217,7 @@ class SapheneiaAPIClient:
         logger.info(f"Running inference on: {data_source}")
         return self._make_request(
             'POST',
-            '/api/v1/timesfm20/inference',
+            '/forecast/v1/timesfm20/inference',
             data=data,
             timeout=300  # 5 minutes for inference
         )
@@ -232,6 +232,6 @@ class SapheneiaAPIClient:
         logger.info("Shutting down model")
         return self._make_request(
             'POST',
-            '/api/v1/timesfm20/shutdown',
+            '/forecast/v1/timesfm20/shutdown',
             timeout=30
         )

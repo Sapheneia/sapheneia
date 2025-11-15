@@ -1,14 +1,14 @@
 """
 Tests for data fetching utilities.
 
-Tests the fetch_data_source function and related utilities from api.core.data.
+Tests the fetch_data_source function and related utilities from forecast.core.data.
 """
 
 import pytest
 from pathlib import Path
 import pandas as pd
-from api.core.data import fetch_data_source, DataFetchError, _fetch_local_file
-from api.core.paths import normalize_data_path
+from forecast.core.data import fetch_data_source, DataFetchError, _fetch_local_file
+from forecast.core.paths import normalize_data_path
 
 
 class TestDataFetching:

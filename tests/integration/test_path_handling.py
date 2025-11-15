@@ -16,13 +16,13 @@ class TestVenvEnvironment:
     
     def test_venv_path_resolution(self):
         """Test that paths resolve correctly in venv environment."""
-        with patch('api.core.paths.IS_DOCKER', False):
+        with patch('forecast.core.paths.IS_DOCKER', False):
             # Reload module to get patched IS_DOCKER
             import importlib
-            import api.core.paths
-            importlib.reload(api.core.paths)
+            import forecast.core.paths
+            importlib.reload(forecast.core.paths)
             
-            result = api.core.paths.normalize_data_path("test.csv")
+            result = forecast.core.paths.normalize_data_path("test.csv")
             
             # Should not start with /app in venv
             assert not str(result).startswith('/app')
@@ -31,14 +31,14 @@ class TestVenvEnvironment:
     
     def test_venv_converts_docker_paths(self):
         """Test that Docker-style paths are converted in venv."""
-        with patch('api.core.paths.IS_DOCKER', False):
+        with patch('forecast.core.paths.IS_DOCKER', False):
             import importlib
-            import api.core.paths
-            importlib.reload(api.core.paths)
+            import forecast.core.paths
+            importlib.reload(forecast.core.paths)
             
             # Simulate getting a Docker-style path
             docker_path = "/app/data/uploads/test.csv"
-            result = api.core.paths.normalize_data_path(docker_path)
+            result = forecast.core.paths.normalize_data_path(docker_path)
             
             # Should not start with /app
             result_str = str(result)
@@ -50,26 +50,26 @@ class TestDockerEnvironment:
     
     def test_docker_path_resolution(self):
         """Test that paths resolve correctly in Docker environment."""
-        with patch('api.core.paths.IS_DOCKER', True):
+        with patch('forecast.core.paths.IS_DOCKER', True):
             # Reload module to get patched IS_DOCKER
             import importlib
-            import api.core.paths
-            importlib.reload(api.core.paths)
+            import forecast.core.paths
+            importlib.reload(forecast.core.paths)
             
-            result = api.core.paths.normalize_data_path("test.csv")
+            result = forecast.core.paths.normalize_data_path("test.csv")
             
             # Should start with /app in Docker
             assert str(result).startswith('/app/data/uploads')
     
     def test_docker_handles_venv_paths(self):
         """Test that venv-style paths work in Docker."""
-        with patch('api.core.paths.IS_DOCKER', True):
+        with patch('forecast.core.paths.IS_DOCKER', True):
             import importlib
-            import api.core.paths
-            importlib.reload(api.core.paths)
+            import forecast.core.paths
+            importlib.reload(forecast.core.paths)
             
             # Relative path should resolve to Docker path
-            result = api.core.paths.normalize_data_path("data/uploads/test.csv")
+            result = forecast.core.paths.normalize_data_path("data/uploads/test.csv")
             assert str(result).startswith('/app')
 
 
@@ -79,34 +79,34 @@ class TestCrossEnvironmentCompatibility:
     def test_local_prefix_stripped_both_environments(self):
         """Test that local:// prefix is stripped in both environments."""
         for is_docker in [True, False]:
-            with patch('api.core.paths.IS_DOCKER', is_docker):
+            with patch('forecast.core.paths.IS_DOCKER', is_docker):
                 import importlib
-                import api.core.paths
-                importlib.reload(api.core.paths)
+                import forecast.core.paths
+                importlib.reload(forecast.core.paths)
                 
-                result = api.core.paths.normalize_data_path("local://test.csv")
+                result = forecast.core.paths.normalize_data_path("local://test.csv")
                 assert "local://" not in str(result)
     
     def test_security_validation_both_environments(self):
         """Test that security validation works in both environments."""
         for is_docker in [True, False]:
-            with patch('api.core.paths.IS_DOCKER', is_docker):
+            with patch('forecast.core.paths.IS_DOCKER', is_docker):
                 import importlib
-                import api.core.paths
-                importlib.reload(api.core.paths)
+                import forecast.core.paths
+                importlib.reload(forecast.core.paths)
                 
                 with pytest.raises(ValueError, match="outside allowed"):
-                    api.core.paths.normalize_data_path("../../../etc/passwd")
+                    forecast.core.paths.normalize_data_path("../../../etc/passwd")
     
     def test_bare_filename_both_environments(self):
         """Test that bare filenames work in both environments."""
         for is_docker in [True, False]:
-            with patch('api.core.paths.IS_DOCKER', is_docker):
+            with patch('forecast.core.paths.IS_DOCKER', is_docker):
                 import importlib
-                import api.core.paths
-                importlib.reload(api.core.paths)
+                import forecast.core.paths
+                importlib.reload(forecast.core.paths)
                 
-                result = api.core.paths.normalize_data_path("file.csv")
+                result = forecast.core.paths.normalize_data_path("file.csv")
                 
                 # Should resolve to uploads directory
                 assert "uploads" in str(result)
@@ -118,7 +118,7 @@ class TestRealEnvironment:
     
     def test_current_environment_paths(self):
         """Test path handling in the actual environment we're running in."""
-        from api.core.paths import normalize_data_path, IS_DOCKER
+        from forecast.core.paths import normalize_data_path, IS_DOCKER
         
         # Test basic filename resolution
         result = normalize_data_path("test.csv")
@@ -136,7 +136,7 @@ class TestRealEnvironment:
     
     def test_current_environment_security(self):
         """Test security validation in current environment."""
-        from api.core.paths import normalize_data_path
+        from forecast.core.paths import normalize_data_path
         
         # Path traversal should always fail
         with pytest.raises(ValueError, match="outside allowed"):
@@ -148,7 +148,7 @@ class TestPathConsistency:
     
     def test_same_input_different_formats(self):
         """Test that different path formats for same file give consistent results."""
-        from api.core.paths import normalize_data_path
+        from forecast.core.paths import normalize_data_path
         
         formats = [
             "test.csv",
