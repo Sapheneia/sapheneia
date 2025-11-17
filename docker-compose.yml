@@ -34,22 +34,22 @@ services:
       retries: 5
       start_period: 120s  # Extended for model loading time
 
-  # Metrics API - Financial Performance Metrics Service
-  metrics-api:
+  # Metrics - Financial Performance Metrics Service
+  metrics:
     build:
       context: .
-      dockerfile: Dockerfile.metrics-api
-    container_name: sapheneia-metrics-api
+      dockerfile: Dockerfile.metrics
+    container_name: sapheneia-metrics
     ports:
       - "8001:8001"
     env_file:
       - .env
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8001
+      - METRICS_HOST=0.0.0.0
+      - METRICS_PORT=8001
       - PYTHONPATH=/app
     volumes:
-      - ./metrics_api:/app/metrics_api
+      - ./metrics:/app/metrics
       - ./logs:/app/logs
     networks:
       - sapheneia-network
@@ -105,7 +105,7 @@ services:
       - "8080:8080"
     environment:
       - UI_API_BASE_URL=http://api:8000
-      - UI_METRICS_API_BASE_URL=http://metrics-api:8001
+      - UI_METRICS_BASE_URL=http://metrics:8001
       - UI_PORT=8080
       - PYTHONPATH=/app
     volumes:
@@ -116,7 +116,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      metrics-api:
+      metrics:
         condition: service_healthy
     networks:
       - sapheneia-network

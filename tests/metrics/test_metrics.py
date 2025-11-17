@@ -7,7 +7,7 @@ Tests the metrics_api/core/metrics.py module functions and calculations.
 import pytest
 import pandas as pd
 import numpy as np
-from metrics_api.core.metrics import (
+from metrics.core.metrics import (
     calculate_sharpe_ratio,
     calculate_max_drawdown,
     calculate_cagr,

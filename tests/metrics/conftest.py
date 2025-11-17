@@ -1,9 +1,9 @@
 """
-Test fixtures for Metrics API tests
+Test fixtures for Metrics tests
 """
 import pytest
 from fastapi.testclient import TestClient
-from metrics_api.main import app
+from metrics.main import app
 
 
 @pytest.fixture

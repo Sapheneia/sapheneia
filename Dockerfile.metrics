@@ -27,7 +27,7 @@ RUN which uv && uv --version
 
 # Copy project files
 COPY pyproject.toml ./
-COPY metrics_api/ ./metrics_api/
+COPY metrics/ ./metrics/
 
 # Install ONLY metrics dependencies (not forecasting, much smaller image)
 RUN uv pip install --system --no-cache -e ".[metrics]"
@@ -35,12 +35,12 @@ RUN uv pip install --system --no-cache -e ".[metrics]"
 # Create directories
 RUN mkdir -p logs
 
-# Expose metrics API port
+# Expose metrics port
 EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Run metrics API server
-CMD uvicorn metrics_api.main:app --host 0.0.0.0 --port 8001
+# Run metrics server
+CMD uvicorn metrics.main:app --host 0.0.0.0 --port 8001

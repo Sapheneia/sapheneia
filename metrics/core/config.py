@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
-        env_prefix = "METRICS_API_"
+        env_prefix = "METRICS_"
         extra = "ignore"  # Ignore extra fields from .env
 
 

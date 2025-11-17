@@ -12,7 +12,7 @@ Metrics included:
 - Win Rate: Percentage of profitable periods
 
 Usage:
-    from api.core.metrics import calculate_performance_metrics
+    from metrics.core.metrics import calculate_performance_metrics
 
     returns = pd.Series([0.01, -0.02, 0.03, ...])
     metrics = calculate_performance_metrics(returns)
