@@ -10,8 +10,8 @@ Built on top of quantstats library for robust, industry-standard metrics.
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from metrics_api.core.config import settings
-from metrics_api.routes import endpoints
+from metrics.core.config import settings
+from metrics.routes import endpoints
 
 # Configure logging
 logging.basicConfig(
@@ -39,7 +39,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(endpoints.router, prefix="/api/v1")
+app.include_router(endpoints.router, prefix="/metrics/v1")
 
 
 @app.get("/")
@@ -54,7 +54,7 @@ async def root():
             "docs": "/docs",
             "redoc": "/redoc",
             "health": "/health",
-            "metrics": "/api/v1/metrics/*"
+            "compute": "/metrics/v1/compute"
         }
     }
 
@@ -64,7 +64,7 @@ async def health():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "service": "metrics-api",
+        "service": "metrics",
         "version": "2.0.0"
     }
 
