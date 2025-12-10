@@ -8,6 +8,7 @@ dependencies = [
     # Core ML Dependencies
     "jax>=0.7.0",
     "jaxlib>=0.7.0",
+    "torch>=2.0.0",  # Required for TimesFM on Apple Silicon
     "timesfm>=1.3.0",
     "numpy>=1.24.0",
     "pandas>=2.0.0",
@@ -67,15 +68,15 @@ all = [
 ]
 
 [tool.setuptools]
-# Use find to discover all packages under api and ui
+# Use find to discover all packages under forecast and ui
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["api*", "ui*"]
+include = ["forecast*", "ui*"]
 exclude = ["*.tests", "*.tests.*", "tests.*", "tests"]
 
 # Pytest configuration (Phase 6: Testing Infrastructure)
 [tool.pytest.ini_options]
-testpaths = ["tests", "api/models"]
+testpaths = ["tests", "forecast/models", "trading/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -83,7 +84,8 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov=api",
+    "--cov=forecast",
+    "--cov=trading",
     "--cov-report=html",
     "--cov-report=term",
     "--cov-report=xml",
@@ -101,7 +103,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["api"]
+source = ["forecast", "trading"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
