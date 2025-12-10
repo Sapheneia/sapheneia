@@ -8,6 +8,7 @@ dependencies = [
     # Core ML Dependencies
     "jax>=0.7.0",
     "jaxlib>=0.7.0",
+    "torch>=2.0.0",  # Required for TimesFM on Apple Silicon
     "timesfm>=1.3.0",
     "numpy>=1.24.0",
     "pandas>=2.0.0",
