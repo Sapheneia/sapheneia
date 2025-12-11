@@ -127,6 +127,33 @@ services:
       retries: 3
       start_period: 40s
 
+  # Metrics API
+  metrics:
+    build:
+      context: .
+      dockerfile: Dockerfile.metrics
+    container_name: sapheneia-metrics
+    ports:
+      - "${METRICS_API_PORT:-8001}:8001"
+    env_file:
+      - .env
+    environment:
+      - METRICS_API_HOST=0.0.0.0
+      - METRICS_API_PORT=8001
+      - PYTHONPATH=/app
+    volumes:
+      - ./metrics:/app/metrics
+      - ./logs:/app/logs
+    networks:
+      - sapheneia-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   sapheneia-network:
     driver: bridge

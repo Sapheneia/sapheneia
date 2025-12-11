@@ -3,9 +3,10 @@
 # =============================================================================
 # Sapheneia Setup Script
 #
-# This script manages two Sapheneia applications:
+# This script manages three Sapheneia applications:
 # - forecast: API (forecasting models) and UI application
 # - trading: Trading strategies API application
+# - metrics: Evaluation metrics API application
 #
 # Usage:
 #   # Forecast Application
@@ -24,9 +25,15 @@
 #   ./setup.sh run-docker trading              # Run trading container
 #   ./setup.sh stop trading                     # Stop trading service
 #
+#   # Metrics Application
+#   ./setup.sh init metrics                     # Initialize metrics application
+#   ./setup.sh run-venv metrics                # Run metrics API service
+#   ./setup.sh stop metrics                     # Stop metrics service
+#
 #   # Help
 #   ./setup.sh --help forecast                  # Help for forecast application
 #   ./setup.sh --help trading                   # Help for trading application
+#   ./setup.sh --help metrics                   # Help for metrics application
 #   ./setup.sh --help                           # General help
 # =============================================================================
 
@@ -46,6 +53,7 @@ VENV_NAME=".venv"
 API_PORT=8000
 UI_PORT=8080
 TRADING_PORT=9000
+METRICS_PORT=8001
 
 # Function to print colored output
 print_status() {
@@ -266,9 +274,38 @@ cmd_init() {
             echo "  3. Run tests: ./setup.sh test"
             echo
             ;;
+        metrics)
+            print_header "Initializing Metrics Application Environment"
+
+            # Detect system
+            detect_system
+
+            # Install UV
+            install_uv
+
+            # Setup Python environment
+            setup_python_env
+
+            # Install dependencies
+            install_dependencies
+
+            # Setup environment file (if not exists)
+            setup_env_file
+
+            # Create necessary directories
+            mkdir -p logs
+
+            print_header "Initialization Complete!"
+            print_status "Metrics application environment is ready!"
+            echo
+            print_status "Next steps:"
+            echo "  1. Run metrics API: ./setup.sh run-venv metrics"
+            echo "  2. Run tests: ./setup.sh test"
+            echo
+            ;;
         *)
             print_error "Unknown application: $application"
-            print_error "Usage: ./setup.sh init [forecast|trading]"
+            print_error "Usage: ./setup.sh init [forecast|trading|metrics]"
             exit 1
             ;;
     esac
@@ -336,6 +373,27 @@ run_trading_venv() {
     fi
 }
 
+# Function to run Metrics API with venv
+run_metrics_api_venv() {
+    print_header "Starting Metrics API (Virtual Environment)"
+
+    kill_port $METRICS_PORT
+
+    print_status "Starting Metrics API on port $METRICS_PORT..."
+    uv run uvicorn metrics.main:app --host 0.0.0.0 --port $METRICS_PORT --reload &
+
+    sleep 3
+
+    if port_in_use $METRICS_PORT; then
+        print_status "✅ Metrics API server running at http://localhost:$METRICS_PORT"
+        print_status "   Health: http://localhost:$METRICS_PORT/health"
+        print_status "   Docs: http://localhost:$METRICS_PORT/docs"
+    else
+        print_error "Failed to start Metrics API server"
+        exit 1
+    fi
+}
+
 # Function to run with venv
 cmd_run_venv() {
     local application=$1
@@ -383,13 +441,22 @@ cmd_run_venv() {
                 exit 1
             fi
             ;;
+        metrics)
+            if [[ -z "$service" || "$service" == "metrics" ]]; then
+                run_metrics_api_venv
+            else
+                print_error "Unknown service: $service"
+                print_error "Usage: ./setup.sh run-venv metrics"
+                exit 1
+            fi
+            ;;
         *)
             if [[ "$application" == "all" ]]; then
                 print_error "Invalid command. Use: ./setup.sh run-venv forecast all"
                 exit 1
             fi
             print_error "Unknown application: $application"
-            print_error "Usage: ./setup.sh run-venv [forecast|trading] [service]"
+            print_error "Usage: ./setup.sh run-venv [forecast|trading|metrics] [service]"
             exit 1
             ;;
     esac
@@ -538,9 +605,25 @@ cmd_stop() {
 
             print_status "✅ Trading services stopped"
             ;;
+        metrics)
+            print_header "Stopping Metrics Services"
+
+            # Stop Docker services
+            if command_exists docker; then
+                print_status "Stopping Docker containers..."
+                docker stop sapheneia-metrics 2>/dev/null || true
+                docker rm sapheneia-metrics 2>/dev/null || true
+                print_status "Docker containers stopped and removed"
+            fi
+
+            print_status "Stopping venv ports..."
+            kill_port $METRICS_PORT
+
+            print_status "✅ Metrics services stopped"
+            ;;
         *)
             print_error "Unknown application: $application"
-            print_error "Usage: ./setup.sh stop [forecast|trading]"
+            print_error "Usage: ./setup.sh stop [forecast|trading|metrics]"
             exit 1
             ;;
     esac
@@ -629,6 +712,41 @@ ${GREEN}ENVIRONMENT:${NC}
 EOF
 }
 
+# Function to show help for metrics application
+show_help_metrics() {
+    cat << EOF
+${BLUE}Sapheneia Metrics Application Setup${NC}
+
+${GREEN}USAGE:${NC}
+    ./setup.sh COMMAND metrics [OPTIONS]
+
+${GREEN}COMMANDS:${NC}
+    init metrics                     Initialize metrics application environment
+    run-venv metrics                Run metrics API service with virtual environment
+    stop metrics                     Stop metrics services
+    test                             Run test suite with pytest
+
+${GREEN}EXAMPLES:${NC}
+    ${BLUE}# Initialize environment${NC}
+    ./setup.sh init metrics
+
+    ${BLUE}# Run with virtual environment${NC}
+    ./setup.sh run-venv metrics
+
+    ${BLUE}# Stop services${NC}
+    ./setup.sh stop metrics
+
+${GREEN}PORTS:${NC}
+    - Metrics API Server: $METRICS_PORT
+
+${GREEN}ENVIRONMENT:${NC}
+    - Python Version: $PYTHON_VERSION
+    - Virtual Environment: $VENV_NAME
+    - Configuration: .env file
+
+EOF
+}
+
 # Function to show general help
 show_help() {
     local application="${1:-}"
@@ -640,25 +758,29 @@ show_help() {
         trading)
             show_help_trading
             ;;
+        metrics)
+            show_help_metrics
+            ;;
         *)
             cat << EOF
 ${BLUE}Sapheneia Setup Script${NC}
 
 ${GREEN}OVERVIEW:${NC}
-    This script manages two Sapheneia applications:
+    This script manages three Sapheneia applications:
     - ${GREEN}forecast${NC}: API (forecasting models) and UI application
     - ${GREEN}trading${NC}: Trading strategies API application
+    - ${GREEN}metrics${NC}: Evaluation metrics API application
 
 ${GREEN}USAGE:${NC}
     ./setup.sh COMMAND [APPLICATION] [OPTIONS]
 
 ${GREEN}COMMANDS:${NC}
-    init [forecast|trading]          Initialize application environment
-    run-venv [forecast|trading] [service] Run services with virtual environment
+    init [forecast|trading|metrics]          Initialize application environment
+    run-venv [forecast|trading|metrics] [service] Run services with virtual environment
     run-docker [forecast|trading] [service] Run services with Docker
-    stop [forecast|trading]           Stop application services
+    stop [forecast|trading|metrics]           Stop application services
     test                             Run test suite with pytest
-    --help [forecast|trading]        Show application-specific help
+    --help [forecast|trading|metrics]        Show application-specific help
 
 ${GREEN}EXAMPLES:${NC}
     ${BLUE}# Forecast Application${NC}
@@ -671,14 +793,21 @@ ${GREEN}EXAMPLES:${NC}
     ./setup.sh run-venv trading
     ./setup.sh stop trading
 
+    ${BLUE}# Metrics Application${NC}
+    ./setup.sh init metrics
+    ./setup.sh run-venv metrics
+    ./setup.sh stop metrics
+
     ${BLUE}# Help${NC}
     ./setup.sh --help forecast      # Help for forecast application
     ./setup.sh --help trading       # Help for trading application
+    ./setup.sh --help metrics       # Help for metrics application
 
 ${GREEN}PORTS:${NC}
     - Forecast API: $API_PORT
     - Forecast UI: $UI_PORT
     - Trading API: $TRADING_PORT
+    - Metrics API: $METRICS_PORT
 
 ${GREEN}REQUIREMENTS:${NC}
     - Bash shell
