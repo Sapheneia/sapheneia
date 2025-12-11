@@ -3636,7 +3636,6 @@ all = [
     { name = "fastapi" },
     { name = "flake8" },
     { name = "flask" },
-    { name = "httpx" },
     { name = "ipykernel" },
     { name = "ipywidgets" },
     { name = "jax" },
@@ -3669,7 +3668,6 @@ all = [
 dev = [
     { name = "black" },
     { name = "flake8" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -3716,7 +3714,6 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'forecasting'", specifier = ">=0.109.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "flask", marker = "extra == 'ui'", specifier = ">=3.0.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.25.0" },
     { name = "ipykernel", marker = "extra == 'forecasting'", specifier = ">=6.25.0" },
     { name = "ipywidgets", marker = "extra == 'forecasting'", specifier = ">=8.1.0" },
     { name = "jax", marker = "extra == 'forecasting'", specifier = ">=0.7.0" },
