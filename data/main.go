@@ -24,6 +24,19 @@ const (
 	NUM_WORKERS = 8 // Number of *parallel fetches* per API request
 )
 
+// --- HTTPClient Interface ---
+// HTTPClient interface allows injecting mock HTTP clients for testing
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// --- Server struct holds all dependencies ---
+type Server struct {
+	WriteAPI   api.WriteAPIBlocking
+	QueryAPI   api.QueryAPI
+	HTTPClient HTTPClient
+}
+
 // --- Yahoo Finance Structs (Unchanged) ---
 type YahooChartResponse struct {
 	Chart struct {
@@ -120,15 +133,23 @@ func main() {
 	// --- End of retry loop ---
 
 	slog.Info("Successfully connected to InfluxDB.")
+
+	// Create Server instance with all dependencies
+	server := &Server{
+		WriteAPI:   influxClient.WriteAPIBlocking(influxOrg, influxBucket),
+		QueryAPI:   influxClient.QueryAPI(influxOrg),
+		HTTPClient: &http.Client{Timeout: 10 * time.Second}, // Real HTTP client
+	}
+
 	// --- NEW: Start Gin Server ---
 	router := gin.Default()
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Data endpoints
-	router.POST("/v1/data/fetch", handleFetchData)
-	router.POST("/v1/data/query", handleQueryData)
+	// Data endpoints - use server methods
+	router.POST("/v1/data/fetch", server.handleFetchData)
+	router.POST("/v1/data/query", server.handleQueryData)
 
 	slog.Info("Starting finance-data API server on :8000")
 	if err := router.Run(":8000"); err != nil {
@@ -138,7 +159,7 @@ func main() {
 }
 
 // handleFetchData is the new Gin handler for on-demand fetching
-func handleFetchData(c *gin.Context) {
+func (s *Server) handleFetchData(c *gin.Context) {
 	var req DataFetchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
@@ -163,10 +184,8 @@ func handleFetchData(c *gin.Context) {
 	// Create worker goroutines
 	for i := 0; i < NUM_WORKERS; i++ {
 		wg.Add(1)
-		// Give each worker its own API handles from the global client
-		go fetchWorker(i, influxClient.WriteAPIBlocking(influxOrg, influxBucket),
-			influxClient.QueryAPI(influxOrg),
-			&wg, tickerJobs, results, req.StartDate, req.Interval)
+		// Give each worker access to the server's dependencies
+		go s.fetchWorker(i, &wg, tickerJobs, results, req.StartDate, req.Interval)
 	}
 
 	// Send jobs
@@ -195,7 +214,7 @@ func handleFetchData(c *gin.Context) {
 }
 
 // fetchWorker processes a single ticker
-func fetchWorker(id int, writeAPI api.WriteAPIBlocking, queryAPI api.QueryAPI, wg *sync.WaitGroup,
+func (s *Server) fetchWorker(id int, wg *sync.WaitGroup,
 	jobs <-chan string, results chan<- map[string]string,
 	startDate string, interval string) {
 
@@ -204,7 +223,7 @@ func fetchWorker(id int, writeAPI api.WriteAPIBlocking, queryAPI api.QueryAPI, w
 		slog.Info("Worker processing", "worker_id", id, "ticker", ticker)
 
 		// 1. Find latest timestamp
-		latestTime, err := getLatestTimestamp(queryAPI, ticker, startDate)
+		latestTime, err := s.getLatestTimestamp(ticker, startDate)
 		if err != nil {
 			slog.Error("Failed to get latest timestamp", "worker_id", id, "ticker", ticker, "error", err)
 			results <- map[string]string{ticker: "Error: " + err.Error()}
@@ -212,7 +231,7 @@ func fetchWorker(id int, writeAPI api.WriteAPIBlocking, queryAPI api.QueryAPI, w
 		}
 
 		// 2. Fetch data from Yahoo
-		points, err := fetchYahooData(ticker, latestTime, interval)
+		points, err := s.fetchYahooData(ticker, latestTime, interval)
 		if err != nil {
 			slog.Error("Failed to fetch Yahoo data", "worker_id", id, "ticker", ticker, "error", err)
 			results <- map[string]string{ticker: "Error: " + err.Error()}
@@ -221,7 +240,7 @@ func fetchWorker(id int, writeAPI api.WriteAPIBlocking, queryAPI api.QueryAPI, w
 
 		// 3. Write to Influx
 		if len(points) > 0 {
-			if err := writeAPI.WritePoint(context.Background(), points...); err != nil {
+			if err := s.WriteAPI.WritePoint(context.Background(), points...); err != nil {
 				slog.Error("Failed to write to InfluxDB", "worker_id", id, "ticker", ticker, "error", err)
 				results <- map[string]string{ticker: "Error: " + err.Error()}
 			}
@@ -234,7 +253,7 @@ func fetchWorker(id int, writeAPI api.WriteAPIBlocking, queryAPI api.QueryAPI, w
 }
 
 // getLatestTimestamp modified to use a default start date if needed
-func getLatestTimestamp(queryAPI api.QueryAPI, ticker string, defaultStartDate string) (time.Time, error) {
+func (s *Server) getLatestTimestamp(ticker string, defaultStartDate string) (time.Time, error) {
 	// Parse the provided start date
 	defaultStartTime, err := time.Parse("2006-01-02", defaultStartDate)
 	if err != nil {
@@ -253,7 +272,7 @@ func getLatestTimestamp(queryAPI api.QueryAPI, ticker string, defaultStartDate s
           |> last()
     `, influxBucket, ticker)
 
-	result, err := queryAPI.Query(context.Background(), query)
+	result, err := s.QueryAPI.Query(context.Background(), query)
 	if err != nil {
 		return defaultStartTime, err
 	}
@@ -273,8 +292,8 @@ func getLatestTimestamp(queryAPI api.QueryAPI, ticker string, defaultStartDate s
 	return defaultStartTime, nil
 }
 
-// fetchYahooData modified to accept an interval
-func fetchYahooData(ticker string, startTime time.Time, interval string) ([]*write.Point, error) {
+// fetchYahooData modified to accept an interval and use injected HTTP client
+func (s *Server) fetchYahooData(ticker string, startTime time.Time, interval string) ([]*write.Point, error) {
 	start := startTime.Unix()
 	end := time.Now().Unix()
 
@@ -288,17 +307,14 @@ func fetchYahooData(ticker string, startTime time.Time, interval string) ([]*wri
 		ticker, start, end, interval,
 	)
 
-	// ... (rest of the function is identical to your original) ...
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	// Use the injected HTTP client instead of creating a new one
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the http request %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-	resp, err := client.Do(req)
+	resp, err := s.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call Yahoo API: %w", err)
 	}
@@ -386,7 +402,7 @@ type DataQueryResponse struct {
 	Count  int         `json:"count"`
 }
 
-func handleQueryData(c *gin.Context) {
+func (s *Server) handleQueryData(c *gin.Context) {
 	var req DataQueryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
@@ -414,8 +430,7 @@ func handleQueryData(c *gin.Context) {
 
 	slog.Info("Querying InfluxDB", "ticker", req.Ticker, "days", req.Days)
 
-	queryAPI := influxClient.QueryAPI(influxOrg)
-	result, err := queryAPI.Query(context.Background(), query)
+	result, err := s.QueryAPI.Query(context.Background(), query)
 	if err != nil {
 		slog.Error("Query failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed", "details": err.Error()})
