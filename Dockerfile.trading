@@ -29,7 +29,6 @@ RUN which uv && uv --version
 # Copy project files
 COPY pyproject.toml ./
 COPY trading/ ./trading/
-COPY .env .env
 
 # Install base dependencies
 RUN uv pip install --system --no-cache -e .
