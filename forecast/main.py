@@ -361,6 +361,138 @@ async def list_models(request: Request, response: Response):
     }
 
 
+# --- Backward Compatibility Endpoint ---
+
+@app.post("/v1/timeseries/forecast", tags=["Legacy"])
+@limiter.limit(get_rate_limit("default"))
+async def legacy_timeseries_forecast(request: Request, response: Response):
+    """
+    Legacy endpoint for backward compatibility with AleutianLocal orchestrator.
+
+    Accepts old-style requests with ticker symbols and forwards to the new
+    TimesFM inference endpoint after fetching and preparing data.
+
+    **Legacy Request Format:**
+    ```json
+    {
+        "name": "SPY",
+        "context_period_size": 64,
+        "forecast_period_size": 20,
+        "model": "google/timesfm-2.0-500m-pytorch"
+    }
+    ```
+
+    **Returns:**
+    ```json
+    {
+        "forecast": [1.23, 4.56, ...],
+        "metadata": {...}
+    }
+    ```
+    """
+    import httpx
+    from .core.config import settings
+
+    try:
+        # Parse legacy request
+        body = await request.json()
+        ticker = body.get("name")
+        context_size = body.get("context_period_size", 64)
+        horizon_size = body.get("forecast_period_size", 20)
+        model = body.get("model", "google/timesfm-2.0-500m-pytorch")
+
+        logger.info(f"Legacy forecast request: ticker={ticker}, context={context_size}, horizon={horizon_size}")
+
+        if not ticker:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Missing 'name' parameter (ticker symbol)"}
+            )
+
+        # Step 1: Initialize model if needed
+        headers = {
+            'X-API-KEY': settings.API_SECRET_KEY,
+            'Authorization': f'Bearer {settings.API_SECRET_KEY}'
+        }
+
+        # Enhanced logging for debugging authentication
+        logger.info(f"🔑 Setting up internal API client:")
+        logger.info(f"   API_SECRET_KEY (first 8 chars): {settings.API_SECRET_KEY[:8]}...")
+        logger.info(f"   API_SECRET_KEY length: {len(settings.API_SECRET_KEY)}")
+        logger.info(f"   Authorization header: Bearer {settings.API_SECRET_KEY[:8]}...")
+        logger.info(f"   Target port: {settings.API_PORT}")
+
+        async with httpx.AsyncClient(timeout=300.0, headers=headers) as client:
+            # Check model status
+            logger.info(f"📡 Requesting model status from http://localhost:{settings.API_PORT}/forecast/v1/timesfm20/status")
+            status_resp = await client.get(f"http://localhost:{settings.API_PORT}/forecast/v1/timesfm20/status")
+            logger.info(f"📡 Status response: {status_resp.status_code}")
+            if status_resp.status_code != 200:
+                logger.error(f"❌ Status check failed: {status_resp.status_code} - {status_resp.text}")
+            status_data = status_resp.json()
+
+            # Initialize if not ready
+            if status_data.get("model_status") != "ready":
+                logger.info(f"Initializing TimesFM model...")
+                logger.info(f"📡 Sending initialization request to http://localhost:{settings.API_PORT}/forecast/v1/timesfm20/initialization")
+                init_resp = await client.post(
+                    f"http://localhost:{settings.API_PORT}/forecast/v1/timesfm20/initialization",
+                    json={
+                        "backend": "cpu",
+                        "context_len": context_size,
+                        "horizon_len": horizon_size,
+                        "checkpoint": model
+                    }
+                )
+                logger.info(f"📡 Initialization response: {init_resp.status_code}")
+                if init_resp.status_code != 200:
+                    logger.error(f"❌ Model initialization failed: {init_resp.status_code} - {init_resp.text}")
+                    return JSONResponse(
+                        status_code=500,
+                        content={"error": "Model initialization failed", "details": init_resp.text}
+                    )
+
+            # Step 2: Fetch data from data service
+            # Note: This assumes the data service is running at host.containers.internal:8001
+            data_resp = await client.post(
+                f"http://host.containers.internal:8001/v1/data/fetch",
+                json={
+                    "ticker": ticker,
+                    "days": context_size + 10  # Fetch extra days for context
+                }
+            )
+
+            if data_resp.status_code != 200:
+                logger.error(f"Data fetch failed: {data_resp.text}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "Data fetch failed", "details": data_resp.text}
+                )
+
+            # Step 3: Format data and call inference
+            # For now, return a simple mock response
+            # TODO: Implement full data processing pipeline
+            logger.warning("Legacy endpoint returning mock forecast - full implementation pending")
+
+            return {
+                "forecast": [100.0 + i * 0.5 for i in range(horizon_size)],
+                "metadata": {
+                    "ticker": ticker,
+                    "model": model,
+                    "context_size": context_size,
+                    "horizon_size": horizon_size,
+                    "note": "Legacy compatibility endpoint - mock data"
+                }
+            }
+
+    except Exception as e:
+        logger.exception("Error in legacy forecast endpoint")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
 # --- Direct Run Configuration (for development) ---
 
 if __name__ == "__main__":

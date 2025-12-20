@@ -19,13 +19,14 @@ services:
       - API_PORT=8000
       - MODEL_NAME=all
       - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
     volumes:
       - ./forecast:/app/forecast
       - ./data:/app/data
       - ./logs:/app/logs
       - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
     networks:
-      - sapheneia-network
+      - aleutian-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -58,7 +59,7 @@ services:
   #     - ./logs:/app/logs
   #     - api_models_timesfm20:/app/api/models/timesfm20/local
   #   networks:
-  #     - sapheneia-network
+  #     - aleutian-network
   #   restart: unless-stopped
   #   healthcheck:
   #     test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -88,7 +89,7 @@ services:
       forecast:
         condition: service_healthy
     networks:
-      - sapheneia-network
+      - aleutian-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -118,7 +119,7 @@ services:
       - ./trading:/app/trading
       - ./logs:/app/logs
     networks:
-      - sapheneia-network
+      - aleutian-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
@@ -127,9 +128,33 @@ services:
       retries: 3
       start_period: 40s
 
+  # Finance Data Service (Yahoo Finance → InfluxDB)
+  data:
+    build:
+      context: .
+      dockerfile: Dockerfile.data
+    container_name: sapheneia-data
+    ports:
+      - "${DATA_API_PORT:-8001}:8000"
+    environment:
+      - INFLUXDB_URL=http://user-influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-your_super_secret_admin_token}
+      - INFLUXDB_ORG=${INFLUXDB_ORG:-aleutian-finance}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-financial-data}
+    networks:
+      - aleutian-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
 networks:
-  sapheneia-network:
-    driver: bridge
+  aleutian-network:
+    external: true
+    name: aleutian-shared
 
 volumes:
   forecast_models_timesfm20:
