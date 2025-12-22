@@ -409,7 +409,41 @@ async def legacy_timeseries_forecast(
     try:
         # Parse and validate request
         body = await request.json()
+
+        # DEBUG LOGGING: Log raw incoming request
+        logger.info("=" * 80)
+        logger.info("🌐 HTTP REQUEST RECEIVED AT /v1/timeseries/forecast")
+        logger.info("=" * 80)
+        logger.info(f"📥 RAW REQUEST BODY:")
+        logger.info(f"   Keys in payload: {list(body.keys())}")
+        logger.info(f"   Full payload: {body}")
+
+        # Check for recent_data field explicitly (NOW REQUIRED!)
+        if "recent_data" in body:
+            recent_data = body["recent_data"]
+            if recent_data is not None:
+                logger.info(f"✅ recent_data FOUND IN HTTP REQUEST!")
+                logger.info(f"   🔒 Python service NEVER queries database")
+                logger.info(f"   Type: {type(recent_data)}")
+                logger.info(f"   Length: {len(recent_data) if isinstance(recent_data, list) else 'N/A'}")
+                if isinstance(recent_data, list) and len(recent_data) > 0:
+                    logger.info(f"   First 5: {recent_data[:5]}")
+                    logger.info(f"   Last 5: {recent_data[-5:]}")
+            else:
+                logger.error(f"❌ recent_data KEY EXISTS BUT VALUE IS NULL!")
+                logger.error(f"   This request will be REJECTED - recent_data is REQUIRED")
+        else:
+            logger.error(f"❌ recent_data KEY NOT PRESENT IN REQUEST!")
+            logger.error(f"   This request will be REJECTED - recent_data is REQUIRED")
+            logger.error(f"   Python service does NOT query database - orchestrator must provide data")
+
+        logger.info("=" * 80)
+
+        # Validate with Pydantic (will fail if recent_data missing)
         forecast_request = AleutianForecastRequest(**body)
+
+        logger.info(f"✅ Pydantic Validation Successful - recent_data is present and valid")
+        logger.info("=" * 80)
 
         # Delegate to service layer
         service = LegacyForecastService()
