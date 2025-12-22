@@ -43,9 +43,13 @@ class LegacyForecastService:
     """
 
     def __init__(self):
-        """Initialize service with API endpoints."""
+        """
+        Initialize service with API endpoints.
+
+        ARCHITECTURE NOTE: This service does NOT connect to databases.
+        It's a pure inference engine that receives data from the orchestrator.
+        """
         self.base_url = f"http://localhost:{settings.API_PORT}"
-        self.data_service_url = "http://sapheneia-data:8000"  # Internal docker network
         self.timeout = 300.0  # 5 minutes for model operations
 
     async def forecast(
@@ -56,6 +60,10 @@ class LegacyForecastService:
         Process forecast request from AleutianLocal.
 
         Single responsibility: Orchestrate the forecast pipeline.
+
+        CRITICAL UPDATE (2025-12-22): Implements priority logic for data source:
+        1. If `recent_data` is provided → Use it directly (backtest mode)
+        2. Otherwise → Query database (live mode)
 
         Args:
             request: AleutianLocal forecast request (Pydantic validated)
@@ -68,11 +76,27 @@ class LegacyForecastService:
             httpx.HTTPError: If API calls fail
         """
         logger.info("=" * 80)
-        logger.info("🎯 Legacy Forecast Request")
+        logger.info("🎯 LEGACY FORECAST REQUEST RECEIVED")
+        logger.info("=" * 80)
+        logger.info(f"📋 REQUEST DETAILS:")
         logger.info(f"   Ticker: {request.name}")
         logger.info(f"   Model: {request.model}")
-        logger.info(f"   Context: {request.context_period_size}")
-        logger.info(f"   Horizon: {request.forecast_period_size}")
+        logger.info(f"   Context Period Size: {request.context_period_size}")
+        logger.info(f"   Forecast Period Size: {request.forecast_period_size}")
+        logger.info(f"   As-Of Date: {request.as_of_date if request.as_of_date else 'NOT PROVIDED'}")
+
+        # CRITICAL: Log received data (recent_data is now REQUIRED)
+        logger.info("=" * 80)
+        logger.info("🔍 DATA VALIDATION:")
+        logger.info(f"   ✅ recent_data RECEIVED FROM ORCHESTRATOR")
+        logger.info(f"   🔒 Python service operates in PURE INFERENCE mode")
+        logger.info(f"   🔒 NO database queries - orchestrator is data source")
+        logger.info(f"   recent_data Length: {len(request.recent_data)}")
+        logger.info(f"   recent_data First 5 values: {request.recent_data[:5]}")
+        logger.info(f"   recent_data Last 5 values: {request.recent_data[-5:]}")
+        logger.info(f"   recent_data Min: {min(request.recent_data):.2f}")
+        logger.info(f"   recent_data Max: {max(request.recent_data):.2f}")
+        logger.info(f"   recent_data Mean: {sum(request.recent_data)/len(request.recent_data):.2f}")
         logger.info("=" * 80)
 
         # 1. Determine model family
@@ -82,11 +106,23 @@ class LegacyForecastService:
         # 2. Ensure model is initialized
         await self._ensure_model_initialized(model_family, request)
 
-        # 3. Fetch historical data
+        # 3. Fetch historical data (PRIORITY LOGIC)
         prices = await self._fetch_historical_data(
             request.name,
-            request.context_period_size
+            request.context_period_size,
+            recent_data=request.recent_data,
+            as_of_date=request.as_of_date
         )
+
+        # Log the prices that will be passed to the model
+        logger.info("=" * 80)
+        logger.info("📊 PRICES READY FOR MODEL INFERENCE:")
+        logger.info("=" * 80)
+        logger.info(f"   Total Price Points: {len(prices)}")
+        logger.info(f"   First 10: {prices[:10]}")
+        logger.info(f"   Last 10: {prices[-10:]}")
+        logger.info(f"   Min: {min(prices):.2f}, Max: {max(prices):.2f}, Mean: {sum(prices)/len(prices):.2f}")
+        logger.info("=" * 80)
 
         # 4. Run inference
         forecast = await self._run_inference(
@@ -96,8 +132,13 @@ class LegacyForecastService:
         )
 
         logger.info("=" * 80)
-        logger.info("✅ Legacy forecast complete")
-        logger.info(f"   Forecast length: {len(forecast.forecast)}")
+        logger.info("✅ LEGACY FORECAST COMPLETE")
+        logger.info("=" * 80)
+        logger.info(f"📊 FINAL OUTPUT:")
+        logger.info(f"   Ticker: {forecast.name}")
+        logger.info(f"   Forecast Values: {forecast.forecast}")
+        logger.info(f"   Forecast Length: {len(forecast.forecast)}")
+        logger.info(f"   Message: {forecast.message}")
         logger.info("=" * 80)
 
         return forecast
@@ -158,43 +199,64 @@ class LegacyForecastService:
     async def _fetch_historical_data(
         self,
         ticker: str,
-        num_days: int
+        num_days: int,
+        recent_data: List[float],  # NOW REQUIRED!
+        as_of_date: Optional[str] = None
     ) -> List[float]:
         """
-        Fetch historical prices from data service.
+        Process historical data from orchestrator.
 
-        Single responsibility: Data retrieval from InfluxDB via data service.
+        CRITICAL ARCHITECTURE DECISION (2025-12-22):
+        Python service is a PURE INFERENCE ENGINE - it does NOT query databases.
+        All data MUST come from the Go orchestrator.
+
+        Single responsibility: Validate and return data from orchestrator.
 
         Args:
-            ticker: Ticker symbol (e.g., "SPY")
-            num_days: Number of historical days to fetch
+            ticker: Ticker symbol (for logging only)
+            num_days: Expected context size (for validation)
+            recent_data: Historical prices from orchestrator (REQUIRED)
+            as_of_date: ISO date string (for logging/metadata only)
 
         Returns:
             List of close prices (newest last)
 
         Raises:
-            httpx.HTTPError: If data fetch fails
-            ValueError: If response format is invalid
+            ValueError: If data validation fails
         """
-        logger.info(f"📈 Fetching {num_days} days of {ticker} data")
+        logger.info("=" * 80)
+        logger.info("✅ USING DATA FROM ORCHESTRATOR (PURE INFERENCE MODE)")
+        logger.info("=" * 80)
+        logger.info(f"📊 Processing recent_data from orchestrator")
+        logger.info(f"   Ticker: {ticker}")
+        logger.info(f"   As-Of Date: {as_of_date if as_of_date else 'N/A (live mode)'}")
+        logger.info(f"   Data Length: {len(recent_data)}")
+        logger.info(f"   Expected context_period_size: {num_days}")
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.data_service_url}/v1/data/query",
-                json={"ticker": ticker, "days": num_days}
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        # Validation: Check data length against expected context size
+        if len(recent_data) < num_days:
+            logger.warning("=" * 80)
+            logger.warning("⚠️ WARNING: DATA LENGTH MISMATCH")
+            logger.warning(f"   Provided: {len(recent_data)} points")
+            logger.warning(f"   Expected: {num_days} points")
+            logger.warning(f"   Will use all {len(recent_data)} available points")
+            logger.warning("=" * 80)
 
-            # Extract close prices from data service response
-            # Response format: {"ticker": "SPY", "data": [{"time": "...", "close": 450.2, ...}, ...]}
-            if "data" not in data:
-                raise ValueError(f"Invalid data response: missing 'data' field")
+        # Log detailed statistics about the data
+        logger.info(f"📈 DATA STATISTICS:")
+        logger.info(f"   First 10 values: {recent_data[:10]}")
+        logger.info(f"   Last 10 values: {recent_data[-10:]}")
+        logger.info(f"   Min price: {min(recent_data):.2f}")
+        logger.info(f"   Max price: {max(recent_data):.2f}")
+        logger.info(f"   Mean price: {sum(recent_data)/len(recent_data):.2f}")
+        logger.info(f"   Range: {max(recent_data) - min(recent_data):.2f}")
 
-            prices = [point["close"] for point in data["data"]]
-            logger.info(f"   ✅ Fetched {len(prices)} price points")
+        # Return the data as-is (orchestrator has already sliced it correctly)
+        logger.info(f"✅ VALIDATED AND RETURNING {len(recent_data)} price points")
+        logger.info(f"   🔒 Python service NEVER queries database - data from orchestrator only")
+        logger.info("=" * 80)
 
-            return prices
+        return recent_data
 
     async def _run_inference(
         self,
@@ -246,13 +308,29 @@ class LegacyForecastService:
         Raises:
             httpx.HTTPError: If Chronos API call fails
         """
-        logger.info("🔮 Running Chronos inference")
+        logger.info("=" * 80)
+        logger.info("🔮 RUNNING CHRONOS MODEL INFERENCE")
+        logger.info("=" * 80)
 
         # Transform request using pure adapter
         chronos_request = aleutian_to_chronos(request, prices)
 
+        logger.info(f"📤 CHRONOS REQUEST PAYLOAD:")
+        logger.info(f"   Context Length: {len(chronos_request.context)}")
+        logger.info(f"   Context First 10: {chronos_request.context[:10]}")
+        logger.info(f"   Context Last 10: {chronos_request.context[-10:]}")
+        logger.info(f"   Context Min: {min(chronos_request.context):.2f}")
+        logger.info(f"   Context Max: {max(chronos_request.context):.2f}")
+        logger.info(f"   Context Mean: {sum(chronos_request.context)/len(chronos_request.context):.2f}")
+        logger.info(f"   Prediction Length: {chronos_request.prediction_length}")
+        logger.info(f"   Num Samples: {chronos_request.num_samples}")
+        logger.info("=" * 80)
+
         # Call Chronos API
         async with httpx.AsyncClient(timeout=self.timeout) as client:
+            logger.info(f"📡 Calling Chronos API:")
+            logger.info(f"   URL: {self.base_url}/forecast/v1/chronos/inference")
+
             resp = await client.post(
                 f"{self.base_url}/forecast/v1/chronos/inference",
                 json=chronos_request.model_dump(),
@@ -261,11 +339,29 @@ class LegacyForecastService:
             resp.raise_for_status()
             chronos_data = resp.json()
 
+            logger.info(f"📥 CHRONOS RESPONSE RECEIVED:")
+            logger.info(f"   Status Code: {resp.status_code}")
+            logger.info(f"   Response Keys: {list(chronos_data.keys())}")
+
         # Parse response
         chronos_response = ChronosInferenceResponse(**chronos_data["prediction"])
 
+        logger.info(f"📊 CHRONOS FORECAST OUTPUT:")
+        logger.info(f"   Median Forecast: {chronos_response.median}")
+        logger.info(f"   Mean Forecast: {chronos_response.mean}")
+        logger.info(f"   Forecast Length: {len(chronos_response.median)}")
+        logger.info("=" * 80)
+
         # Transform to AleutianLocal format using pure adapter
-        return chronos_to_aleutian(chronos_response, request.name)
+        aleutian_response = chronos_to_aleutian(chronos_response, request.name)
+
+        logger.info(f"📤 FINAL RESPONSE TO ALEUTIAN:")
+        logger.info(f"   Ticker: {aleutian_response.name}")
+        logger.info(f"   Forecast: {aleutian_response.forecast}")
+        logger.info(f"   Message: {aleutian_response.message}")
+        logger.info("=" * 80)
+
+        return aleutian_response
 
     async def _run_timesfm_inference(
         self,

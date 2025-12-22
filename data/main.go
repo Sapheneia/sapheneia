@@ -418,17 +418,33 @@ func (s *Server) handleQueryData(c *gin.Context) {
 		req.Days = 252 // Default to 1 year of trading days
 	}
 
-	// Build Flux query
-	query := fmt.Sprintf(`
-		from(bucket: "%s")
-		  |> range(start: -%dd)
-		  |> filter(fn: (r) => r._measurement == "stock_prices")
-		  |> filter(fn: (r) => r.ticker == "%s")
-		  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-		  |> sort(columns: ["_time"], desc: false)
-	`, influxBucket, req.Days+10, req.Ticker) // +10 days buffer
-
-	slog.Info("Querying InfluxDB", "ticker", req.Ticker, "days", req.Days)
+	// Build Flux query with optional end_date (CRITICAL: Prevents look-ahead bias)
+	var query string
+	if req.EndDate != "" {
+		// BACKTEST MODE: Use end_date as stop parameter to prevent future data leakage
+		// Convert YYYY-MM-DD to RFC3339 timestamp (end of day to include the full day's data)
+		stopTime := fmt.Sprintf("%sT23:59:59Z", req.EndDate)
+		query = fmt.Sprintf(`
+			from(bucket: "%s")
+			  |> range(start: -%dd, stop: %s)
+			  |> filter(fn: (r) => r._measurement == "stock_prices")
+			  |> filter(fn: (r) => r.ticker == "%s")
+			  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+			  |> sort(columns: ["_time"], desc: false)
+		`, influxBucket, req.Days+10, stopTime, req.Ticker)
+		slog.Info("Querying InfluxDB (backtest mode)", "ticker", req.Ticker, "days", req.Days, "end_date", req.EndDate, "stop_time", stopTime)
+	} else {
+		// LIVE MODE: Query up to now
+		query = fmt.Sprintf(`
+			from(bucket: "%s")
+			  |> range(start: -%dd)
+			  |> filter(fn: (r) => r._measurement == "stock_prices")
+			  |> filter(fn: (r) => r.ticker == "%s")
+			  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+			  |> sort(columns: ["_time"], desc: false)
+		`, influxBucket, req.Days+10, req.Ticker)
+		slog.Info("Querying InfluxDB (live mode)", "ticker", req.Ticker, "days", req.Days)
+	}
 
 	result, err := s.QueryAPI.Query(context.Background(), query)
 	if err != nil {

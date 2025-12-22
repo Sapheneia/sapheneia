@@ -17,6 +17,14 @@ class AleutianForecastRequest(BaseModel):
     Request from AleutianLocal to legacy /v1/timeseries/forecast endpoint.
 
     This matches the contract expected by AleutianLocal's orchestrator.
+
+    CRITICAL UPDATE (2025-12-22): Added `recent_data` and `as_of_date` fields
+    to fix look-ahead bias during backtesting.
+
+    Data Flow Priority:
+    1. If `recent_data` is provided, use it directly (backtest mode)
+    2. Otherwise, query InfluxDB for historical data (live mode)
+    3. If querying DB, respect `as_of_date` as the stop parameter
     """
     name: str = Field(
         ...,
@@ -37,13 +45,31 @@ class AleutianForecastRequest(BaseModel):
         description="Model identifier (e.g., 'amazon/chronos-t5-tiny', 'google/timesfm-2.0-500m-pytorch')"
     )
 
+    # ──────────────────────────────────────────────────────────────────
+    # 🆕 REQUIRED FIELD (2025-12-22): Data must be provided by orchestrator
+    # Python service NEVER queries database - it's a pure inference engine
+    # ──────────────────────────────────────────────────────────────────
+
+    recent_data: List[float] = Field(
+        ...,
+        description="REQUIRED: Historical price sequence from orchestrator. Python service does NOT query database.",
+        min_items=1
+    )
+
+    as_of_date: Optional[str] = Field(
+        default=None,
+        description="ISO date string (YYYY-MM-DD) representing the simulated 'current' date. Used for metadata/logging only."
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
                 "name": "SPY",
                 "context_period_size": 90,
                 "forecast_period_size": 30,
-                "model": "amazon/chronos-t5-tiny"
+                "model": "amazon/chronos-t5-tiny",
+                "recent_data": [380.50, 381.20, 379.80, 385.00, 388.10],
+                "as_of_date": "2023-01-15"
             }
         }
 
