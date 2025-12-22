@@ -1,131 +1,70 @@
 """
-Pytest configuration and shared fixtures for Sapheneia tests.
-
-Provides common test fixtures and utilities for all test modules.
+Pytest configuration and fixtures for Sapheneia tests.
 """
 
 import pytest
-from fastapi.testclient import TestClient
+import sys
 from pathlib import Path
-import os
-import tempfile
-import shutil
 
-# Import the FastAPI app
-from forecast.main import app
+# Add forecast package to Python path
+forecast_path = Path(__file__).parent.parent / "forecast"
+sys.path.insert(0, str(forecast_path))
 
 
 @pytest.fixture
-def client():
-    """FastAPI test client for testing API endpoints."""
-    return TestClient(app)
+def sample_aleutian_request():
+    """Fixture providing a sample AleutianForecastRequest."""
+    from forecast.core.legacy_schema import AleutianForecastRequest
+    
+    return AleutianForecastRequest(
+        name="SPY",
+        context_period_size=90,
+        forecast_period_size=10,
+        model="amazon/chronos-t5-tiny"
+    )
 
 
 @pytest.fixture
-def auth_headers():
-    """Authentication headers for testing API endpoints."""
-    return {"Authorization": "Bearer test_secret_key"}
+def sample_historical_prices():
+    """Fixture providing sample historical price data."""
+    return [450.0 + i * 0.1 for i in range(90)]
 
 
 @pytest.fixture
-def sample_data_file(tmp_path):
-    """
-    Create a sample CSV file for testing.
+def sample_chronos_response():
+    """Fixture providing a sample ChronosInferenceResponse."""
+    from forecast.core.legacy_schema import ChronosInferenceResponse
     
-    Creates a temporary CSV file with 100 rows of time series data.
-    """
-    import pandas as pd
-    
-    df = pd.DataFrame({
-        'date': pd.date_range('2024-01-01', periods=100, freq='D'),
-        'value': range(100),
-        'category': ['A'] * 50 + ['B'] * 50
-    })
-    
-    file_path = tmp_path / "test_data.csv"
-    df.to_csv(file_path, index=False)
-    return file_path
+    return ChronosInferenceResponse(
+        median=[455.0, 456.0, 457.0, 458.0, 459.0, 460.0, 461.0, 462.0, 463.0, 464.0],
+        mean=[454.9, 455.9, 456.9, 457.9, 458.9, 459.9, 460.9, 461.9, 462.9, 463.9],
+        quantiles={
+            "10": [453.0] * 10,
+            "50": [455.0, 456.0, 457.0, 458.0, 459.0, 460.0, 461.0, 462.0, 463.0, 464.0],
+            "90": [457.0] * 10,
+        },
+        samples=[
+            [455.0 + i * 0.2 for i in range(10)],
+            [454.0 + i * 0.2 for i in range(10)],
+            [456.0 + i * 0.2 for i in range(10)],
+        ],
+        metadata={
+            "context_length": 90,
+            "prediction_length": 10,
+            "num_samples": 20,
+            "model_variant": "amazon/chronos-t5-tiny",
+            "inference_time_seconds": 2.45
+        }
+    )
 
 
 @pytest.fixture
-def sample_large_data_file(tmp_path):
-    """
-    Create a larger sample CSV file for testing (500 rows).
-    
-    Useful for testing performance and larger data processing.
-    """
-    import pandas as pd
-    
-    df = pd.DataFrame({
-        'date': pd.date_range('2024-01-01', periods=500, freq='D'),
-        'value': range(500),
-        'volume': [100] * 500
-    })
-    
-    file_path = tmp_path / "test_large_data.csv"
-    df.to_csv(file_path, index=False)
-    return file_path
-
-
-@pytest.fixture
-def temp_data_dir(tmp_path):
-    """
-    Create a temporary data directory structure for testing.
-    
-    Creates temporary uploads/ and results/ directories.
-    Returns the base path.
-    """
-    base_dir = tmp_path / "data"
-    uploads_dir = base_dir / "uploads"
-    results_dir = base_dir / "results"
-    
-    uploads_dir.mkdir(parents=True)
-    results_dir.mkdir(parents=True)
-    
-    return base_dir
-
-
-@pytest.fixture
-def mock_data_definition():
-    """Sample data definition for testing."""
+def mock_data_service_response():
+    """Fixture providing a mock data service response."""
     return {
-        "value": "target",
-        "category": "dynamic_categorical",
-        "volume": "dynamic_numerical"
+        "ticker": "SPY",
+        "data": [
+            {"time": f"2023-01-{i:02d}", "close": 450.0 + i * 0.1}
+            for i in range(1, 91)
+        ]
     }
-
-
-@pytest.fixture
-def mock_inference_parameters():
-    """Sample inference parameters for testing."""
-    return {
-        "context_len": 64,
-        "horizon_len": 24,
-        "use_covariates": False,
-        "use_quantiles": False
-    }
-
-
-@pytest.fixture(scope="session")
-def test_env():
-    """Set up test environment variables."""
-    old_env = {}
-    test_env_vars = {
-        'API_SECRET_KEY': 'test_secret_key',
-        'ENVIRONMENT': 'test',
-        'LOG_LEVEL': 'DEBUG'
-    }
-    
-    # Save old values
-    for key, value in test_env_vars.items():
-        old_env[key] = os.environ.get(key)
-        os.environ[key] = value
-    
-    yield test_env_vars
-    
-    # Restore old values
-    for key, value in old_env.items():
-        if value is None:
-            os.environ.pop(key, None)
-        else:
-            os.environ[key] = value

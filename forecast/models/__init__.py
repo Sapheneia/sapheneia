@@ -19,17 +19,95 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "default_port": 8001,
         "status": "active"
     },
-    # Future models can be added here:
-    # "chronos": {
-    #     "name": "Chronos",
-    #     "version": "1.0",
-    #     "description": "Amazon's Chronos - Transformer-based forecasting model",
-    #     "module": "forecast.models.chronos",
-    #     "router_path": "forecast.models.chronos.routes.endpoints",
-    #     "service_path": "forecast.models.chronos.services.model",
-    #     "default_port": 8002,
-    #     "status": "planned"
-    # },
+    # Amazon Chronos Models
+    "chronos-t5-tiny": {
+        "name": "Chronos T5 Tiny",
+        "version": "1.0",
+        "description": "Amazon Chronos T5 Tiny - Compact time series forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8100,
+        "huggingface_id": "amazon/chronos-t5-tiny",
+        "status": "active"
+    },
+    "chronos-t5-mini": {
+        "name": "Chronos T5 Mini",
+        "version": "1.0",
+        "description": "Amazon Chronos T5 Mini - Small time series forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8101,
+        "huggingface_id": "amazon/chronos-t5-mini",
+        "status": "active"
+    },
+    "chronos-t5-small": {
+        "name": "Chronos T5 Small",
+        "version": "1.0",
+        "description": "Amazon Chronos T5 Small - Medium time series forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8102,
+        "huggingface_id": "amazon/chronos-t5-small",
+        "status": "active"
+    },
+    "chronos-t5-base": {
+        "name": "Chronos T5 Base",
+        "version": "1.0",
+        "description": "Amazon Chronos T5 Base - Base time series forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8103,
+        "huggingface_id": "amazon/chronos-t5-base",
+        "status": "active"
+    },
+    "chronos-t5-large": {
+        "name": "Chronos T5 Large",
+        "version": "1.0",
+        "description": "Amazon Chronos T5 Large - Large time series forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8104,
+        "huggingface_id": "amazon/chronos-t5-large",
+        "status": "active"
+    },
+    "chronos-bolt-mini": {
+        "name": "Chronos Bolt Mini",
+        "version": "1.0",
+        "description": "Amazon Chronos Bolt Mini - Fast mini forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8105,
+        "huggingface_id": "amazon/chronos-bolt-mini",
+        "status": "active"
+    },
+    "chronos-bolt-small": {
+        "name": "Chronos Bolt Small",
+        "version": "1.0",
+        "description": "Amazon Chronos Bolt Small - Fast small forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8106,
+        "huggingface_id": "amazon/chronos-bolt-small",
+        "status": "active"
+    },
+    "chronos-bolt-base": {
+        "name": "Chronos Bolt Base",
+        "version": "1.0",
+        "description": "Amazon Chronos Bolt Base - Fast base forecasting model",
+        "module": "forecast.models.chronos",
+        "router_path": "forecast.models.chronos.routes.endpoints",
+        "service_path": "forecast.models.chronos.services.model",
+        "default_port": 8107,
+        "huggingface_id": "amazon/chronos-bolt-base",
+        "status": "active"
+    },
 }
 
 
