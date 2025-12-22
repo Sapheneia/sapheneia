@@ -53,14 +53,16 @@ RUN if [ "$MODEL_NAME" = "timesfm20" ] || [ "$MODEL_NAME" = "all" ]; then \
         uv pip install --system --no-cache torch; \
     fi
 
-# Future model dependencies can be added here:
-# RUN if [ "$MODEL_NAME" = "chronos" ] || [ "$MODEL_NAME" = "all" ]; then \
-#         uv pip install --system --no-cache chronos-forecasting; \
-#     fi
+# Install Chronos dependencies
+RUN if [ "$MODEL_NAME" = "chronos" ] || [ "$MODEL_NAME" = "all" ]; then \
+        echo "Installing Chronos dependencies..." && \
+        uv pip install --system --no-cache torch git+https://github.com/amazon-science/chronos-forecasting.git; \
+    fi
 
 # Create necessary directories for all models
 RUN mkdir -p \
     forecast/models/timesfm20/local \
+    forecast/models/chronos/local \
     data/uploads \
     logs
 

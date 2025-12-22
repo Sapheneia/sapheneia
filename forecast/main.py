@@ -29,6 +29,11 @@ from .models import get_available_models, get_all_models_info
 
 # Import routers from model modules
 from .models.timesfm20.routes import endpoints as timesfm20_endpoints
+from .models.chronos.routes import endpoints as chronos_endpoints
+
+# Import legacy API service and schema
+from .core.legacy_service import LegacyForecastService
+from .core.legacy_schema import AleutianForecastRequest, AleutianForecastResponse
 
 # Optional: MLflow integration (to be implemented in Phase 10)
 try:
@@ -262,8 +267,15 @@ app.include_router(
 )
 logger.info(f"✅ Included TimesFM-2.0 router at: /forecast/v1{timesfm20_endpoints.router.prefix}")
 
+# Chronos routes under /forecast/v1/chronos
+app.include_router(
+    chronos_endpoints.router,
+    prefix="/forecast/v1"
+)
+logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+
 # Future models can be added here:
-# app.include_router(flowstate91m_endpoints.router, prefix="/forecast/v1")
+# app.include_router(other_model_endpoints.router, prefix="/forecast/v1")
 
 
 # --- Root Endpoints ---
@@ -359,6 +371,101 @@ async def list_models(request: Request, response: Response):
         "models": get_all_models_info(),
         "count": len(get_available_models())
     }
+
+
+# --- Backward Compatibility Endpoint ---
+
+@app.post("/v1/timeseries/forecast", tags=["Legacy"], response_model=AleutianForecastResponse)
+@limiter.limit(get_rate_limit("default"))
+async def legacy_timeseries_forecast(
+    request: Request,
+    response: Response
+) -> AleutianForecastResponse:
+    """
+    Legacy endpoint for backward compatibility with AleutianLocal orchestrator.
+
+    Supports multiple forecasting models (Chronos, TimesFM, etc.) through
+    dynamic routing based on the model identifier.
+
+    **Request Format (from AleutianLocal):**
+    ```json
+    {
+        "name": "SPY",
+        "context_period_size": 90,
+        "forecast_period_size": 10,
+        "model": "amazon/chronos-t5-tiny"
+    }
+    ```
+
+    **Response Format:**
+    ```json
+    {
+        "name": "SPY",
+        "forecast": [450.2, 451.5, 452.8, ...],
+        "message": "Success"
+    }
+    ```
+    """
+    try:
+        # Parse and validate request
+        body = await request.json()
+
+        # DEBUG LOGGING: Log raw incoming request
+        logger.info("=" * 80)
+        logger.info("🌐 HTTP REQUEST RECEIVED AT /v1/timeseries/forecast")
+        logger.info("=" * 80)
+        logger.info(f"📥 RAW REQUEST BODY:")
+        logger.info(f"   Keys in payload: {list(body.keys())}")
+        logger.info(f"   Full payload: {body}")
+
+        # Check for recent_data field explicitly (NOW REQUIRED!)
+        if "recent_data" in body:
+            recent_data = body["recent_data"]
+            if recent_data is not None:
+                logger.info(f"✅ recent_data FOUND IN HTTP REQUEST!")
+                logger.info(f"   🔒 Python service NEVER queries database")
+                logger.info(f"   Type: {type(recent_data)}")
+                logger.info(f"   Length: {len(recent_data) if isinstance(recent_data, list) else 'N/A'}")
+                if isinstance(recent_data, list) and len(recent_data) > 0:
+                    logger.info(f"   First 5: {recent_data[:5]}")
+                    logger.info(f"   Last 5: {recent_data[-5:]}")
+            else:
+                logger.error(f"❌ recent_data KEY EXISTS BUT VALUE IS NULL!")
+                logger.error(f"   This request will be REJECTED - recent_data is REQUIRED")
+        else:
+            logger.error(f"❌ recent_data KEY NOT PRESENT IN REQUEST!")
+            logger.error(f"   This request will be REJECTED - recent_data is REQUIRED")
+            logger.error(f"   Python service does NOT query database - orchestrator must provide data")
+
+        logger.info("=" * 80)
+
+        # Validate with Pydantic (will fail if recent_data missing)
+        forecast_request = AleutianForecastRequest(**body)
+
+        logger.info(f"✅ Pydantic Validation Successful - recent_data is present and valid")
+        logger.info("=" * 80)
+
+        # Delegate to service layer
+        service = LegacyForecastService()
+        result = await service.forecast(forecast_request)
+
+        return result
+
+    except ValueError as e:
+        # Validation errors (unknown model, invalid parameters, etc.)
+        logger.error(f"Validation error in legacy forecast: {e}")
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)}
+        )
+
+    except Exception as e:
+        # Unexpected errors
+        logger.exception("Error in legacy forecast endpoint")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal server error", "details": str(e)}
+        )
 
 
 # --- Direct Run Configuration (for development) ---

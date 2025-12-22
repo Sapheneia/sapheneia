@@ -37,16 +37,27 @@ async def get_api_key(
     """
     provided_key = credentials.credentials
 
+    # Enhanced logging for debugging authentication issues
+    logger.info(f"🔐 Authentication attempt:")
+    logger.info(f"   Scheme: {credentials.scheme}")
+    logger.info(f"   Provided key (first 8 chars): {provided_key[:8] if provided_key else 'NONE'}...")
+    logger.info(f"   Expected key (first 8 chars): {settings.API_SECRET_KEY[:8]}...")
+    logger.info(f"   Keys match: {provided_key == settings.API_SECRET_KEY}")
+
     # Validate against configured API key
     if provided_key != settings.API_SECRET_KEY:
-        logger.warning(f"Invalid API key attempt: {provided_key[:8]}...")
+        logger.error(f"❌ Authentication FAILED:")
+        logger.error(f"   Provided: {provided_key[:min(20, len(provided_key))] if provided_key else 'NONE'}...")
+        logger.error(f"   Expected: {settings.API_SECRET_KEY[:min(20, len(settings.API_SECRET_KEY))]}...")
+        logger.error(f"   Provided length: {len(provided_key) if provided_key else 0}")
+        logger.error(f"   Expected length: {len(settings.API_SECRET_KEY)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    logger.debug("API key validated successfully")
+    logger.info("✅ API key validated successfully")
     return provided_key
 
 

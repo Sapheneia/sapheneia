@@ -26,7 +26,7 @@ RUN which uv && uv --version
 # Copy project files
 COPY pyproject.toml ./
 COPY ui/ ./ui/
-COPY api/ ./api/
+COPY forecast/ ./forecast/
 COPY .env .env
 
 # Install dependencies using uv

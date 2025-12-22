@@ -19,13 +19,15 @@ services:
       - API_PORT=8000
       - MODEL_NAME=all
       - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
     volumes:
       - ./forecast:/app/forecast
       - ./data:/app/data
       - ./logs:/app/logs
       - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
     networks:
-      - sapheneia-network
+      - aleutian-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -33,6 +35,273 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s  # Extended for model loading time
+
+  # Amazon Chronos Models - Separate containers for each variant
+  # Each container mounts the pre-downloaded models cache from Aleutian
+
+  forecast-chronos-t5-tiny:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-tiny
+    ports:
+      - "8100:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-tiny
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-t5-mini:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-mini
+    ports:
+      - "8101:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-mini
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-t5-small:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-small
+    ports:
+      - "8102:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-small
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-t5-base:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-base
+    ports:
+      - "8103:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-base
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-t5-large:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-large
+    ports:
+      - "8104:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-large
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-bolt-mini:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-bolt-mini
+    ports:
+      - "8105:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-bolt-mini
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-bolt-small:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-bolt-small
+    ports:
+      - "8106:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-bolt-small
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  forecast-chronos-bolt-base:
+    build:
+      context: .
+      dockerfile: Dockerfile.forecast
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-bolt-base
+    ports:
+      - "8107:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-bolt-base
+      - HF_HOME=/models_cache
+      - DEVICE=cpu
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=default_trading_api_key_please_change
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Optional: Separate TimesFM-2.0 API Service (uncomment to run as separate service)
   # api-timesfm20:
@@ -58,7 +327,7 @@ services:
   #     - ./logs:/app/logs
   #     - api_models_timesfm20:/app/api/models/timesfm20/local
   #   networks:
-  #     - sapheneia-network
+  #     - aleutian-network
   #   restart: unless-stopped
   #   healthcheck:
   #     test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -88,7 +357,7 @@ services:
       forecast:
         condition: service_healthy
     networks:
-      - sapheneia-network
+      - aleutian-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -112,13 +381,14 @@ services:
       - TRADING_API_HOST=0.0.0.0
       - TRADING_API_PORT=9000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TRADING_API_KEY=default_trading_api_key_please_change
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - PYTHONPATH=/app
     volumes:
       - ./trading:/app/trading
       - ./logs:/app/logs
     networks:
-      - sapheneia-network
+      - aleutian-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
@@ -127,9 +397,33 @@ services:
       retries: 3
       start_period: 40s
 
+  # Finance Data Service (Yahoo Finance → InfluxDB)
+  data:
+    build:
+      context: .
+      dockerfile: Dockerfile.data
+    container_name: sapheneia-data
+    ports:
+      - "${DATA_API_PORT:-8001}:8000"
+    environment:
+      - INFLUXDB_URL=http://user-influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-your_super_secret_admin_token}
+      - INFLUXDB_ORG=${INFLUXDB_ORG:-aleutian-finance}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-financial-data}
+    networks:
+      - aleutian-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
 networks:
-  sapheneia-network:
-    driver: bridge
+  aleutian-network:
+    external: true
+    name: aleutian-shared
 
 volumes:
   forecast_models_timesfm20:
