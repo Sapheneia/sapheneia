@@ -47,6 +47,20 @@ metrics = [
     "ipython>=8.12.0",  # Required by quantstats for reports module
 ]
 
+# Trading API dependencies
+trading = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "slowapi>=0.1.9",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "requests>=2.31.0",
+    "yfinance>=0.2.0",  # Often used in trading apps, ensuring it's here
+]
+
 # UI dependencies
 ui = [
     "flask>=3.0.0",

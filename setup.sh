@@ -39,6 +39,9 @@
 
 set -e  # Exit on any error
 
+# specific path for uv
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -223,6 +226,8 @@ cmd_init() {
 
             # Install dependencies
             install_dependencies
+            print_status "Installing forecasting dependencies..."
+            uv pip install -e .[forecasting]
 
             # Setup environment file
             setup_env_file
@@ -258,6 +263,8 @@ cmd_init() {
 
             # Install dependencies
             install_dependencies
+            print_status "Installing trading dependencies..."
+            uv pip install -e .[trading]
 
             # Setup environment file (if not exists)
             setup_env_file
@@ -288,6 +295,8 @@ cmd_init() {
 
             # Install dependencies
             install_dependencies
+            print_status "Installing metrics dependencies..."
+            uv pip install -e .[metrics]
 
             # Setup environment file (if not exists)
             setup_env_file
@@ -472,9 +481,6 @@ cmd_run_docker() {
         exit 1
     fi
 
-    # Set Docker context to desktop-linux for Docker Desktop on macOS
-    export DOCKER_CONTEXT=desktop-linux
-
     # Check for docker compose (new) or docker-compose (legacy)
     if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
         print_error "Docker Compose is not installed. Please install Docker Compose first."
@@ -536,6 +542,22 @@ cmd_run_docker() {
                 exit 1
             fi
             ;;
+        metrics)
+            if [[ -z "$service" || "$service" == "metrics" ]]; then
+                kill_port $METRICS_PORT
+                print_status "Building and starting Metrics container..."
+                $COMPOSE_CMD up -d metrics
+                sleep 3
+                print_status "✅ Metrics API running at http://localhost:$METRICS_PORT"
+                echo
+                print_status "View logs: $COMPOSE_CMD logs -f metrics"
+                print_status "To stop: ./setup.sh stop metrics"
+            else
+                print_error "Unknown service: $service"
+                print_error "Usage: ./setup.sh run-docker metrics"
+                exit 1
+            fi
+            ;;
         *)
             if [[ "$application" == "all" ]]; then
                 print_error "Invalid command. Use: ./setup.sh run-docker forecast all"
@@ -563,12 +585,10 @@ cmd_test() {
 
 # Function to stop services
 cmd_stop() {
-    local application=$1
+    local application="${1:-all}"
 
     if [[ -z "$application" ]]; then
-        print_error "Application name required"
-        print_error "Usage: ./setup.sh stop [forecast|trading]"
-        exit 1
+        application="all"
     fi
 
     case $application in
@@ -620,6 +640,11 @@ cmd_stop() {
             kill_port $METRICS_PORT
 
             print_status "✅ Metrics services stopped"
+            ;;
+        all)
+            cmd_stop forecast
+            cmd_stop trading
+            cmd_stop metrics
             ;;
         *)
             print_error "Unknown application: $application"
