@@ -1,0 +1,63 @@
+# Sapheneia Metrics API Dockerfile
+# FastAPI backend for evaluation metrics
+#
+# Build args:
+#   METRICS_PORT: Port to expose (default: 8001)
+#
+# Examples:
+#   docker build -f Dockerfile.metrics -t sapheneia-metrics .
+#   docker build -f Dockerfile.metrics -t sapheneia-metrics --build-arg METRICS_PORT=8002 .
+
+FROM python:3.11-slim
+
+# Build arguments
+ARG MODEL_NAME=metrics
+ARG METRICS_PORT=8001
+
+# Set as environment variables
+ENV METRICS_PORT=${METRICS_PORT}
+
+LABEL maintainer="Sapheneia Team"
+LABEL description="Sapheneia ${MODEL_NAME} API"
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+ENV UV_HOME=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
+    mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+
+# Verify uv is installed
+RUN which uv && uv --version
+
+# Copy project files
+COPY pyproject.toml ./
+COPY metrics/ ./metrics/
+COPY .env .env
+
+# Install base dependencies
+RUN uv pip install --system --no-cache -e .
+
+# Install metrics-specific dependencies
+RUN uv pip install --system --no-cache -e .[metrics]
+
+# Create necessary directories
+RUN mkdir -p logs
+
+# Expose the specified port
+EXPOSE ${METRICS_PORT}
+
+# Health check - adjust port based on METRICS_PORT
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${METRICS_PORT}/health || exit 1
+
+# Run metrics API server on specified port
+CMD uvicorn metrics.main:app --host 0.0.0.0 --port ${METRICS_PORT}
+
