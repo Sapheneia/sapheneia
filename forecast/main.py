@@ -31,7 +31,10 @@ from .models import get_available_models, get_all_models_info
 from .models.timesfm20.routes import endpoints as timesfm20_endpoints
 from .models.chronos.routes import endpoints as chronos_endpoints
 
-# Import legacy API service and schema
+# Import new unified orchestration router
+from orchestration import orchestration_router
+
+# Import legacy API service and schema (DEPRECATED - use inference module)
 from .core.legacy_service import LegacyForecastService
 from .core.legacy_schema import AleutianForecastRequest, AleutianForecastResponse
 
@@ -273,6 +276,11 @@ app.include_router(
     prefix="/forecast/v1"
 )
 logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+
+# Unified orchestration router (NEW - preferred integration point)
+# Provides: /orchestration/v1/predict, /orchestration/v1/health, /orchestration/v1/models
+app.include_router(orchestration_router)
+logger.info("✅ Included Orchestration router at: /orchestration/v1/*")
 
 # Future models can be added here:
 # app.include_router(other_model_endpoints.router, prefix="/forecast/v1")
