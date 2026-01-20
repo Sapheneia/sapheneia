@@ -12,50 +12,9 @@ sys.path.insert(0, str(forecast_path))
 
 
 @pytest.fixture
-def sample_aleutian_request():
-    """Fixture providing a sample AleutianForecastRequest."""
-    from forecast.core.legacy_schema import AleutianForecastRequest
-    
-    return AleutianForecastRequest(
-        name="SPY",
-        context_period_size=90,
-        forecast_period_size=10,
-        model="amazon/chronos-t5-tiny"
-    )
-
-
-@pytest.fixture
 def sample_historical_prices():
     """Fixture providing sample historical price data."""
     return [450.0 + i * 0.1 for i in range(90)]
-
-
-@pytest.fixture
-def sample_chronos_response():
-    """Fixture providing a sample ChronosInferenceResponse."""
-    from forecast.core.legacy_schema import ChronosInferenceResponse
-    
-    return ChronosInferenceResponse(
-        median=[455.0, 456.0, 457.0, 458.0, 459.0, 460.0, 461.0, 462.0, 463.0, 464.0],
-        mean=[454.9, 455.9, 456.9, 457.9, 458.9, 459.9, 460.9, 461.9, 462.9, 463.9],
-        quantiles={
-            "10": [453.0] * 10,
-            "50": [455.0, 456.0, 457.0, 458.0, 459.0, 460.0, 461.0, 462.0, 463.0, 464.0],
-            "90": [457.0] * 10,
-        },
-        samples=[
-            [455.0 + i * 0.2 for i in range(10)],
-            [454.0 + i * 0.2 for i in range(10)],
-            [456.0 + i * 0.2 for i in range(10)],
-        ],
-        metadata={
-            "context_length": 90,
-            "prediction_length": 10,
-            "num_samples": 20,
-            "model_variant": "amazon/chronos-t5-tiny",
-            "inference_time_seconds": 2.45
-        }
-    )
 
 
 @pytest.fixture
@@ -68,3 +27,30 @@ def mock_data_service_response():
             for i in range(1, 91)
         ]
     }
+
+
+@pytest.fixture
+def sample_data_file(tmp_path):
+    """Fixture providing a sample CSV data file for testing."""
+    import pandas as pd
+
+    # Create sample data
+    data = {
+        "date": [f"2023-01-{i:02d}" for i in range(1, 31)],
+        "value": [100.0 + i * 0.5 for i in range(30)]
+    }
+    df = pd.DataFrame(data)
+
+    # Create the data/uploads directory structure in tmp_path
+    uploads_dir = tmp_path / "data" / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write to file
+    file_path = uploads_dir / "sample_data.csv"
+    df.to_csv(file_path, index=False)
+
+    return file_path
+
+
+# Note: client and auth_headers fixtures are defined locally in test_endpoints.py
+# to handle import errors gracefully when forecast.main cannot be imported

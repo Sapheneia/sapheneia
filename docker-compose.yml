@@ -1,7 +1,21 @@
+# =============================================================================
+# Sapheneia Docker Compose - v2.0
+# =============================================================================
+# Updated 2026-01-20 for Aleutian integration with 127xx port scheme
+#
+# Port assignments defined in .env file:
+#   ORCHESTRATION_PORT (12700) - Gateway
+#   CHRONOS_T5_*_PORT (12710-12714) - Chronos T5 models
+#   CHRONOS_BOLT_*_PORT (12715-12717) - Chronos Bolt models
+#   TIMESFM_*_PORT (12720-12721) - TimesFM models
+#   UI_PORT (12780) - Web interface
+#   TRADING_API_PORT (12132) - Trading API
+#   DATA_API_PORT (12701) - Data service
+# =============================================================================
+
 services:
-  # FastAPI Backend - Forecast API (serves all models)
+  # FastAPI Backend - Forecast API Gateway (routes to all models)
   # NOTE: Uses module-level state - MUST run with single worker (UVICORN_WORKERS=1)
-  # For parallel processing, implement Redis state backend (see REMEDIATION_PLAN.md Phase 4)
   forecast:
     build:
       context: .
@@ -11,7 +25,7 @@ services:
         MODEL_PORT: 8000
     container_name: sapheneia-forecast
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${ORCHESTRATION_PORT:-12700}:8000"
     env_file:
       - .env
     environment:
@@ -24,6 +38,7 @@ services:
       - ./forecast:/app/forecast
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./simulations:/app/simulations
       - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
       - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
     networks:
@@ -34,10 +49,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s  # Extended for model loading time
+      start_period: 120s
 
-  # Amazon Chronos Models - Separate containers for each variant
-  # Each container mounts the pre-downloaded models cache from Aleutian
+  # ===========================================================================
+  # Amazon Chronos T5 Series
+  # ===========================================================================
 
   forecast-chronos-t5-tiny:
     build:
@@ -48,7 +64,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-t5-tiny
     ports:
-      - "8100:8000"
+      - "${CHRONOS_T5_TINY_PORT:-12710}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -81,7 +97,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-t5-mini
     ports:
-      - "8101:8000"
+      - "${CHRONOS_T5_MINI_PORT:-12711}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -114,7 +130,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-t5-small
     ports:
-      - "8102:8000"
+      - "${CHRONOS_T5_SMALL_PORT:-12712}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -147,7 +163,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-t5-base
     ports:
-      - "8103:8000"
+      - "${CHRONOS_T5_BASE_PORT:-12713}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -180,7 +196,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-t5-large
     ports:
-      - "8104:8000"
+      - "${CHRONOS_T5_LARGE_PORT:-12714}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -204,6 +220,10 @@ services:
       retries: 3
       start_period: 60s
 
+  # ===========================================================================
+  # Amazon Chronos Bolt Series
+  # ===========================================================================
+
   forecast-chronos-bolt-mini:
     build:
       context: .
@@ -213,7 +233,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-bolt-mini
     ports:
-      - "8105:8000"
+      - "${CHRONOS_BOLT_MINI_PORT:-12715}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -246,7 +266,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-bolt-small
     ports:
-      - "8106:8000"
+      - "${CHRONOS_BOLT_SMALL_PORT:-12716}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -279,7 +299,7 @@ services:
         MODEL_PORT: 8000
     container_name: forecast-chronos-bolt-base
     ports:
-      - "8107:8000"
+      - "${CHRONOS_BOLT_BASE_PORT:-12717}:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -303,47 +323,53 @@ services:
       retries: 3
       start_period: 60s
 
-  # Optional: Separate TimesFM-2.0 API Service (uncomment to run as separate service)
-  # api-timesfm20:
+  # ===========================================================================
+  # Google TimesFM (commented - uncomment to enable)
+  # ===========================================================================
+
+  # forecast-timesfm-2-0:
   #   build:
   #     context: .
-  #     dockerfile: Dockerfile.api
+  #     dockerfile: Dockerfile.forecast
   #     args:
-  #       MODEL_NAME: timesfm20
-  #       MODEL_PORT: 8001
-  #   container_name: sapheneia-api-timesfm20
+  #       MODEL_NAME: timesfm
+  #       MODEL_PORT: 8000
+  #   container_name: forecast-timesfm-2-0
   #   ports:
-  #     - "${TIMESFM20_MODEL_PORT:-8001}:8001"
-  #   env_file:
-  #     - .env
+  #     - "${TIMESFM_2_0_PORT:-12720}:8000"
   #   environment:
   #     - API_HOST=0.0.0.0
-  #     - API_PORT=8001
-  #     - MODEL_NAME=timesfm20
+  #     - API_PORT=8000
+  #     - MODEL_NAME=timesfm
+  #     - MODEL_VARIANT=google/timesfm-2.0-500m-pytorch
+  #     - HF_HOME=/models_cache
+  #     - DEVICE=cpu
   #     - PYTHONPATH=/app
   #   volumes:
-  #     - ./api:/app/api
-  #     - ./data:/app/data
+  #     - ./forecast:/app/forecast
   #     - ./logs:/app/logs
-  #     - api_models_timesfm20:/app/api/models/timesfm20/local
+  #     - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
   #   networks:
   #     - aleutian-network
-  #   restart: unless-stopped
+  #   restart: "no"
   #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
   #     interval: 30s
   #     timeout: 10s
-  #     retries: 5
+  #     retries: 3
   #     start_period: 120s
 
-  # Flask UI
+  # ===========================================================================
+  # UI Service
+  # ===========================================================================
+
   ui:
     build:
       context: .
       dockerfile: Dockerfile.ui
     container_name: sapheneia-ui
     ports:
-      - "8080:8080"
+      - "${UI_PORT:-12780}:8080"
     environment:
       - UI_API_BASE_URL=http://forecast:8000
       - UI_PORT=8080
@@ -366,14 +392,17 @@ services:
       retries: 3
       start_period: 10s
 
-  # Trading Strategies API
+  # ===========================================================================
+  # Trading API Service
+  # ===========================================================================
+
   trading:
     build:
       context: .
       dockerfile: Dockerfile.trading
     container_name: sapheneia-trading
     ports:
-      - "${TRADING_API_PORT:-9000}:9000"
+      - "${TRADING_API_PORT:-12132}:9000"
     env_file:
       - .env
     environment:
@@ -397,14 +426,17 @@ services:
       retries: 3
       start_period: 40s
 
-  # Finance Data Service (Yahoo Finance → InfluxDB)
+  # ===========================================================================
+  # Data Service (Yahoo Finance → InfluxDB)
+  # ===========================================================================
+
   data:
     build:
       context: .
       dockerfile: Dockerfile.data
     container_name: sapheneia-data
     ports:
-      - "${DATA_API_PORT:-8001}:8000"
+      - "${DATA_API_PORT:-12701}:8000"
     environment:
       - INFLUXDB_URL=http://user-influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-your_super_secret_admin_token}
@@ -419,6 +451,31 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+
+  # ===========================================================================
+  # Metrics Service (commented - uncomment to enable)
+  # ===========================================================================
+
+  # metrics:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.metrics
+  #   container_name: sapheneia-metrics
+  #   ports:
+  #     - "${METRICS_PORT:-12702}:8000"
+  #   environment:
+  #     - METRICS_HOST=0.0.0.0
+  #     - METRICS_PORT=8000
+  #     - LOG_LEVEL=${METRICS_LOG_LEVEL:-INFO}
+  #   networks:
+  #     - aleutian-network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
 
 networks:
   aleutian-network:
