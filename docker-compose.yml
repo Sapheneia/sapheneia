@@ -43,7 +43,7 @@ services:
       - ./logs:/app/logs
       - ./simulations:/app/simulations
       - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -113,7 +113,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -146,7 +146,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -179,7 +179,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -212,7 +212,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -249,7 +249,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -282,7 +282,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -315,7 +315,7 @@ services:
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
     networks:
       - aleutian-network
     restart: "no"
@@ -351,7 +351,7 @@ services:
   #   volumes:
   #     - ./forecast:/app/forecast
   #     - ./logs:/app/logs
-  #     - /Volumes/ai_models/aleutian_data/models_cache:/models_cache
+  #     - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
   #   networks:
   #     - aleutian-network
   #   restart: "no"

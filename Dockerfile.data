@@ -5,7 +5,7 @@
 #   docker build -f Dockerfile.data -t sapheneia-data .
 
 # Build stage
-FROM --platform=linux/arm64 golang:1.25-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
@@ -20,10 +20,10 @@ RUN go mod download
 COPY data/ ./
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o finance-data main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o finance-data main.go
 
 # Runtime stage
-FROM --platform=linux/arm64 alpine:latest
+FROM alpine:latest
 
 # Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates curl

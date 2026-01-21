@@ -40,8 +40,15 @@
 cd ~/projects/sapheneia  # Linux
 # cd /Users/yourname/PycharmProjects/sapheneia  # macOS
 
-# Copy environment template (first time only)
+# Copy environment template and configure (first time only)
 cp .env.template .env
+sed -i "s|MODELS_CACHE_PATH=.*|MODELS_CACHE_PATH=$HOME/models_cache|" .env
+sed -i "s|SIMULATIONS_ROOT=.*|SIMULATIONS_ROOT=$HOME/simulations|" .env
+sed -i "s|INFLUXDB_TOKEN=.*|INFLUXDB_TOKEN=aleutian-dev-token-2026|" .env
+# For GPU servers, also run: sed -i "s|DEVICE=cpu|DEVICE=cuda:0|" .env
+
+# Create required directories
+mkdir -p ~/models_cache ~/simulations
 
 # Start core services + one model
 podman-compose up -d forecast forecast-chronos-t5-tiny trading
@@ -666,12 +673,12 @@ cd ~/projects
 
 ```bash
 # Clone Sapheneia
-git clone https://github.com/YOUR_ORG/sapheneia.git
+git clone https://github.com/Sapheneia/sapheneia.git
 cd sapheneia
 
 # Clone Aleutian (in separate directory)
 cd ~/projects
-git clone https://github.com/YOUR_ORG/AleutianFOSS.git
+git clone https://github.com/AleutianAI/AleutianFOSS.git
 cd AleutianFOSS
 ```
 
@@ -693,11 +700,19 @@ cd ~/projects/sapheneia
 # Copy environment template
 cp .env.template .env
 
-# Edit configuration
-nano .env
+# Configure with sed (no manual editing needed)
+sed -i "s|MODELS_CACHE_PATH=.*|MODELS_CACHE_PATH=$HOME/models_cache|" .env
+sed -i "s|SIMULATIONS_ROOT=.*|SIMULATIONS_ROOT=$HOME/simulations|" .env
+sed -i "s|INFLUXDB_TOKEN=.*|INFLUXDB_TOKEN=aleutian-dev-token-2026|" .env
+
+# Create directories
+mkdir -p ~/models_cache ~/simulations
+
+# Verify
+grep -E "MODELS_CACHE_PATH|SIMULATIONS_ROOT|INFLUXDB_TOKEN" .env
 ```
 
-**Key `.env` settings:**
+**(Optional) Additional `.env` settings for production:**
 ```bash
 # API Keys (generate secure values)
 API_SECRET_KEY=your_secure_api_key_here
@@ -1356,16 +1371,38 @@ mkdir -p ~/projects ~/models_cache ~/simulations
 cd ~/projects
 
 # ========================================
-# 4. Clone repositories (use SSH URLs for SSH auth)
+# 4. Clone repositories
 # ========================================
 
-# With SSH authentication:
-git clone git@github.com:YOUR_ORG/sapheneia.git
-git clone git@github.com:YOUR_ORG/AleutianFOSS.git
+# Using GitHub CLI (recommended after gh auth login):
+gh repo clone Sapheneia/sapheneia
+gh repo clone AleutianAI/AleutianFOSS
 
-# With HTTPS (token auth):
-git clone https://github.com/YOUR_ORG/sapheneia.git
-git clone https://github.com/YOUR_ORG/AleutianFOSS.git
+# Or with SSH authentication:
+git clone git@github.com:Sapheneia/sapheneia.git
+git clone git@github.com:AleutianAI/AleutianFOSS.git
+
+# Or with HTTPS (token auth):
+git clone https://github.com/Sapheneia/sapheneia.git
+git clone https://github.com/AleutianAI/AleutianFOSS.git
+
+# ========================================
+# 5. Switch to correct branches
+# ========================================
+
+# Sapheneia: use aleutian_merge branch (has Aleutian integration code)
+cd ~/projects/sapheneia
+git fetch origin
+git checkout aleutian_merge
+git branch  # Verify: should show "* aleutian_merge"
+
+# If checkout fails (remote-only branch):
+git checkout -b aleutian_merge origin/aleutian_merge
+
+# AleutianFOSS: use main branch (or specific feature branch if needed)
+cd ~/projects/AleutianFOSS
+git checkout main
+git pull origin main
 
 # ========================================
 # 3. Create Docker network
@@ -1392,56 +1429,49 @@ cd ~/projects/sapheneia
 # 1. Create .env from template
 # ========================================
 cp .env.template .env
-nano .env
+
+# ========================================
+# 2. Configure with sed (no manual editing needed)
+# ========================================
+
+# Set models cache to home directory
+sed -i "s|MODELS_CACHE_PATH=.*|MODELS_CACHE_PATH=$HOME/models_cache|" .env
+
+# Set simulations root to home directory
+sed -i "s|SIMULATIONS_ROOT=.*|SIMULATIONS_ROOT=$HOME/simulations|" .env
+
+# Enable GPU (cuda:0 for single GPU)
+sed -i "s|DEVICE=cpu|DEVICE=cuda:0|" .env
+
+# Set InfluxDB token to match Aleutian's default
+sed -i "s|INFLUXDB_TOKEN=.*|INFLUXDB_TOKEN=aleutian-dev-token-2026|" .env
+
+# (Optional) Change API keys for production - defaults are fine for testing
+# sed -i "s|API_SECRET_KEY=.*|API_SECRET_KEY=your_secure_key_here|" .env
+# sed -i "s|TRADING_API_KEY=.*|TRADING_API_KEY=your_trading_key_here|" .env
+
+# ========================================
+# 3. Verify changes
+# ========================================
+grep -E "MODELS_CACHE_PATH|SIMULATIONS_ROOT|DEVICE|INFLUXDB_TOKEN" .env
+
+# Expected output:
+#   MODELS_CACHE_PATH=/home/youruser/models_cache
+#   SIMULATIONS_ROOT=/home/youruser/simulations
+#   DEVICE=cuda:0
+#   INFLUXDB_TOKEN=aleutian-dev-token-2026
+
+# ========================================
+# 4. Create required directories
+# ========================================
+mkdir -p ~/models_cache ~/simulations
 ```
 
-**`.env` configuration for RTX 5090:**
-
-```bash
-# ===========================================
-# Sapheneia Configuration - RTX 5090 Server
-# ===========================================
-
-# API Keys (generate secure values for production)
-API_SECRET_KEY=your_secure_api_key_here_minimum_32_chars
-SAPHENEIA_TRADING_API_KEY=your_trading_key_here
-
-# GPU Configuration
-DEVICE=cuda:0
-TORCH_ALLOW_TF32=1
-CUDA_ALLOW_TF32=1
-
-# Batch size (RTX 5090 can handle larger batches)
-BATCH_SIZE=32
-
-# Models cache (local directory)
-MODELS_CACHE_DIR=/home/$(whoami)/models_cache
-HF_HOME=/home/$(whoami)/models_cache
-
-# Simulations storage
-SIMULATIONS_ROOT=/home/$(whoami)/simulations
-
-# Port configuration (127xx scheme)
-ORCHESTRATION_PORT=12700
-DATA_API_PORT=12701
-CHRONOS_T5_TINY_PORT=12710
-CHRONOS_T5_MINI_PORT=12711
-CHRONOS_T5_SMALL_PORT=12712
-CHRONOS_T5_BASE_PORT=12713
-CHRONOS_T5_LARGE_PORT=12714
-CHRONOS_BOLT_MINI_PORT=12715
-CHRONOS_BOLT_SMALL_PORT=12716
-CHRONOS_BOLT_BASE_PORT=12717
-TRADING_API_PORT=12132
-UI_PORT=12780
-
-# Logging
-LOG_LEVEL=INFO
-```
+**Note:** The default `API_SECRET_KEY` and `TRADING_API_KEY` in `.env.template` are fine for development/testing. Change them for production deployments.
 
 ```bash
 # ========================================
-# 2. Update docker-compose.yml for GPU
+# 5. Update docker-compose.yml for GPU (if not already configured)
 # ========================================
 # Add GPU support to model containers
 # Edit docker-compose.yml and add to each forecast-chronos-* service:
@@ -1821,10 +1851,10 @@ python3 -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 mkdir -p ~/projects && cd ~/projects
 
 # Clone Sapheneia
-git clone https://github.com/YOUR_ORG/sapheneia.git
+git clone https://github.com/Sapheneia/sapheneia.git
 
 # Clone Aleutian
-git clone https://github.com/YOUR_ORG/AleutianFOSS.git
+git clone https://github.com/AleutianAI/AleutianFOSS.git
 ```
 
 ### Step 4: Build ARM64 Container Images
@@ -1838,7 +1868,7 @@ cd ~/projects/sapheneia
 podman build --platform linux/arm64 -t sapheneia-forecast:arm64 -f Containerfile.forecast .
 
 # Or use pre-built ARM64 images if available
-# podman pull ghcr.io/your-org/sapheneia-forecast:arm64
+# podman pull ghcr.io/sapheneia/sapheneia-forecast:arm64
 ```
 
 ### Step 5: Configure for Unified Memory
