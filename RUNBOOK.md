@@ -36,7 +36,9 @@
 ### Start Minimal System
 
 ```bash
-cd /Users/jin/PycharmProjects/sapheneia
+# Navigate to Sapheneia directory
+cd ~/projects/sapheneia  # Linux
+# cd /Users/yourname/PycharmProjects/sapheneia  # macOS
 
 # Copy environment template (first time only)
 cp .env.template .env
@@ -52,15 +54,17 @@ curl http://localhost:12700/health  # Gateway
 curl http://localhost:12710/health  # Chronos tiny
 curl http://localhost:12132/health  # Trading
 
-# Test from Aleutian
-cd /Users/jin/GolandProjects/AleutianFOSS
-./aleutian timeseries forecast SPY --model "amazon/chronos-t5-tiny" --context 90 --horizon 10
+# Test from Aleutian (if installed system-wide)
+aleutian timeseries forecast SPY --model "amazon/chronos-t5-tiny" --context 90 --horizon 10
+
+# Or from Aleutian directory
+cd ~/projects/AleutianFOSS && ./aleutian timeseries forecast SPY --model "amazon/chronos-t5-tiny" --context 90 --horizon 10
 ```
 
 ### Stop All Services
 
 ```bash
-cd /Users/jin/PycharmProjects/sapheneia
+cd ~/projects/sapheneia  # or your sapheneia directory
 podman-compose stop
 ```
 
@@ -382,12 +386,58 @@ SAPHENEIA_TRADING_API_KEY=your_trading_api_key
 
 ### Request Flow
 
-1. **User** → `aleutian timeseries forecast SPY --model chronos-t5-tiny`
-2. **Aleutian Evaluator** → ServiceRouter resolves URL based on deployment mode
-3. **Request** → `POST http://sapheneia-forecast:8000/v1/timeseries/forecast` (legacy) or `/orchestration/v1/predict` (unified)
-4. **Sapheneia Gateway** → Routes to `http://forecast-chronos-t5-tiny:8000`
-5. **Model Container** → Runs inference, returns forecast
-6. **Response** → Back through gateway to Aleutian to user
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ REQUEST FLOW: Aleutian → Sapheneia → Model Container                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+UNIFIED API (--api-version unified):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+User CLI                   Aleutian                  Sapheneia Orchestrator       Model Container
+   │                         │                              │                           │
+   │ ./aleutian evaluate     │                              │                           │
+   │ --api-version unified   │                              │                           │
+   │────────────────────────▶│                              │                           │
+   │                         │  POST /orchestration/v1/     │                           │
+   │                         │       predict                │                           │
+   │                         │─────────────────────────────▶│                           │
+   │                         │  {request_id, ticker,        │                           │
+   │                         │   model, context, horizon}   │ POST /forecast/v1/        │
+   │                         │                              │      inference            │
+   │                         │                              │──────────────────────────▶│
+   │                         │                              │ {context, prediction_len} │
+   │                         │                              │                           │
+   │                         │                              │◀──────────────────────────│
+   │                         │◀─────────────────────────────│ {prediction, quantiles,   │
+   │◀────────────────────────│ {forecast, quantiles,        │  metadata}                │
+   │ Results stored          │  metadata, inference_time}   │                           │
+   │ in InfluxDB             │                              │                           │
+
+LEGACY API (--api-version legacy):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+User CLI                   Aleutian                  Sapheneia Gateway            Model Container
+   │                         │                              │                           │
+   │ ./aleutian evaluate     │                              │                           │
+   │────────────────────────▶│  POST /v1/timeseries/        │                           │
+   │                         │       forecast               │                           │
+   │                         │─────────────────────────────▶│                           │
+   │                         │  {name, model, context_size, │ POST /forecast/v1/        │
+   │                         │   forecast_size}             │      chronos/inference    │
+   │                         │                              │──────────────────────────▶│
+   │                         │◀─────────────────────────────│                           │
+   │◀────────────────────────│ {forecast, message}          │                           │
+```
+
+**Step-by-step flow:**
+
+1. **User** → `aleutian evaluate run --config scenario.yaml --api-version unified`
+2. **Aleutian Evaluator** → Reads scenario config, resolves `ORCHESTRATOR_URL`
+3. **Request** → `POST http://sapheneia-forecast:8000/orchestration/v1/predict`
+4. **Sapheneia Orchestrator** → Routes to appropriate model container
+5. **Internal Call** → `POST http://forecast-chronos-t5-tiny:8000/forecast/v1/inference`
+6. **Model Container** → Runs GPU inference, returns forecast with metadata
+7. **Response** → Orchestrator adds tracing info (response_id, inference_time_ms)
+8. **Aleutian** → Stores results in InfluxDB with full tracing
 
 ### Model Routing (Aleutian → Sapheneia)
 
@@ -1091,6 +1141,625 @@ nvcc --version  # Shows toolkit CUDA version (if installed)
 
 ---
 
+## Ubuntu LTS + RTX 5090 Deployment (Headless Server)
+
+Complete deployment guide for Sapheneia + Aleutian on a headless Ubuntu LTS server with NVIDIA RTX 5090 GPU. This configuration mimics Project Digits and is ideal for production-like testing.
+
+### Target Environment
+
+- **OS**: Ubuntu 22.04 LTS or 24.04 LTS (headless)
+- **GPU**: NVIDIA RTX 5090 (32GB VRAM)
+- **RAM**: 64GB+ recommended
+- **Storage**: 500GB+ SSD (for models cache + simulations)
+- **Network**: SSH access only
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Ubuntu LTS Server (Headless) - RTX 5090                                     │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ podman network: aleutian-shared                                      │   │
+│  │                                                                      │   │
+│  │  ┌─────────────────┐    ┌────────────────────────────────────────┐ │   │
+│  │  │ Aleutian Stack  │    │ Sapheneia Stack                         │ │   │
+│  │  │                 │    │                                         │ │   │
+│  │  │ ┌─────────────┐ │    │ ┌─────────────┐  ┌──────────────────┐  │ │   │
+│  │  │ │InfluxDB     │ │    │ │Orchestrator │  │Chronos T5 Tiny   │  │ │   │
+│  │  │ │:12130       │ │    │ │:12700       │──│:12710 (GPU)      │  │ │   │
+│  │  │ └─────────────┘ │    │ └─────────────┘  └──────────────────┘  │ │   │
+│  │  │                 │    │        │         ┌──────────────────┐  │ │   │
+│  │  │ ┌─────────────┐ │    │        │         │Chronos T5 Base   │  │ │   │
+│  │  │ │Go Orch.     │─┼────┼────────┘         │:12713 (GPU)      │  │ │   │
+│  │  │ │:12210       │ │    │                  └──────────────────┘  │ │   │
+│  │  │ └─────────────┘ │    │ ┌─────────────┐  ┌──────────────────┐  │ │   │
+│  │  │                 │    │ │Trading API  │  │Chronos T5 Large  │  │ │   │
+│  │  │ ┌─────────────┐ │    │ │:12132       │  │:12714 (GPU)      │  │ │   │
+│  │  │ │Aleutian CLI │ │    │ └─────────────┘  └──────────────────┘  │ │   │
+│  │  │ │(host)       │ │    │                                         │ │   │
+│  │  │ └─────────────┘ │    └────────────────────────────────────────┘ │   │
+│  │  └─────────────────┘                                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ RTX 5090 (CUDA)                                                      │   │
+│  │ 32GB VRAM - Shared across model containers                           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase 1: Server Setup
+
+```bash
+# ========================================
+# 1. Connect to server
+# ========================================
+ssh user@your-server-ip
+
+# ========================================
+# 2. System updates
+# ========================================
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y build-essential git curl jq htop nvtop
+
+# ========================================
+# 3. Install NVIDIA drivers (RTX 5090 requires 550+)
+# ========================================
+# Check if GPU is detected
+lspci | grep -i nvidia
+
+# Add NVIDIA repository
+sudo add-apt-repository -y ppa:graphics-drivers/ppa
+sudo apt update
+
+# Install driver (550+ for RTX 50 series)
+sudo apt install -y nvidia-driver-550
+
+# Reboot
+sudo reboot
+
+# After reboot, verify
+nvidia-smi
+# Should show: RTX 5090, Driver Version 550.xx, CUDA 12.x
+
+# ========================================
+# 4. Install NVIDIA Container Toolkit
+# ========================================
+# Add repository
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Install
+sudo apt update
+sudo apt install -y nvidia-container-toolkit
+
+# Generate CDI spec for Podman
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+nvidia-ctk cdi list
+
+# ========================================
+# 5. Install Podman
+# ========================================
+sudo apt install -y podman podman-compose
+
+# Verify
+podman --version
+podman-compose --version
+
+# Test GPU in container
+podman run --rm --device nvidia.com/gpu=all \
+  nvidia/cuda:12.3-base-ubuntu22.04 nvidia-smi
+```
+
+### Phase 2: GitHub Authentication & Project Setup
+
+```bash
+# ========================================
+# 1. Check if already authenticated
+# ========================================
+# Test SSH access to GitHub
+ssh -T git@github.com
+# Success: "Hi username! You've successfully authenticated..."
+# Failure: "Permission denied (publickey)"
+
+# Check for existing SSH keys
+ls -la ~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub 2>/dev/null
+
+# ========================================
+# 2. Option A: SSH Key Authentication (Recommended for servers)
+# ========================================
+
+# Generate new SSH key (if none exists)
+ssh-keygen -t ed25519 -C "your_email@example.com"
+# Press Enter for default location, set passphrase (optional)
+
+# Start ssh-agent and add key
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+
+# Display public key (copy this)
+cat ~/.ssh/id_ed25519.pub
+
+# Add to GitHub:
+# 1. Go to https://github.com/settings/keys
+# 2. Click "New SSH key"
+# 3. Paste the public key
+# 4. Click "Add SSH key"
+
+# Test connection
+ssh -T git@github.com
+
+# ========================================
+# 2. Option B: GitHub CLI (gh) Authentication (Headless Server)
+# ========================================
+
+# Install GitHub CLI
+sudo apt install gh
+# Or: sudo snap install gh
+
+# Login with token (best for headless servers)
+gh auth login
+# Choose:
+#   → GitHub.com
+#   → HTTPS
+#   → Yes (authenticate Git with credentials)
+#   → Paste an authentication token
+
+# ----------------------------------------
+# GENERATING THE TOKEN (from a machine with a browser):
+# ----------------------------------------
+# 1. On your Mac/PC, go to: https://github.com/settings/tokens
+# 2. Click "Generate new token" → "Generate new token (classic)"
+# 3. Settings:
+#    - Note: "linux-server-aleutian" (descriptive name)
+#    - Expiration: 90 days (or "No expiration")
+#    - Scopes - CHECK THESE:
+#      ☑️ repo (full control of private repos)
+#      ☑️ read:org (read org membership)
+#      ☑️ workflow (update GitHub Actions)
+# 4. Click "Generate token"
+# 5. COPY THE TOKEN IMMEDIATELY (you won't see it again!)
+#    Token looks like: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+#
+# SHORTCUT: If already logged into gh on your Mac:
+#   gh auth token
+# This prints your current token to copy.
+# ----------------------------------------
+
+# Back on the headless server, paste the token when prompted
+# Then verify:
+gh auth status
+
+# ========================================
+# 2. Option C: Personal Access Token (HTTPS)
+# ========================================
+
+# Generate token at: https://github.com/settings/tokens
+# Select scopes: repo (full access)
+
+# Configure git to cache credentials
+git config --global credential.helper store
+
+# First clone will prompt for username/token
+# Username: your-github-username
+# Password: paste-your-token-here (not your password!)
+
+# ========================================
+# 3. Create project structure
+# ========================================
+mkdir -p ~/projects ~/models_cache ~/simulations
+cd ~/projects
+
+# ========================================
+# 4. Clone repositories (use SSH URLs for SSH auth)
+# ========================================
+
+# With SSH authentication:
+git clone git@github.com:YOUR_ORG/sapheneia.git
+git clone git@github.com:YOUR_ORG/AleutianFOSS.git
+
+# With HTTPS (token auth):
+git clone https://github.com/YOUR_ORG/sapheneia.git
+git clone https://github.com/YOUR_ORG/AleutianFOSS.git
+
+# ========================================
+# 3. Create Docker network
+# ========================================
+podman network create aleutian-shared
+podman network ls
+
+# ========================================
+# 4. Install Go (for Aleutian)
+# ========================================
+wget https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+source ~/.bashrc
+go version
+```
+
+### Phase 3: Configure Sapheneia for GPU
+
+```bash
+cd ~/projects/sapheneia
+
+# ========================================
+# 1. Create .env from template
+# ========================================
+cp .env.template .env
+nano .env
+```
+
+**`.env` configuration for RTX 5090:**
+
+```bash
+# ===========================================
+# Sapheneia Configuration - RTX 5090 Server
+# ===========================================
+
+# API Keys (generate secure values for production)
+API_SECRET_KEY=your_secure_api_key_here_minimum_32_chars
+SAPHENEIA_TRADING_API_KEY=your_trading_key_here
+
+# GPU Configuration
+DEVICE=cuda:0
+TORCH_ALLOW_TF32=1
+CUDA_ALLOW_TF32=1
+
+# Batch size (RTX 5090 can handle larger batches)
+BATCH_SIZE=32
+
+# Models cache (local directory)
+MODELS_CACHE_DIR=/home/$(whoami)/models_cache
+HF_HOME=/home/$(whoami)/models_cache
+
+# Simulations storage
+SIMULATIONS_ROOT=/home/$(whoami)/simulations
+
+# Port configuration (127xx scheme)
+ORCHESTRATION_PORT=12700
+DATA_API_PORT=12701
+CHRONOS_T5_TINY_PORT=12710
+CHRONOS_T5_MINI_PORT=12711
+CHRONOS_T5_SMALL_PORT=12712
+CHRONOS_T5_BASE_PORT=12713
+CHRONOS_T5_LARGE_PORT=12714
+CHRONOS_BOLT_MINI_PORT=12715
+CHRONOS_BOLT_SMALL_PORT=12716
+CHRONOS_BOLT_BASE_PORT=12717
+TRADING_API_PORT=12132
+UI_PORT=12780
+
+# Logging
+LOG_LEVEL=INFO
+```
+
+```bash
+# ========================================
+# 2. Update docker-compose.yml for GPU
+# ========================================
+# Add GPU support to model containers
+# Edit docker-compose.yml and add to each forecast-chronos-* service:
+
+#   devices:
+#     - nvidia.com/gpu=all
+#   environment:
+#     - NVIDIA_VISIBLE_DEVICES=all
+#     - DEVICE=cuda:0
+```
+
+### Phase 4: Start Services
+
+```bash
+cd ~/projects/sapheneia
+
+# ========================================
+# 1. Start minimal stack (GPU-enabled)
+# ========================================
+podman-compose up -d forecast forecast-chronos-t5-tiny trading data
+
+# ========================================
+# 2. Watch startup (wait for model loading)
+# ========================================
+podman-compose logs -f forecast-chronos-t5-tiny
+
+# Look for:
+# - "Using device: cuda:0"
+# - "Model loaded successfully"
+# - "Application startup complete"
+
+# Press Ctrl+C when ready
+
+# ========================================
+# 3. Verify services
+# ========================================
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Check GPU usage
+nvidia-smi
+
+# ========================================
+# 4. Test endpoints
+# ========================================
+# Health check
+curl http://localhost:12700/health
+curl http://localhost:12710/health
+
+# Initialize model
+curl -s -X POST "http://localhost:12710/forecast/v1/chronos/initialization" \
+  -H "Authorization: Bearer $(grep API_SECRET_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" -d '{}'
+
+# Test GPU inference (should be fast: ~30-50ms)
+time curl -s -X POST "http://localhost:12710/forecast/v1/inference" \
+  -H "Authorization: Bearer $(grep API_SECRET_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"context":[100,101,102,103,104,105,106,107,108,109],"prediction_length":5}' | jq .execution_metadata
+```
+
+### Phase 5: Install & Configure Aleutian
+
+```bash
+cd ~/projects/AleutianFOSS
+
+# ========================================
+# 1. Build Aleutian binary
+# ========================================
+go build -o aleutian ./cmd/aleutian
+
+# ========================================
+# 2. Install system-wide (choose one method)
+# ========================================
+
+# Method A: Symlink to /usr/local/bin (recommended)
+sudo ln -sf $(pwd)/aleutian /usr/local/bin/aleutian
+
+# Method B: Copy binary to /usr/local/bin
+sudo cp aleutian /usr/local/bin/aleutian
+sudo chmod +x /usr/local/bin/aleutian
+
+# Method C: Install to ~/.local/bin (no sudo required)
+mkdir -p ~/.local/bin
+cp aleutian ~/.local/bin/
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Verify installation (should work from any directory)
+which aleutian
+aleutian --help
+
+# ========================================
+# 3. Set environment variables
+# ========================================
+cat >> ~/.bashrc << 'EOF'
+
+# ============================================
+# Aleutian + Sapheneia Configuration
+# ============================================
+export ALEUTIAN_HOME="$HOME/projects/AleutianFOSS"
+export ORCHESTRATOR_URL=http://localhost:12700
+export SAPHENEIA_TRADING_SERVICE_URL=http://localhost:12132
+export SAPHENEIA_API_KEY=your_secure_api_key_here_minimum_32_chars
+export INFLUXDB_TOKEN=aleutian-dev-token-2026
+
+# Point Aleutian to compose files location
+export ALEUTIAN_COMPOSE_DIR="$HOME/projects/AleutianFOSS"
+EOF
+
+source ~/.bashrc
+
+# ========================================
+# 4. Start Aleutian stack with Sapheneia mode
+# ========================================
+# This starts InfluxDB, Go orchestrator, and other Aleutian services
+# while pointing forecast requests to Sapheneia containers
+
+aleutian stack start --forecast-mode sapheneia
+
+# Check status
+aleutian stack status
+
+# ========================================
+# 5. Alternative: Start services manually
+# ========================================
+# If stack command doesn't work, start manually:
+cd ~/projects/AleutianFOSS
+podman-compose -f podman-compose.timeseries.yml up -d user-influxdb aleutian-go-orchestrator
+
+# Wait for startup
+sleep 15
+
+# Verify
+curl http://localhost:12130/health   # InfluxDB
+curl http://localhost:12210/health   # Go orchestrator
+```
+
+### Phase 6: End-to-End Testing
+
+```bash
+# ========================================
+# 1. Verify services are running
+# ========================================
+aleutian stack status
+
+# Expected output shows:
+# - user-influxdb: healthy
+# - aleutian-go-orchestrator: healthy
+
+# Also check Sapheneia services
+podman ps --filter "name=sapheneia" --filter "name=forecast-" \
+  --format "table {{.Names}}\t{{.Status}}"
+
+# ========================================
+# 2. Test simple forecast (from any directory)
+# ========================================
+aleutian timeseries forecast SPY \
+  --model "amazon/chronos-t5-tiny" \
+  --context 90 \
+  --horizon 10
+
+# ========================================
+# 3. Run full evaluation with unified API
+# ========================================
+aleutian evaluate run \
+  --config ~/projects/sapheneia/simulations/strategies/spy_threshold_v1.yaml \
+  --api-version unified \
+  --personality minimal
+
+# ========================================
+# 4. Query results from InfluxDB
+# ========================================
+curl -s -X POST "http://localhost:12130/api/v2/query?org=aleutian-finance" \
+  -H "Authorization: Token $INFLUXDB_TOKEN" \
+  -H "Content-Type: application/vnd.flux" \
+  -H "Accept: application/csv" \
+  --data-raw 'from(bucket: "financial-data")
+    |> range(start: -1h)
+    |> filter(fn: (r) => r._measurement == "forecast_evaluations")
+    |> pivot(rowKey:["_time", "evaluation_date"], columnKey: ["_field"], valueColumn: "_value")
+    |> keep(columns: ["evaluation_date", "action", "current_price", "forecast_price"])
+    |> limit(n: 10)'
+
+# ========================================
+# 5. Monitor GPU during inference
+# ========================================
+# In a separate terminal:
+watch -n 1 nvidia-smi
+
+# Run another evaluation and watch GPU utilization spike
+```
+
+### Phase 7: Production Hardening
+
+```bash
+# ========================================
+# 1. Create systemd services for auto-start
+# ========================================
+
+# Sapheneia service
+sudo tee /etc/systemd/system/sapheneia.service << 'EOF'
+[Unit]
+Description=Sapheneia Forecast Services
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/projects/sapheneia
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/podman-compose up
+ExecStop=/usr/bin/podman-compose stop
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable sapheneia
+sudo systemctl start sapheneia
+sudo systemctl status sapheneia
+
+# ========================================
+# 2. Set up log rotation
+# ========================================
+sudo tee /etc/logrotate.d/sapheneia << 'EOF'
+/home/YOUR_USERNAME/projects/sapheneia/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+}
+EOF
+
+# ========================================
+# 3. Set up monitoring cron job
+# ========================================
+(crontab -l 2>/dev/null; echo "*/5 * * * * curl -sf http://localhost:12700/health > /dev/null || systemctl restart sapheneia") | crontab -
+```
+
+### Performance Expectations (RTX 5090)
+
+| Model | Inference Time | VRAM Usage | Batch Size |
+|-------|---------------|------------|------------|
+| Chronos T5 Tiny | ~20-40ms | ~500MB | 64 |
+| Chronos T5 Mini | ~30-50ms | ~800MB | 64 |
+| Chronos T5 Small | ~40-70ms | ~1.5GB | 32 |
+| Chronos T5 Base | ~80-120ms | ~3GB | 16 |
+| Chronos T5 Large | ~150-250ms | ~6GB | 8 |
+| TimesFM 2.0 | ~100-180ms | ~4GB | 16 |
+
+### GPU Monitoring Commands
+
+```bash
+# Real-time GPU monitoring
+watch -n 1 nvidia-smi
+
+# Detailed GPU stats
+nvidia-smi dmon -s pucvmet
+
+# GPU memory per process
+nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
+
+# Install and use nvtop (better UI)
+sudo apt install nvtop
+nvtop
+
+# Check container GPU usage
+podman stats --no-stream
+```
+
+### Troubleshooting RTX 5090
+
+**Issue: CUDA out of memory**
+```bash
+# Check VRAM usage
+nvidia-smi
+
+# Reduce batch size in .env
+BATCH_SIZE=8
+
+# Stop large models, keep only tiny
+podman-compose stop forecast-chronos-t5-large
+podman-compose up -d forecast-chronos-t5-tiny
+```
+
+**Issue: GPU not detected in container**
+```bash
+# Regenerate CDI spec
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+
+# Verify CDI
+nvidia-ctk cdi list
+
+# Test
+podman run --rm --device nvidia.com/gpu=all nvidia/cuda:12.3-base-ubuntu22.04 nvidia-smi
+```
+
+**Issue: Slow inference (not using GPU)**
+```bash
+# Check container device setting
+podman exec forecast-chronos-t5-tiny env | grep DEVICE
+
+# Should show: DEVICE=cuda:0
+# If missing, check docker-compose.yml environment section
+
+# Verify PyTorch sees GPU inside container
+podman exec forecast-chronos-t5-tiny python3 -c \
+  "import torch; print('CUDA:', torch.cuda.is_available(), 'Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A')"
+```
+
+---
+
 ## NVIDIA Project Digits Deployment
 
 Instructions for deploying Sapheneia on NVIDIA Project Digits (GB10 Grace Blackwell Superchip).
@@ -1388,7 +2057,156 @@ cat simulations/backtests/abc123/summary.json
 
 ## Debugging
 
-### Step 1: Check Container Status
+### Quick Diagnostic Commands
+
+```bash
+# ========================================
+# CONTAINER STATUS
+# ========================================
+
+# List all running Sapheneia/forecast containers
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Check health of all forecast containers
+for port in 12700 12710 12711 12712 12713 12714 12715 12716 12717; do
+  echo -n "Port $port: "
+  curl -sf "http://localhost:$port/health" > /dev/null && echo "✅ UP" || echo "❌ DOWN"
+done
+
+# ========================================
+# ENDPOINT TESTING
+# ========================================
+
+# Test 1: Model container generic inference endpoint (NEW - added Jan 2026)
+# This endpoint is used by the orchestrator to call model containers
+curl -s -X POST "http://localhost:12710/forecast/v1/inference" \
+  -H "Authorization: Bearer default_trading_api_key_please_change" \
+  -H "Content-Type: application/json" \
+  -d '{"context":[100,101,102,103,104,105,106,107,108,109],"prediction_length":5}' | jq .
+
+# Test 2: Model container model-specific endpoint (legacy)
+curl -s -X POST "http://localhost:12710/forecast/v1/chronos/inference" \
+  -H "Authorization: Bearer default_trading_api_key_please_change" \
+  -H "Content-Type: application/json" \
+  -d '{"context":[100,101,102,103,104,105,106,107,108,109],"prediction_length":5}' | jq .
+
+# Test 3: Orchestrator unified predict endpoint
+curl -s -X POST "http://localhost:12700/orchestration/v1/predict" \
+  -H "Authorization: Bearer default_trading_api_key_please_change" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "debug-test-001",
+    "timestamp": "2026-01-21T12:00:00Z",
+    "ticker": "SPY",
+    "model": "amazon/chronos-t5-tiny",
+    "context": {
+      "values": [100,101,102,103,104,105,106,107,108,109,110,111,112,113,114],
+      "period": "1d",
+      "source": "manual",
+      "start_date": "2025-12-01",
+      "end_date": "2025-12-15",
+      "field": "close"
+    },
+    "horizon": {"length": 5, "period": "1d"}
+  }' | jq .
+
+# Test 4: Model initialization (if model shows "uninitialized")
+curl -s -X POST "http://localhost:12710/forecast/v1/chronos/initialization" \
+  -H "Authorization: Bearer default_trading_api_key_please_change" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq .
+
+# Test 5: Check model status
+curl -s "http://localhost:12710/forecast/v1/chronos/status" \
+  -H "Authorization: Bearer default_trading_api_key_please_change" | jq .
+
+# ========================================
+# ALEUTIAN INTEGRATION TESTING
+# ========================================
+
+# Run evaluation with unified API (full end-to-end test)
+# If aleutian is installed system-wide:
+ORCHESTRATOR_URL=http://localhost:12700 \
+INFLUXDB_TOKEN=aleutian-dev-token-2026 \
+SAPHENEIA_API_KEY=default_trading_api_key_please_change \
+aleutian evaluate run \
+  --config ~/projects/sapheneia/simulations/strategies/spy_threshold_v1.yaml \
+  --api-version unified \
+  --personality minimal
+
+# Or if using the stack command (recommended):
+aleutian stack start --forecast-mode sapheneia
+aleutian evaluate run \
+  --config ~/projects/sapheneia/simulations/strategies/spy_threshold_v1.yaml \
+  --api-version unified
+
+# ========================================
+# INFLUXDB VERIFICATION
+# ========================================
+
+# List measurements
+curl -s -X POST "http://localhost:12130/api/v2/query?org=aleutian-finance" \
+  -H "Authorization: Token aleutian-dev-token-2026" \
+  -H "Content-Type: application/vnd.flux" \
+  -H "Accept: application/csv" \
+  --data-raw 'import "influxdata/influxdb/schema" schema.measurements(bucket: "financial-data")'
+
+# Query evaluation results (last 20)
+curl -s -X POST "http://localhost:12130/api/v2/query?org=aleutian-finance" \
+  -H "Authorization: Token aleutian-dev-token-2026" \
+  -H "Content-Type: application/vnd.flux" \
+  -H "Accept: application/csv" \
+  --data-raw 'from(bucket: "financial-data")
+    |> range(start: -1d)
+    |> filter(fn: (r) => r._measurement == "forecast_evaluations")
+    |> pivot(rowKey:["_time", "evaluation_date"], columnKey: ["_field"], valueColumn: "_value")
+    |> keep(columns: ["evaluation_date", "action", "current_price", "forecast_price", "available_cash", "position_after"])
+    |> sort(columns: ["evaluation_date"], desc: true)
+    |> limit(n: 20)'
+
+# ========================================
+# LOGS AND DEBUGGING
+# ========================================
+
+# View recent logs with errors highlighted
+podman logs --tail 100 forecast-chronos-t5-tiny 2>&1 | grep -E "(ERROR|error|Error|WARN|warn)"
+
+# Follow logs in real-time
+podman logs -f forecast-chronos-t5-tiny
+
+# Check orchestration service logs
+podman logs --tail 50 sapheneia-forecast 2>&1 | grep -E "(inference|predict|route)"
+
+# ========================================
+# NETWORK DEBUGGING
+# ========================================
+
+# Verify network exists
+podman network ls | grep aleutian-shared
+
+# Check which containers are on the network
+podman network inspect aleutian-shared | jq '.[].Containers | keys'
+
+# Test container-to-container connectivity
+podman exec sapheneia-forecast curl -s http://forecast-chronos-t5-tiny:8000/health
+
+# ========================================
+# RESOURCE MONITORING
+# ========================================
+
+# Real-time container stats
+podman stats --no-stream
+
+# GPU monitoring (if applicable)
+nvidia-smi -l 1
+
+# Memory usage
+free -h
+```
+
+### Step-by-Step Debugging
+
+#### Step 1: Check Container Status
 
 ```bash
 # List all Sapheneia containers
@@ -1399,7 +2217,7 @@ podman ps -a --filter "name=sapheneia" --filter "name=forecast-" \
 podman ps --filter "name=forecast-chronos-t5-tiny"
 ```
 
-### Step 2: Check Logs
+#### Step 2: Check Logs
 
 ```bash
 # View last 50 lines
@@ -1412,7 +2230,7 @@ podman logs -f forecast-chronos-t5-tiny
 podman logs forecast-chronos-t5-tiny 2>&1 | grep -i error
 ```
 
-### Step 3: Check Network
+#### Step 3: Check Network
 
 ```bash
 # Verify network exists
@@ -1425,7 +2243,7 @@ podman network create aleutian-shared
 podman network inspect aleutian-shared | jq '.[].Containers'
 ```
 
-### Step 4: Check Volumes
+#### Step 4: Check Volumes
 
 ```bash
 # Verify code mounted
@@ -1435,7 +2253,7 @@ podman exec forecast-chronos-t5-tiny ls -la /app/forecast/
 podman exec forecast-chronos-t5-tiny ls -la /models_cache/
 ```
 
-### Step 5: Interactive Debug
+#### Step 5: Interactive Debug
 
 ```bash
 # Enter container
@@ -1446,6 +2264,33 @@ python --version
 pip list | grep chronos
 env | grep -E "(API_PORT|MODEL_VARIANT|DEVICE)"
 curl http://localhost:8000/health
+```
+
+### API Endpoint Reference
+
+| Endpoint | Port | Description |
+|----------|------|-------------|
+| `/health` | Any | Basic health check |
+| `/forecast/v1/inference` | 12710+ | **Generic inference** (model containers) |
+| `/forecast/v1/chronos/inference` | 12710+ | Chronos-specific inference |
+| `/forecast/v1/chronos/status` | 12710+ | Model status |
+| `/forecast/v1/chronos/initialization` | 12710+ | Initialize model |
+| `/orchestration/v1/predict` | 12700 | **Unified predict** (orchestrator) |
+| `/v1/timeseries/forecast` | 12700 | Legacy forecast endpoint |
+
+### Request Flow Debugging
+
+```
+Aleutian CLI                    Sapheneia Orchestrator          Model Container
+     │                                   │                              │
+     │  POST /orchestration/v1/predict   │                              │
+     │──────────────────────────────────▶│                              │
+     │                                   │  POST /forecast/v1/inference │
+     │                                   │─────────────────────────────▶│
+     │                                   │                              │
+     │                                   │◀─────────────────────────────│
+     │◀──────────────────────────────────│         forecast + metadata  │
+     │         response with tracing     │                              │
 ```
 
 ---
@@ -1517,7 +2362,7 @@ podman-compose up -d forecast-chronos-t5-tiny
 ### Unit Tests
 
 ```bash
-cd /Users/jin/PycharmProjects/sapheneia
+cd ~/projects/sapheneia  # or your sapheneia directory
 
 # Run all tests
 pytest tests/
@@ -1552,8 +2397,8 @@ curl -X POST http://localhost:12700/v1/timeseries/forecast \
 # Container logs
 podman logs <container_name>
 
-# Application logs
-ls -la /Users/jin/PycharmProjects/sapheneia/logs/
+# Application logs (on host)
+ls -la ~/projects/sapheneia/logs/
 
 # Inside containers
 podman exec <container_name> ls -la /app/logs/
@@ -1626,11 +2471,16 @@ podman logs forecast-chronos-t5-tiny 2>&1 | grep "inference_time"
 
 ```bash
 # Backup simulations
-rsync -av /Users/jin/PycharmProjects/sapheneia/simulations/ /backup/simulations/
+rsync -av ~/projects/sapheneia/simulations/ /backup/simulations/
 
 # Backup configuration
+cd ~/projects/sapheneia
 cp .env .env.backup
 cp docker-compose.yml docker-compose.yml.backup
+
+# Full project backup (to external drive or remote)
+rsync -av ~/projects/sapheneia/ /mnt/backup/sapheneia/
+rsync -av ~/projects/AleutianFOSS/ /mnt/backup/AleutianFOSS/
 ```
 
 ---
@@ -1662,7 +2512,8 @@ podman-compose build && podman-compose up -d
 ### Key Files
 
 ```
-/Users/jin/PycharmProjects/sapheneia/
+# Sapheneia (~/projects/sapheneia/ on Linux, varies on other OS)
+sapheneia/
 ├── .env                    # Environment configuration
 ├── .env.template           # Configuration template
 ├── docker-compose.yml      # Service definitions
@@ -1670,9 +2521,87 @@ podman-compose build && podman-compose up -d
 ├── forecast/               # Forecast API code
 │   ├── core/               # Shared infrastructure
 │   └── models/             # Model implementations
+├── orchestration/          # Orchestration service
 ├── trading/                # Trading API code
 ├── simulations/            # Forecast & backtest storage
+│   └── strategies/         # Scenario YAML files
 └── logs/                   # Application logs
+
+# Aleutian (~/projects/AleutianFOSS/ on Linux)
+AleutianFOSS/
+├── cmd/aleutian/           # CLI entry point
+├── services/orchestrator/  # Go orchestrator service
+├── podman-compose*.yml     # Container definitions
+└── aleutian                # Built binary (install to /usr/local/bin/)
+```
+
+### Linux Server Quick Reference
+
+```bash
+# ============================================
+# DAILY OPERATIONS (run from any directory)
+# ============================================
+
+# Start everything (Sapheneia mode)
+aleutian stack start --forecast-mode sapheneia
+cd ~/projects/sapheneia && podman-compose up -d forecast forecast-chronos-t5-tiny trading
+
+# Check status
+aleutian stack status
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Run evaluation
+aleutian evaluate run \
+  --config ~/projects/sapheneia/simulations/strategies/spy_threshold_v1.yaml \
+  --api-version unified
+
+# View logs
+podman logs -f forecast-chronos-t5-tiny
+aleutian stack logs orchestrator
+
+# Stop everything
+aleutian stack stop
+cd ~/projects/sapheneia && podman-compose stop
+
+# ============================================
+# DEBUGGING
+# ============================================
+
+# Quick health check
+for port in 12130 12210 12700 12710 12132; do
+  echo -n "Port $port: "
+  curl -sf "http://localhost:$port/health" > /dev/null && echo "✅" || echo "❌"
+done
+
+# Test inference
+curl -s -X POST "http://localhost:12710/forecast/v1/inference" \
+  -H "Authorization: Bearer $SAPHENEIA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"context":[100,101,102,103,104],"prediction_length":5}' | jq .
+
+# GPU monitoring
+nvidia-smi -l 1
+nvtop
+
+# ============================================
+# MAINTENANCE
+# ============================================
+
+# Restart services after code changes
+cd ~/projects/sapheneia && podman-compose restart
+
+# Rebuild after major changes
+cd ~/projects/sapheneia && podman-compose build && podman-compose up -d
+
+# Rebuild Aleutian
+cd ~/projects/AleutianFOSS && go build -o aleutian ./cmd/aleutian
+sudo cp aleutian /usr/local/bin/
+
+# Check disk space
+df -h ~/projects ~/models_cache
+
+# Clean up
+podman system prune -f
 ```
 
 ### Support

@@ -1,0 +1,39 @@
+# SPY Threshold Strategy v1
+# A simple threshold-based trading strategy for backtesting SPY
+#
+# Strategy Logic:
+#   - BUY when forecast price exceeds current price by threshold
+#   - SELL when forecast price is below current price by threshold
+#   - HOLD otherwise
+#
+# Author: Sapheneia Team
+# Created: 2025-01-20
+
+metadata:
+  id: "spy-threshold-v1"
+  version: "1.0.0"
+  description: "SPY threshold strategy using Chronos forecasting"
+  author: "Sapheneia Team"
+  created: "2025-01-20"
+
+evaluation:
+  ticker: "SPY"
+  fetch_start_date: "20211201"
+  start_date: "20230101"
+  end_date: "20240101"
+
+forecast:
+  model: "amazon/chronos-t5-tiny"
+  context_size: 64
+  horizon_size: 10
+  compute_mode: "unified"
+
+trading:
+  initial_capital: 100000.0
+  initial_position: 0.0
+  initial_cash: 100000.0
+  strategy_type: "threshold"
+  params:
+    threshold_type: "absolute"
+    threshold_value: 2.0
+    execution_size: 0.1

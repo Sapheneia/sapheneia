@@ -5,7 +5,7 @@ Main application entry point for the Sapheneia time series forecasting API.
 Provides REST API endpoints for multiple forecasting models.
 """
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -20,6 +20,9 @@ from .core.config import settings, logger
 
 # Import rate limiting
 from .core.rate_limit import limiter, rate_limit_exceeded_handler, get_rate_limit
+
+# Import authentication
+from .core.security import get_api_key
 
 # Import custom exceptions (Phase 7: Error Handling)
 from .core.exceptions import SapheneiaException
@@ -278,6 +281,39 @@ app.include_router(
     prefix="/forecast/v1"
 )
 logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+
+# Generic inference endpoint at /forecast/v1/inference for dedicated model containers.
+# When a container runs a single model (e.g., chronos-t5-tiny), it exposes inference
+# at the generic path without the model name prefix. This allows the orchestration
+# service to call a consistent endpoint regardless of which model container is targeted.
+from fastapi import APIRouter, Body
+from .models.chronos.schemas.schema import InferenceInput, InferenceOutput
+from .models.chronos.routes.endpoints import inference_endpoint as chronos_inference_endpoint
+
+generic_inference_router = APIRouter(
+    tags=["Generic Inference"],
+    dependencies=[Depends(get_api_key)]
+)
+
+@generic_inference_router.post("/inference", response_model=InferenceOutput)
+@limiter.limit(get_rate_limit("inference"))
+async def generic_inference_endpoint(
+    request: Request,
+    response: Response,
+    input_data: InferenceInput = Body()
+):
+    """
+    Generic inference endpoint for dedicated model containers.
+
+    This endpoint provides a model-agnostic path for inference requests.
+    It delegates to the active model's inference implementation (currently Chronos).
+
+    Use this endpoint when calling dedicated model containers that run a single model.
+    """
+    return await chronos_inference_endpoint(request, response, input_data)
+
+app.include_router(generic_inference_router, prefix="/forecast/v1")
+logger.info("✅ Included generic inference router at: /forecast/v1/inference")
 
 # Unified orchestration router (NEW - preferred integration point)
 # Provides: /orchestration/v1/predict, /orchestration/v1/health, /orchestration/v1/models

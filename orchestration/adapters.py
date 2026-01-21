@@ -23,6 +23,7 @@ from .schema import (
     ForecastData,
     ContextSummary,
     InferenceMetadata,
+    HorizonSpec,
     Period,
     DataSource,
     DataField,

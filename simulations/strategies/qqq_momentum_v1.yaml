@@ -1,0 +1,39 @@
+# QQQ Momentum Strategy v1
+# A momentum-based trading strategy for backtesting QQQ
+#
+# Strategy Logic:
+#   - Measures price momentum over lookback period
+#   - BUY when momentum exceeds threshold
+#   - SELL when momentum drops below negative threshold
+#
+# Author: Sapheneia Team
+# Created: 2025-01-20
+
+metadata:
+  id: "qqq-momentum-v1"
+  version: "1.0.0"
+  description: "QQQ momentum strategy using TimesFM forecasting"
+  author: "Sapheneia Team"
+  created: "2025-01-20"
+
+evaluation:
+  ticker: "QQQ"
+  fetch_start_date: "20211201"
+  start_date: "20230101"
+  end_date: "20240101"
+
+forecast:
+  model: "google/timesfm-2.0-500m-pytorch"
+  context_size: 128
+  horizon_size: 20
+  compute_mode: "unified"
+
+trading:
+  initial_capital: 50000.0
+  initial_position: 0.0
+  initial_cash: 50000.0
+  strategy_type: "momentum"
+  params:
+    lookback_period: 20
+    momentum_threshold: 0.02
+    execution_size: 0.15

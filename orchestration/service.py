@@ -61,10 +61,17 @@ class InferenceService:
         Initialize inference service.
 
         Args:
-            base_url: Base URL for model endpoints
+            base_url: Base URL for model endpoints (fallback)
             api_key: Optional API key for authentication
+
+        Environment Variables (for distributed model containers):
+            CHRONOS_SERVICE_URL: URL for Chronos model container (e.g., http://forecast-chronos-t5-tiny:8000)
+            TIMESFM_SERVICE_URL: URL for TimesFM model container
         """
+        import os
         self.base_url = base_url
+        self.chronos_url = os.getenv("CHRONOS_SERVICE_URL", base_url)
+        self.timesfm_url = os.getenv("TIMESFM_SERVICE_URL", base_url)
         self.api_key = api_key
         self.timeout = 300.0  # 5 minutes for model operations
 
@@ -142,7 +149,10 @@ class InferenceService:
         # Transform to Chronos format
         chronos_request = inference_to_chronos(request)
 
-        logger.info(f"Calling Chronos endpoint: {self.base_url}/forecast/v1/chronos/inference")
+        # Call dedicated Chronos container using generic inference endpoint
+        # Model containers expose /forecast/v1/inference (no model name in path)
+        endpoint = f"{self.chronos_url}/forecast/v1/inference"
+        logger.info(f"Calling Chronos endpoint: {endpoint}")
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             headers = {"Content-Type": "application/json"}
@@ -150,7 +160,7 @@ class InferenceService:
                 headers["Authorization"] = f"Bearer {self.api_key}"
 
             resp = await client.post(
-                f"{self.base_url}/forecast/v1/chronos/inference",
+                endpoint,
                 json=chronos_request,
                 headers=headers,
             )
@@ -215,8 +225,10 @@ class InferenceService:
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
 
+            # Call dedicated TimesFM container
+            endpoint = f"{self.timesfm_url}/forecast/v1/timesfm20/inference"
             resp = await client.post(
-                f"{self.base_url}/forecast/v1/timesfm20/inference",
+                endpoint,
                 json=timesfm_request,
                 headers=headers,
             )
