@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 golang:1.25-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
 # Copy go.mod and go.sum first to leverage Docker layer caching
@@ -9,11 +9,11 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /app/finance-data-service ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/finance-data-service ./main.go
 
 # --- Final Image ---
 # Use a minimal Alpine image
-FROM --platform=linux/arm64 alpine:latest
+FROM alpine:latest
 
 RUN apk update && \
     apk add --no-cache \
