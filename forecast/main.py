@@ -31,8 +31,14 @@ from .models import get_available_models, get_all_models_info
 from .models.timesfm20.routes import endpoints as timesfm20_endpoints
 from .models.chronos.routes import endpoints as chronos_endpoints
 
-# Import new unified orchestration router
-from orchestration import orchestration_router
+# Import new unified orchestration router (optional - may not be implemented yet)
+try:
+    from orchestration import orchestration_router
+    ORCHESTRATION_AVAILABLE = True
+except ImportError:
+    ORCHESTRATION_AVAILABLE = False
+    orchestration_router = None
+    logger.warning("Orchestration module not available. /orchestration/v1/* endpoints disabled.")
 
 # Optional: MLflow integration (to be implemented in Phase 10)
 try:
@@ -275,8 +281,11 @@ logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.rou
 
 # Unified orchestration router (NEW - preferred integration point)
 # Provides: /orchestration/v1/predict, /orchestration/v1/health, /orchestration/v1/models
-app.include_router(orchestration_router)
-logger.info("✅ Included Orchestration router at: /orchestration/v1/*")
+if ORCHESTRATION_AVAILABLE and orchestration_router is not None:
+    app.include_router(orchestration_router)
+    logger.info("✅ Included Orchestration router at: /orchestration/v1/*")
+else:
+    logger.warning("⚠️  Orchestration router not available - /orchestration/v1/* endpoints disabled")
 
 # Future models can be added here:
 # app.include_router(other_model_endpoints.router, prefix="/forecast/v1")

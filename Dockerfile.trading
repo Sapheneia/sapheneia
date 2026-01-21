@@ -30,8 +30,8 @@ RUN which uv && uv --version
 COPY pyproject.toml ./
 COPY trading/ ./trading/
 
-# Install base dependencies
-RUN uv pip install --system --no-cache -e .
+# Install base dependencies with trading extras (includes uvicorn, fastapi, etc.)
+RUN uv pip install --system --no-cache -e ".[trading]"
 
 # Create necessary directories
 RUN mkdir -p logs

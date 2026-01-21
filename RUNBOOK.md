@@ -359,24 +359,35 @@ curl -X POST http://localhost:12700/v1/timeseries/forecast \
 
 ### Configuration
 
-Aleutian connects to Sapheneia via the `aleutian-shared` Docker network.
+Aleutian connects to Sapheneia via the `aleutian-shared` Docker network. Sapheneia is **OPTIONAL** - Aleutian can run in standalone mode without it.
 
 **Aleutian Environment Variables** (set in AleutianFOSS):
 ```bash
 # In podman-compose.timeseries.yml or .env
+
+# Primary URLs (recommended)
+SAPHENEIA_ORCHESTRATION_URL=http://sapheneia-forecast:8000  # For distributed
+SAPHENEIA_ORCHESTRATION_URL=http://localhost:12210          # For standalone
+SAPHENEIA_TRADING_URL=http://sapheneia-trading:9000         # For distributed
+SAPHENEIA_TRADING_URL=http://localhost:12132                # For standalone
+
+# Legacy URLs (deprecated, still supported for backwards compatibility)
 ALEUTIAN_FORECAST_MODE=sapheneia
 ALEUTIAN_TIMESERIES_TOOL=http://sapheneia-forecast:8000
 SAPHENEIA_TRADING_SERVICE_URL=http://sapheneia-trading:9000
+
+# API Key (required for trading)
 SAPHENEIA_TRADING_API_KEY=your_trading_api_key
 ```
 
 ### Request Flow
 
 1. **User** → `aleutian timeseries forecast SPY --model chronos-t5-tiny`
-2. **Aleutian Orchestrator** → `POST http://sapheneia-forecast:8000/v1/timeseries/forecast`
-3. **Sapheneia Gateway** → Routes to `http://forecast-chronos-t5-tiny:8000`
-4. **Model Container** → Runs inference, returns forecast
-5. **Response** → Back through gateway to Aleutian to user
+2. **Aleutian Evaluator** → ServiceRouter resolves URL based on deployment mode
+3. **Request** → `POST http://sapheneia-forecast:8000/v1/timeseries/forecast` (legacy) or `/orchestration/v1/predict` (unified)
+4. **Sapheneia Gateway** → Routes to `http://forecast-chronos-t5-tiny:8000`
+5. **Model Container** → Runs inference, returns forecast
+6. **Response** → Back through gateway to Aleutian to user
 
 ### Model Routing (Aleutian → Sapheneia)
 
@@ -388,20 +399,43 @@ Aleutian's `timeseries.go` normalizes model names and routes:
 | `Chronos-T5-Base` | `chronos-t5-base` | `forecast-chronos-t5-base:8000` (internal) / `:12713` (external) |
 | `google/timesfm-2.0-500m` | `timesfm-2-0-500m` | `forecast-timesfm-2-0:8000` (internal) / `:12720` (external) |
 
+### CLI Flags
+
+| Flag | Description | Values | Default |
+|------|-------------|--------|---------|
+| `--api-version` | API version to use | `legacy`, `unified` | `legacy` |
+| `--deployment-mode` | Deployment topology | `standalone`, `distributed` | `standalone` |
+| `--compute-mode` | **DEPRECATED** - use `--api-version` | `legacy`, `unified` | `legacy` |
+
+### Deployment Modes
+
+| Mode | Description | URLs |
+|------|-------------|------|
+| `standalone` | Local development, localhost ports | `http://localhost:12210`, `http://localhost:12132` |
+| `distributed` | Kubernetes/Docker network | `http://sapheneia-orchestration:8000`, `http://sapheneia-trading:8000` |
+
 ### Testing Integration
 
 ```bash
-# From Aleutian CLI
+# From Aleutian CLI - simple forecast
 ./aleutian timeseries forecast SPY \
   --model "amazon/chronos-t5-tiny" \
   --context 90 \
   --horizon 10
 
-# Run backtest with scenario file
-./aleutian evaluate run --config strategies/spy_threshold_v1.yaml
+# Run backtest with scenario file (uses legacy API by default)
+./aleutian evaluation run --config strategies/spy_threshold_v1.yaml
 
-# Run backtest with compute mode override
-./aleutian evaluate run --config strategies/spy_threshold_v1.yaml --compute-mode unified
+# Run backtest with unified API (includes request/response tracing)
+./aleutian evaluation run --config strategies/spy_threshold_v1.yaml --api-version unified
+
+# Run backtest in distributed mode (e.g., for Kubernetes)
+./aleutian evaluation run --config strategies/spy_threshold_v1.yaml \
+  --api-version unified \
+  --deployment-mode distributed
+
+# DEPRECATED: Using --compute-mode (still works but logs warning)
+./aleutian evaluation run --config strategies/spy_threshold_v1.yaml --compute-mode unified
 ```
 
 ---

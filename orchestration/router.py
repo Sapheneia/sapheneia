@@ -4,19 +4,23 @@ Orchestration Router
 FastAPI router exposing the unified orchestration API for Aleutian integration.
 
 Endpoints:
-    POST /orchestration/v1/predict   - Unified inference endpoint
-    GET  /orchestration/v1/health    - Health check
-    GET  /orchestration/v1/models    - List available models
-    POST /v1/timeseries/forecast     - Legacy endpoint (deprecated)
+    POST /orchestration/v1/predict      - Unified inference endpoint
+    GET  /orchestration/v1/health       - Health check
+    GET  /orchestration/v1/models       - List available models
+    GET  /orchestration/v1/strategies   - List available strategies
+    GET  /orchestration/v1/strategies/{name} - Get strategy by name
+    POST /v1/timeseries/forecast        - Legacy endpoint (deprecated)
 
 The new /orchestration/v1/predict endpoint is the recommended integration point.
 The legacy /v1/timeseries/forecast is maintained for backwards compatibility.
 """
 
 import logging
-from typing import Optional
+from pathlib import Path
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from fastapi.responses import JSONResponse
+import yaml
 
 from .schema import (
     InferenceRequest,
@@ -29,6 +33,9 @@ from .schema import (
 from .service import InferenceService, LegacyCompatService
 
 logger = logging.getLogger(__name__)
+
+# Strategies directory (relative to repo root)
+STRATEGIES_DIR = Path(__file__).parent.parent / "simulations" / "strategies"
 
 # Create router
 router = APIRouter(tags=["Orchestration"])
@@ -192,6 +199,94 @@ async def list_models():
             },
         ]
     }
+
+
+# =============================================================================
+# STRATEGY ENDPOINTS
+# =============================================================================
+
+@router.get(
+    "/orchestration/v1/strategies",
+    summary="List available strategies",
+    description="""
+    List all available backtest strategy configurations.
+
+    Returns a list of strategy names that can be loaded via the
+    `/orchestration/v1/strategies/{name}` endpoint.
+    """,
+)
+async def list_strategies() -> Dict[str, List[str]]:
+    """
+    List all available strategy YAML files.
+
+    Returns:
+        Dictionary with "strategies" key containing list of strategy names.
+    """
+    if not STRATEGIES_DIR.exists():
+        logger.warning(f"Strategies directory not found: {STRATEGIES_DIR}")
+        return {"strategies": []}
+
+    strategies = [f.stem for f in STRATEGIES_DIR.glob("*.yaml") if f.is_file()]
+    strategies.sort()
+
+    logger.info(f"Found {len(strategies)} strategies")
+    return {"strategies": strategies}
+
+
+@router.get(
+    "/orchestration/v1/strategies/{name}",
+    summary="Get strategy configuration",
+    description="""
+    Get a specific backtest strategy configuration by name.
+
+    The returned JSON can be used directly with Aleutian's evaluation CLI:
+
+    ```bash
+    aleutian eval --config http://localhost:12210/orchestration/v1/strategies/spy_threshold_v1
+    ```
+
+    **Response Schema:**
+    - `metadata`: Strategy identity (id, version, description, author, created)
+    - `evaluation`: Ticker and date range configuration
+    - `forecast`: Model and forecasting parameters
+    - `trading`: Portfolio and strategy parameters
+    """,
+)
+async def get_strategy(name: str) -> Dict[str, Any]:
+    """
+    Get a strategy configuration by name.
+
+    Args:
+        name: Strategy name (filename without .yaml extension)
+
+    Returns:
+        Parsed strategy configuration as JSON.
+
+    Raises:
+        HTTPException 404: If strategy not found.
+    """
+    strategy_path = STRATEGIES_DIR / f"{name}.yaml"
+
+    if not strategy_path.exists():
+        logger.warning(f"Strategy not found: {name}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Strategy '{name}' not found. Use /orchestration/v1/strategies to list available strategies."
+        )
+
+    try:
+        with open(strategy_path, "r") as f:
+            strategy = yaml.safe_load(f)
+
+        logger.info(f"Loaded strategy: {name}")
+        return strategy
+
+    except yaml.YAMLError as e:
+        logger.error(f"Failed to parse strategy YAML: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse strategy '{name}': {str(e)}"
+        )
 
 
 # =============================================================================
