@@ -220,9 +220,60 @@ test_inference() {
     return 1
 }
 
+# Test 5: Can run full backtest and export CSV?
+test_backtest() {
+    local slug="$1"
+    local ticker="${2:-SPY}"
+
+    # Find the strategy file
+    local strategy_file="${SAPHENEIA_DIR}/simulations/strategies/${ticker}/${ticker,,}_${slug//-/_}.yaml"
+
+    if [[ ! -f "$strategy_file" ]]; then
+        log "    Strategy file not found: $strategy_file"
+        return 1
+    fi
+
+    # Run the backtest
+    local output
+    output=$(aleutian evaluate run --config "$strategy_file" --api-version unified 2>&1) || true
+
+    # Extract Run ID
+    local run_id
+    run_id=$(echo "$output" | grep "Run ID:" | awk '{print $NF}' | tail -1)
+
+    if [[ -z "$run_id" ]]; then
+        log "    No Run ID generated"
+        log "    Output: $(echo "$output" | tail -2)"
+        return 1
+    fi
+
+    log "    Run ID: $run_id"
+
+    # Export to CSV
+    local export_output
+    export_output=$(aleutian evaluate export "$run_id" 2>&1) || true
+
+    if echo "$export_output" | grep -q "Export complete"; then
+        # Move CSV to test_results
+        local csv_file="backtest_${run_id}.csv"
+        if [[ -f "$csv_file" ]]; then
+            mv "$csv_file" "${SAPHENEIA_DIR}/test_results/"
+            log "    CSV: test_results/${csv_file}"
+            return 0
+        fi
+    fi
+
+    log "    Export failed: $(echo "$export_output" | tail -1)"
+    return 1
+}
+
 # Full test suite for a single model
+# Args: slug [include_backtest] [ticker]
 run_model_test() {
     local slug="$1"
+    local include_backtest="${2:-false}"
+    local ticker="${3:-SPY}"
+
     local model_entry
     model_entry=$(find_model "$slug")
 
@@ -237,6 +288,9 @@ run_model_test() {
     local known_status=$(get_field "$model_entry" 5)
     local notes=$(get_field "$model_entry" 6)
 
+    local total_tests=4
+    [[ "$include_backtest" == "true" ]] && total_tests=5
+
     log ""
     log "${CYAN}Testing: ${BOLD}$slug${NC}"
     log "  HuggingFace: $hf_id"
@@ -249,7 +303,7 @@ run_model_test() {
     local details=""
 
     # Test 1: Health check
-    log -n "  [1/4] Container health check... "
+    log -n "  [1/${total_tests}] Container health check... "
     if test_container_health "$slug" "$port"; then
         log "${GREEN}PASS${NC}"
     else
@@ -261,7 +315,7 @@ run_model_test() {
     fi
 
     # Test 2: Model initialization
-    log -n "  [2/4] Model initialization... "
+    log -n "  [2/${total_tests}] Model initialization... "
     if test_model_init "$slug" "$port" "$hf_id" "$family"; then
         log "${GREEN}PASS${NC}"
     else
@@ -273,7 +327,7 @@ run_model_test() {
     fi
 
     # Test 3: Model status
-    log -n "  [3/4] Model status ready... "
+    log -n "  [3/${total_tests}] Model status ready... "
     # Wait a moment for initialization to complete
     sleep 2
     if test_model_status "$slug" "$port" "$family"; then
@@ -283,9 +337,9 @@ run_model_test() {
         # Try again after longer wait
         sleep 10
         if test_model_status "$slug" "$port" "$family"; then
-            log "  [3/4] Model status ready... ${GREEN}PASS${NC} (after wait)"
+            log "  [3/${total_tests}] Model status ready... ${GREEN}PASS${NC} (after wait)"
         else
-            log "  [3/4] Model status ready... ${RED}FAIL${NC}"
+            log "  [3/${total_tests}] Model status ready... ${RED}FAIL${NC}"
             result="status_not_ready"
             details="Model did not reach ready status"
             TEST_RESULTS[$slug]="$result|$details"
@@ -294,20 +348,38 @@ run_model_test() {
     fi
 
     # Test 4: Inference
-    log -n "  [4/4] Inference test... "
+    log -n "  [4/${total_tests}] Inference test... "
     if test_inference "$slug" "$port" "$family"; then
         log "${GREEN}PASS${NC}"
         result="working"
-        details="All tests passed"
+        details="Inference passed"
     else
         log "${RED}FAIL${NC} (inference returned invalid response)"
         result="inference_failed"
         details="Inference did not return valid forecast"
+        TEST_RESULTS[$slug]="$result|$details"
+        return 1
+    fi
+
+    # Test 5: Full backtest with CSV export (optional)
+    if [[ "$include_backtest" == "true" ]]; then
+        log -n "  [5/${total_tests}] Full backtest (${ticker})... "
+        if test_backtest "$slug" "$ticker"; then
+            log "${GREEN}PASS${NC}"
+            result="working_full"
+            details="All tests passed including backtest"
+        else
+            log "${RED}FAIL${NC}"
+            result="backtest_failed"
+            details="Backtest or CSV export failed"
+            TEST_RESULTS[$slug]="$result|$details"
+            return 1
+        fi
     fi
 
     TEST_RESULTS[$slug]="$result|$details"
 
-    if [[ "$result" == "working" ]]; then
+    if [[ "$result" == "working" || "$result" == "working_full" ]]; then
         log "  ${GREEN}>>> MODEL WORKING <<<${NC}"
         return 0
     else
@@ -424,6 +496,9 @@ generate_report() {
 # =============================================================================
 
 cmd_test_all() {
+    local include_backtest="${1:-false}"
+    local ticker="${2:-SPY}"
+
     log "${CYAN}"
     cat << 'EOF'
   __  __           _      _   _____         _
@@ -434,6 +509,11 @@ cmd_test_all() {
   Sapheneia Model Test Suite
 EOF
     log "${NC}"
+
+    if [[ "$include_backtest" == "true" ]]; then
+        log "${CYAN}Running full tests with backtest (${ticker})...${NC}"
+    fi
+    log ""
 
     local tested=0
     local passed=0
@@ -451,7 +531,7 @@ EOF
         fi
 
         ((tested++))
-        if run_model_test "$slug"; then
+        if run_model_test "$slug" "$include_backtest" "$ticker"; then
             ((passed++))
         else
             ((failed++))
@@ -467,13 +547,24 @@ EOF
     log "  Passed:  ${GREEN}$passed${NC}"
     log "  Failed:  ${RED}$failed${NC}"
     log "  Skipped: ${YELLOW}$skipped${NC} (not implemented)"
+    if [[ "$include_backtest" == "true" ]]; then
+        log ""
+        log "  CSV files saved to: ${SAPHENEIA_DIR}/test_results/"
+    fi
     log ""
 
     generate_report
 }
 
 cmd_test_quick() {
-    log "${CYAN}Testing only known-working models...${NC}"
+    local include_backtest="${1:-false}"
+    local ticker="${2:-SPY}"
+
+    if [[ "$include_backtest" == "true" ]]; then
+        log "${CYAN}Testing known-working models with full backtest (${ticker})...${NC}"
+    else
+        log "${CYAN}Testing only known-working models...${NC}"
+    fi
     log ""
 
     local tested=0
@@ -486,7 +577,7 @@ cmd_test_quick() {
 
         if [[ "$status" == "working" ]]; then
             ((tested++))
-            if run_model_test "$slug"; then
+            if run_model_test "$slug" "$include_backtest" "$ticker"; then
                 ((passed++))
             else
                 ((failed++))
@@ -502,6 +593,10 @@ cmd_test_quick() {
     log "  Tested:  $tested"
     log "  Passed:  ${GREEN}$passed${NC}"
     log "  Failed:  ${RED}$failed${NC}"
+    if [[ "$include_backtest" == "true" ]]; then
+        log ""
+        log "  CSV files saved to: ${SAPHENEIA_DIR}/test_results/"
+    fi
     log ""
 
     generate_report
@@ -509,11 +604,14 @@ cmd_test_quick() {
 
 cmd_test_model() {
     local slug="$1"
+    local include_backtest="${2:-false}"
+    local ticker="${3:-SPY}"
+
     if [[ -z "$slug" ]]; then
         log "${RED}Error: Please specify a model slug${NC}"
         exit 1
     fi
-    run_model_test "$slug"
+    run_model_test "$slug" "$include_backtest" "$ticker"
 
     log ""
     log "Results saved to: ${SAPHENEIA_DIR}/test_results/"
@@ -521,12 +619,19 @@ cmd_test_model() {
 
 cmd_test_family() {
     local family="$1"
+    local include_backtest="${2:-false}"
+    local ticker="${3:-SPY}"
+
     if [[ -z "$family" ]]; then
         log "${RED}Error: Please specify a model family${NC}"
         exit 1
     fi
 
-    log "${CYAN}Testing all $family models...${NC}"
+    if [[ "$include_backtest" == "true" ]]; then
+        log "${CYAN}Testing all $family models with full backtest (${ticker})...${NC}"
+    else
+        log "${CYAN}Testing all $family models...${NC}"
+    fi
 
     local tested=0
     local passed=0
@@ -539,7 +644,7 @@ cmd_test_family() {
 
         if [[ "$model_family" == "$family" && "$status" != "not_implemented" ]]; then
             ((tested++))
-            if run_model_test "$slug"; then
+            if run_model_test "$slug" "$include_backtest" "$ticker"; then
                 ((passed++))
             else
                 ((failed++))
@@ -555,6 +660,10 @@ cmd_test_family() {
     log "  Tested:  $tested"
     log "  Passed:  ${GREEN}$passed${NC}"
     log "  Failed:  ${RED}$failed${NC}"
+    if [[ "$include_backtest" == "true" ]]; then
+        log ""
+        log "  CSV files saved to: ${SAPHENEIA_DIR}/test_results/"
+    fi
     log ""
 
     generate_report
@@ -595,24 +704,36 @@ ${BOLD}USAGE:${NC}
 
 ${BOLD}COMMANDS:${NC}
     test              Test all testable models (skips not_implemented)
-    quick             Test only known-working models
+    quick             Test only known-working models (inference only)
+    full              Test known-working models with full backtest + CSV export
     model <slug>      Test a specific model
     family <name>     Test all models in a family (chronos, timesfm, etc.)
     list              List all models with their status
     report            Generate status report
 
+${BOLD}OPTIONS:${NC}
+    --full            Include full backtest test (runs aleutian evaluate + export)
+    --ticker <SYM>    Ticker to use for backtest (default: SPY)
+
 ${BOLD}EXAMPLES:${NC}
-    ./test-models.sh test                    # Test all
-    ./test-models.sh quick                   # Test known-working only
-    ./test-models.sh model chronos-t5-tiny   # Test specific model
-    ./test-models.sh family chronos          # Test all Chronos models
-    ./test-models.sh list                    # Show all models
+    ./test-models.sh quick                   # Quick test (inference only)
+    ./test-models.sh full                    # Full test with backtest + CSV
+    ./test-models.sh quick --full            # Same as 'full'
+    ./test-models.sh quick --full --ticker QQQ  # Full test using QQQ
+    ./test-models.sh model chronos-t5-tiny --full  # Full test single model
+    ./test-models.sh family chronos --full   # Full test all Chronos models
 
 ${BOLD}TEST LEVELS:${NC}
     1. Container health check (is service running?)
     2. Model initialization (can load weights?)
     3. Status ready (is model ready for inference?)
     4. Inference test (can generate forecasts?)
+    5. Backtest test (--full only: run backtest + export CSV)
+
+${BOLD}OUTPUT:${NC}
+    test_results/MODEL_STATUS.md             # Latest summary
+    test_results/model_test_report_*.md      # Timestamped reports
+    test_results/backtest_*.csv              # CSV exports (--full only)
 
 EOF
 }
@@ -628,11 +749,32 @@ main() {
     # Ensure test results directory exists
     mkdir -p "${SAPHENEIA_DIR}/test_results"
 
+    # Parse global options
+    local include_backtest="false"
+    local ticker="SPY"
+
+    while [[ "$1" == --* ]]; do
+        case "$1" in
+            --full)
+                include_backtest="true"
+                shift
+                ;;
+            --ticker)
+                ticker="$2"
+                shift 2
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
     case "$cmd" in
-        test|all)      cmd_test_all ;;
-        quick)         cmd_test_quick ;;
-        model)         cmd_test_model "$@" ;;
-        family)        cmd_test_family "$@" ;;
+        test|all)      cmd_test_all "$include_backtest" "$ticker" ;;
+        quick)         cmd_test_quick "$include_backtest" "$ticker" ;;
+        full)          cmd_test_quick "true" "$ticker" ;;  # Alias for quick --full
+        model)         cmd_test_model "$1" "$include_backtest" "$ticker" ;;
+        family)        cmd_test_family "$1" "$include_backtest" "$ticker" ;;
         list|ls)       cmd_list ;;
         report)        generate_report ;;
         help|--help|-h) cmd_help ;;
