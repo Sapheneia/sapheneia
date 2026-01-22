@@ -15,7 +15,8 @@
 #   - Environment variables set (ORCHESTRATOR_URL, SAPHENEIA_API_KEY)
 # =============================================================================
 
-set -e
+# Don't use set -e - handle errors explicitly for better control
+# set -e
 
 # Colors
 RED='\033[0;31m'
@@ -96,18 +97,21 @@ done
 log() {
     local msg="[$(date '+%H:%M:%S')] $1"
     echo -e "$msg"
-    [[ -f "$LOG_FILE" ]] && echo "$msg" >> "$LOG_FILE"
+    if [[ -f "$LOG_FILE" ]]; then
+        echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
+    fi
 }
 
 print_banner() {
     echo -e "${CYAN}"
     cat << 'EOF'
-  ____              _            _
- | __ )  __ _  ___| | _____  __| |_
- |  _ \ / _` |/ __| |/ / _ \/ _` __|
- | |_) | (_| | (__|   <  __/ (_| |_
- |____/ \__,_|\___|_|\_\___|\__,\__|
-  Runner - Sapheneia Strategies
+  ____              _                   _
+ / ___|  __ _ _ __ | |__   ___ _ __   ___(_) __ _
+ \___ \ / _` | '_ \| '_ \ / _ \ '_ \ / _ \ |/ _` |
+  ___) | (_| | |_) | | | |  __/ | | |  __/ | (_| |
+ |____/ \__,_| .__/|_| |_|\___|_| |_|\___|_|\__,_|
+             |_|
+  Backtest Runner - Time Series Forecasting
 
 EOF
     echo -e "${NC}"
