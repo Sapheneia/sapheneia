@@ -1,0 +1,26 @@
+metadata:
+  id: "xlu-chronos-t5-large"
+  version: "1.0.0"
+  description: "XLU (Utilities Select Sector SPDR) backtest using Chronos T5 Large"
+  author: "Sapheneia"
+
+evaluation:
+  ticker: "XLU"
+  fetch_start_date: "20211201"
+  start_date: "20230101"
+  end_date: "20240101"
+
+forecast:
+  model: "amazon/chronos-t5-large"
+  context_size: 252
+  horizon_size: 20
+
+trading:
+  initial_capital: 100000.0
+  initial_position: 0.0
+  initial_cash: 100000.0
+  strategy_type: "threshold"
+  params:
+    threshold_type: "absolute"
+    threshold_value: 2.0
+    execution_size: 10.0

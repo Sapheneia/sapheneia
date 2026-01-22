@@ -5,14 +5,19 @@
 # This script runs all backtest strategies and exports results to CSV.
 #
 # Usage:
-#   ./run_all_backtests.sh              # Run all strategies
+#   ./run_all_backtests.sh              # Run all strategies (auto-fetches missing data)
 #   ./run_all_backtests.sh --ticker SPY # Run only SPY strategies
 #   ./run_all_backtests.sh --model tiny # Run only chronos_tiny strategies
 #   ./run_all_backtests.sh --dry-run    # Show what would run (no execution)
+#   ./run_all_backtests.sh --skip-fetch # Skip data fetching (assumes data exists)
 #
 # Requirements:
 #   - Sapheneia stack running (forecast, chronos, influxdb)
 #   - Environment variables set (ORCHESTRATOR_URL, SAPHENEIA_API_KEY)
+#
+# Auto Data Fetch:
+#   By default, the script checks InfluxDB for each ticker and fetches
+#   missing data using 'aleutian timeseries fetch'. Use --skip-fetch to disable.
 # =============================================================================
 
 # Don't use set -e - handle errors explicitly for better control
@@ -37,6 +42,10 @@ FILTER_TICKER=""
 FILTER_MODEL=""
 DRY_RUN=false
 SKIP_INIT=false
+SKIP_FETCH=false
+
+# Track which tickers we've already fetched data for
+declare -A FETCHED_TICKERS
 
 # Counters
 TOTAL=0
@@ -66,21 +75,29 @@ while [[ $# -gt 0 ]]; do
             SKIP_INIT=true
             shift
             ;;
+        --skip-fetch)
+            SKIP_FETCH=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --ticker TICKER   Only run strategies for this ticker (e.g., SPY)"
-            echo "  --model MODEL     Only run this model type (tiny, base, bolt, timesfm)"
+            echo "  --model MODEL     Only run this model (e.g., chronos-t5-tiny, chronos-bolt-mini, timesfm)"
             echo "  --dry-run         Show what would run without executing"
             echo "  --skip-init       Skip model initialization"
+            echo "  --skip-fetch      Skip automatic data fetching (assumes data exists)"
             echo "  --help            Show this help"
             echo ""
+            echo "Models:"
+            echo "  chronos-t5-tiny, chronos-t5-base, chronos-bolt-mini, timesfm"
+            echo ""
             echo "Examples:"
-            echo "  $0                        # Run all 104 strategies"
-            echo "  $0 --ticker SPY           # Run only SPY (4 strategies)"
-            echo "  $0 --model tiny           # Run chronos_tiny for all tickers (26 strategies)"
-            echo "  $0 --ticker SPY --model tiny  # Run only SPY with chronos_tiny (1 strategy)"
+            echo "  $0                                    # Run all strategies"
+            echo "  $0 --ticker SPY                       # Run only SPY (4 strategies)"
+            echo "  $0 --model chronos-t5-tiny            # Run chronos-t5-tiny for all tickers"
+            echo "  $0 --ticker SPY --model chronos-t5-tiny  # Run only SPY with chronos-t5-tiny"
             exit 0
             ;;
         *)
@@ -181,6 +198,190 @@ initialize_models() {
     log ""
 }
 
+# Convert model slug to filename pattern
+# Maps AleutianFOSS model slugs to strategy filename patterns
+normalize_model_filter() {
+    local model="$1"
+    case "$model" in
+        # --- AMAZON CHRONOS T5 ---
+        chronos-t5-tiny)    echo "chronos-t5-tiny" ;;
+        chronos-t5-mini)    echo "chronos-t5-mini" ;;
+        chronos-t5-small)   echo "chronos-t5-small" ;;
+        chronos-t5-base)    echo "chronos-t5-base" ;;
+        chronos-t5-large)   echo "chronos-t5-large" ;;
+
+        # --- AMAZON CHRONOS BOLT ---
+        chronos-bolt-mini)  echo "chronos-bolt-mini" ;;
+        chronos-bolt-small) echo "chronos-bolt-small" ;;
+        chronos-bolt-base)  echo "chronos-bolt-base" ;;
+
+        # --- GOOGLE TIMESFM ---
+        timesfm-1-0)        echo "timesfm-1-0" ;;
+        timesfm-2-0|timesfm) echo "timesfm-2-0" ;;
+        timesfm-2-5)        echo "timesfm-2-5" ;;
+
+        # --- SALESFORCE MOIRAI ---
+        moirai-1-0-small)   echo "moirai-1-0-small" ;;
+        moirai-1-1-small)   echo "moirai-1-1-small" ;;
+        moirai-1-1-base)    echo "moirai-1-1-base" ;;
+        moirai-1-1-large)   echo "moirai-1-1-large" ;;
+        moirai-2-0-small)   echo "moirai-2-0-small" ;;
+
+        # --- IBM GRANITE ---
+        granite-ttm-r1)     echo "granite-ttm-r1" ;;
+        granite-ttm-r2)     echo "granite-ttm-r2" ;;
+        granite-flowstate)  echo "granite-flowstate" ;;
+        granite-patchtsmixer) echo "granite-patchtsmixer" ;;
+        granite-patchtst)   echo "granite-patchtst" ;;
+
+        # --- AUTONLAB MOMENT ---
+        moment-small)       echo "moment-small" ;;
+        moment-base)        echo "moment-base" ;;
+        moment-large)       echo "moment-large" ;;
+
+        # --- ALIBABA YINGLONG ---
+        yinglong-6m)        echo "yinglong-6m" ;;
+        yinglong-50m)       echo "yinglong-50m" ;;
+        yinglong-110m)      echo "yinglong-110m" ;;
+        yinglong-300m)      echo "yinglong-300m" ;;
+
+        # --- MISC / SINGLE MODELS ---
+        lag-llama)          echo "lag-llama" ;;
+        kairos-10m)         echo "kairos-10m" ;;
+        kairos-50m)         echo "kairos-50m" ;;
+        timemoe-200m)       echo "timemoe-200m" ;;
+        timer)              echo "timer" ;;
+        sundial)            echo "sundial" ;;
+        toto)               echo "toto" ;;
+        falcon-tst)         echo "falcon-tst" ;;
+        tempopfn)           echo "tempopfn" ;;
+        forecastpfn)        echo "forecastpfn" ;;
+        chattime)           echo "chattime" ;;
+        opencity)           echo "opencity" ;;
+        units)              echo "units" ;;
+
+        *)
+            # Pass through as-is for direct filename matching
+            echo "$model"
+            ;;
+    esac
+}
+
+# Parse date from YAML (YYYYMMDD format) and convert to ISO format
+parse_yaml_date() {
+    local yaml_file="$1"
+    local field="$2"
+    local date_str
+    date_str=$(grep "^  ${field}:" "$yaml_file" | sed 's/.*: *"//' | sed 's/".*//' | tr -d ' ')
+    if [[ -n "$date_str" && ${#date_str} -eq 8 ]]; then
+        # Convert YYYYMMDD to YYYY-MM-DD
+        echo "${date_str:0:4}-${date_str:4:2}-${date_str:6:2}"
+    fi
+}
+
+# Calculate days between two dates (YYYY-MM-DD format)
+days_between() {
+    local start="$1"
+    local end="$2"
+    local start_sec end_sec
+    start_sec=$(date -d "$start" +%s 2>/dev/null) || start_sec=$(date -j -f "%Y-%m-%d" "$start" +%s 2>/dev/null)
+    end_sec=$(date -d "$end" +%s 2>/dev/null) || end_sec=$(date -j -f "%Y-%m-%d" "$end" +%s 2>/dev/null)
+    echo $(( (end_sec - start_sec) / 86400 ))
+}
+
+# Check if ticker data exists in InfluxDB, fetch if missing
+ensure_ticker_data() {
+    local ticker="$1"
+    local strategy_file="$2"
+
+    # Skip if we already checked this ticker with sufficient data
+    if [[ -n "${FETCHED_TICKERS[$ticker]:-}" ]]; then
+        return 0
+    fi
+
+    if [[ "$SKIP_FETCH" == true ]]; then
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log "  ${YELLOW}[DRY RUN] Would check/fetch data for ${ticker}${NC}"
+        FETCHED_TICKERS[$ticker]=1
+        return 0
+    fi
+
+    # Parse dates from the strategy YAML
+    local fetch_start_date start_date end_date
+    fetch_start_date=$(parse_yaml_date "$strategy_file" "fetch_start_date")
+    start_date=$(parse_yaml_date "$strategy_file" "start_date")
+    end_date=$(parse_yaml_date "$strategy_file" "end_date")
+
+    # Fallback if fetch_start_date not specified: use start_date
+    if [[ -z "$fetch_start_date" ]]; then
+        fetch_start_date="$start_date"
+    fi
+
+    if [[ -z "$fetch_start_date" || -z "$end_date" ]]; then
+        log "  ${YELLOW}⚠ Could not parse dates from YAML, skipping data check${NC}"
+        FETCHED_TICKERS[$ticker]=1
+        return 0
+    fi
+
+    # Calculate required days: from fetch_start_date to end_date
+    local required_days
+    required_days=$(days_between "$fetch_start_date" "$end_date")
+
+    # Query InfluxDB to check if data exists for the required range
+    local influx_url="${INFLUXDB_URL:-http://localhost:12130}"
+    local influx_token="${INFLUXDB_TOKEN:-your_super_secret_admin_token}"
+    local influx_org="${INFLUXDB_ORG:-aleutian-finance}"
+    local influx_bucket="${INFLUXDB_BUCKET:-financial-data}"
+
+    # Check if we have data for this ticker in the required date range
+    local query="from(bucket: \"${influx_bucket}\")
+        |> range(start: ${fetch_start_date}T00:00:00Z, stop: ${end_date}T23:59:59Z)
+        |> filter(fn: (r) => r[\"ticker\"] == \"${ticker}\")
+        |> filter(fn: (r) => r[\"_field\"] == \"close\")
+        |> count()"
+
+    local response
+    response=$(curl -s -X POST "${influx_url}/api/v2/query?org=${influx_org}" \
+        -H "Authorization: Token ${influx_token}" \
+        -H "Content-Type: application/vnd.flux" \
+        -d "$query" 2>/dev/null)
+
+    # Check if we got data (response contains count > 0)
+    local count=0
+    if echo "$response" | grep -q "_value"; then
+        count=$(echo "$response" | grep -oP '(?<=,)[0-9]+(?=\r?$)' | tail -1 2>/dev/null)
+        count=${count:-0}
+    fi
+
+    # Estimate expected trading days (~252 per year, so ~70% of calendar days)
+    local expected_trading_days=$(( required_days * 70 / 100 ))
+    local min_required=$(( expected_trading_days * 80 / 100 ))  # Need at least 80% of expected
+
+    if [[ "$count" -lt "$min_required" ]]; then
+        log "  ${YELLOW}Fetching data for ${ticker} (have ${count}, need ~${min_required})...${NC}"
+
+        # Add buffer days for safety
+        local fetch_days=$(( required_days + 30 ))
+
+        # Use aleutian to fetch the data
+        local fetch_output
+        fetch_output=$(aleutian timeseries fetch "$ticker" --days "$fetch_days" 2>&1) || true
+
+        if echo "$fetch_output" | grep -qi "error\|failed"; then
+            log "  ${RED}⚠ Failed to fetch data for ${ticker}${NC}"
+            log "    $(echo "$fetch_output" | tail -1)"
+        else
+            log "  ${GREEN}✓${NC} Data fetched for ${ticker}"
+        fi
+    fi
+
+    # Mark as checked so we don't try again
+    FETCHED_TICKERS[$ticker]=1
+}
+
 run_strategy() {
     local strategy_file="$1"
     local strategy_name=$(basename "$strategy_file" .yaml)
@@ -194,12 +395,19 @@ run_strategy() {
         return
     fi
 
-    if [[ -n "$FILTER_MODEL" ]] && [[ "$strategy_name" != *"$FILTER_MODEL"* ]]; then
-        ((SKIPPED++))
-        return
+    if [[ -n "$FILTER_MODEL" ]]; then
+        local normalized_filter
+        normalized_filter=$(normalize_model_filter "$FILTER_MODEL")
+        if [[ "$strategy_name" != *"$normalized_filter"* ]]; then
+            ((SKIPPED++))
+            return
+        fi
     fi
 
     log "${CYAN}[$TOTAL] Running: ${ticker}/${strategy_name}${NC}"
+
+    # Ensure we have data for this ticker (auto-fetch if missing)
+    ensure_ticker_data "$ticker" "$strategy_file"
 
     if [[ "$DRY_RUN" == true ]]; then
         log "  ${YELLOW}[DRY RUN] Would execute: aleutian evaluate run --config $strategy_file${NC}"
@@ -314,6 +522,7 @@ main() {
     [[ -n "$FILTER_TICKER" ]] && log "  Filter ticker: $FILTER_TICKER"
     [[ -n "$FILTER_MODEL" ]] && log "  Filter model: $FILTER_MODEL"
     [[ "$DRY_RUN" == true ]] && log "  ${YELLOW}DRY RUN MODE${NC}"
+    [[ "$SKIP_FETCH" == true ]] && log "  ${YELLOW}Skip data fetch: enabled${NC}"
     log ""
 
     # Create results directory

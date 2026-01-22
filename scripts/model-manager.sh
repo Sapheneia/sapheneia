@@ -54,47 +54,62 @@ fi
 # Status: supported (in Sapheneia) or planned (in AleutianFOSS but no Sapheneia impl)
 
 declare -a MODELS=(
-    # Amazon Chronos T5 Series - SUPPORTED
+    # === AMAZON CHRONOS T5 === (SUPPORTED)
     "chronos-t5-tiny|forecast-chronos-t5-tiny|amazon/chronos-t5-tiny|12710|chronos|supported"
     "chronos-t5-mini|forecast-chronos-t5-mini|amazon/chronos-t5-mini|12711|chronos|supported"
     "chronos-t5-small|forecast-chronos-t5-small|amazon/chronos-t5-small|12712|chronos|supported"
     "chronos-t5-base|forecast-chronos-t5-base|amazon/chronos-t5-base|12713|chronos|supported"
     "chronos-t5-large|forecast-chronos-t5-large|amazon/chronos-t5-large|12714|chronos|supported"
 
-    # Amazon Chronos Bolt Series - SUPPORTED
+    # === AMAZON CHRONOS BOLT === (SUPPORTED)
     "chronos-bolt-mini|forecast-chronos-bolt-mini|amazon/chronos-bolt-mini|12715|chronos|supported"
     "chronos-bolt-small|forecast-chronos-bolt-small|amazon/chronos-bolt-small|12716|chronos|supported"
     "chronos-bolt-base|forecast-chronos-bolt-base|amazon/chronos-bolt-base|12717|chronos|supported"
 
-    # Google TimesFM - SUPPORTED (but container commented in compose)
-    "timesfm-2-0|forecast-timesfm-2-0|google/timesfm-2.0-500m-pytorch|12720|timesfm|supported"
-
-    # Google TimesFM - PLANNED (no Sapheneia impl yet)
-    "timesfm-1-0|forecast-timesfm-1-0|google/timesfm-1.0-200m|12721|timesfm|planned"
+    # === GOOGLE TIMESFM === (PARTIAL - only 2.0 supported)
+    "timesfm-1-0|forecast-timesfm-1-0|google/timesfm-1.0-200m|12720|timesfm|planned"
+    "timesfm-2-0|forecast-timesfm-2-0|google/timesfm-2.0-500m-pytorch|12721|timesfm|supported"
     "timesfm-2-5|forecast-timesfm-2-5|google/timesfm-2.5|12722|timesfm|planned"
 
-    # Salesforce Moirai - PLANNED
-    "moirai-1-0-small|forecast-moirai-1-0-small|salesforce/moirai-1.0-R-small|12730|moirai|planned"
-    "moirai-1-1-small|forecast-moirai-1-1-small|salesforce/moirai-1.1-R-small|12731|moirai|planned"
-    "moirai-1-1-base|forecast-moirai-1-1-base|salesforce/moirai-1.1-R-base|12732|moirai|planned"
-    "moirai-1-1-large|forecast-moirai-1-1-large|salesforce/moirai-1.1-R-large|12733|moirai|planned"
-    "moirai-2-0-small|forecast-moirai-2-0-small|salesforce/moirai-2.0-R-small|12734|moirai|planned"
+    # === SALESFORCE MOIRAI === (PLANNED)
+    "moirai-1-0-small|forecast-moirai-1-0-small|Salesforce/moirai-1.0-R-small|12730|moirai|planned"
+    "moirai-1-1-small|forecast-moirai-1-1-small|Salesforce/moirai-1.1-R-small|12731|moirai|planned"
+    "moirai-1-1-base|forecast-moirai-1-1-base|Salesforce/moirai-1.1-R-base|12732|moirai|planned"
+    "moirai-1-1-large|forecast-moirai-1-1-large|Salesforce/moirai-1.1-R-large|12733|moirai|planned"
+    "moirai-2-0-small|forecast-moirai-2-0-small|Salesforce/moirai-2.0-R-small|12734|moirai|planned"
 
-    # IBM Granite - PLANNED
+    # === IBM GRANITE === (PLANNED)
     "granite-ttm-r1|forecast-granite-ttm-r1|ibm/granite-timeseries-ttm-r1|12740|granite|planned"
     "granite-ttm-r2|forecast-granite-ttm-r2|ibm/granite-timeseries-ttm-r2|12741|granite|planned"
+    "granite-flowstate|forecast-granite-flowstate|ibm-granite/granite-timeseries-flowstate|12742|granite|planned"
+    "granite-patchtsmixer|forecast-granite-patchtsmixer|ibm-granite/granite-timeseries-patchtsmixer|12743|granite|planned"
+    "granite-patchtst|forecast-granite-patchtst|ibm-granite/granite-timeseries-patchtst|12744|granite|planned"
 
-    # AutonLab Moment - PLANNED
+    # === AUTONLAB MOMENT === (PLANNED)
     "moment-small|forecast-moment-small|AutonLab/MOMENT-1-small|12750|moment|planned"
     "moment-base|forecast-moment-base|AutonLab/MOMENT-1-base|12751|moment|planned"
     "moment-large|forecast-moment-large|AutonLab/MOMENT-1-large|12752|moment|planned"
 
-    # Alibaba Yinglong - PLANNED
-    "yinglong-6m|forecast-yinglong-6m|Yinglong/yinglong-6m|12760|yinglong|planned"
-    "yinglong-50m|forecast-yinglong-50m|Yinglong/yinglong-50m|12761|yinglong|planned"
+    # === ALIBABA YINGLONG === (PLANNED)
+    "yinglong-6m|forecast-yinglong-6m|Alibaba/yinglong-6m|12760|yinglong|planned"
+    "yinglong-50m|forecast-yinglong-50m|Alibaba/yinglong-50m|12761|yinglong|planned"
+    "yinglong-110m|forecast-yinglong-110m|Alibaba/yinglong-110m|12762|yinglong|planned"
+    "yinglong-300m|forecast-yinglong-300m|Alibaba/yinglong-300m|12763|yinglong|planned"
 
-    # Other - PLANNED
+    # === MISC / SINGLE MODELS === (PLANNED)
     "lag-llama|forecast-lag-llama|time-series-foundation-models/Lag-Llama|12770|lagllama|planned"
+    "kairos-10m|forecast-kairos-10m|Salesforce/kairos-10m|12771|kairos|planned"
+    "kairos-50m|forecast-kairos-50m|Salesforce/kairos-50m|12772|kairos|planned"
+    "timemoe-200m|forecast-timemoe-200m|Maple728/TimeMoE-200M|12773|timemoe|planned"
+    "timer|forecast-timer|thuml/Timer|12774|timer|planned"
+    "sundial|forecast-sundial|Sundial/sundial|12775|sundial|planned"
+    "toto|forecast-toto|Databricks/toto|12776|toto|planned"
+    "falcon-tst|forecast-falcon-tst|tii-falcon/falcon-tst|12777|falcon|planned"
+    "tempopfn|forecast-tempopfn|Salesforce/TempoPFN|12778|tempopfn|planned"
+    "forecastpfn|forecast-forecastpfn|amazon/forecastpfn|12779|forecastpfn|planned"
+    "chattime|forecast-chattime|amazon/chattime|12780|chattime|planned"
+    "opencity|forecast-opencity|OpenCity/opencity|12781|opencity|planned"
+    "units|forecast-units|mzchen/UniTS|12782|units|planned"
 )
 
 # =============================================================================
@@ -526,7 +541,7 @@ cmd_init() {
     status_response=$(curl -s "http://localhost:${port}${status_endpoint}" \
         -H "Authorization: Bearer ${api_key}")
 
-    if echo "$status_response" | grep -q '"status":"ready"'; then
+    if echo "$status_response" | grep -q '"ready"'; then
         log ""
         log "${GREEN}✓ Model initialized and ready!${NC}"
         log ""
@@ -594,16 +609,19 @@ ${BOLD}COMMANDS:${NC}
     build <slug>            Build container image
     pull <slug>             Pre-download HuggingFace model weights
 
-${BOLD}SUPPORTED MODELS:${NC}
-    ${GREEN}Amazon Chronos T5:${NC}
-        chronos-t5-tiny, chronos-t5-mini, chronos-t5-small
-        chronos-t5-base, chronos-t5-large
+${BOLD}SUPPORTED MODELS (Sapheneia implementation exists):${NC}
+    ${GREEN}Amazon Chronos T5:${NC} chronos-t5-tiny, chronos-t5-mini, chronos-t5-small, chronos-t5-base, chronos-t5-large
+    ${GREEN}Amazon Chronos Bolt:${NC} chronos-bolt-mini, chronos-bolt-small, chronos-bolt-base
+    ${GREEN}Google TimesFM:${NC} timesfm-2-0
 
-    ${GREEN}Amazon Chronos Bolt:${NC}
-        chronos-bolt-mini, chronos-bolt-small, chronos-bolt-base
-
-    ${GREEN}Google TimesFM:${NC}
-        timesfm-2-0
+${BOLD}PLANNED MODELS (AleutianFOSS routing exists, no Sapheneia impl):${NC}
+    ${YELLOW}TimesFM:${NC} timesfm-1-0, timesfm-2-5
+    ${YELLOW}Moirai:${NC} moirai-1-0-small, moirai-1-1-small, moirai-1-1-base, moirai-1-1-large, moirai-2-0-small
+    ${YELLOW}Granite:${NC} granite-ttm-r1, granite-ttm-r2, granite-flowstate, granite-patchtsmixer, granite-patchtst
+    ${YELLOW}Moment:${NC} moment-small, moment-base, moment-large
+    ${YELLOW}Yinglong:${NC} yinglong-6m, yinglong-50m, yinglong-110m, yinglong-300m
+    ${YELLOW}Others:${NC} lag-llama, kairos-10m, kairos-50m, timemoe-200m, timer, sundial, toto,
+            falcon-tst, tempopfn, forecastpfn, chattime, opencity, units
 
 ${BOLD}EXAMPLES:${NC}
     # Start and initialize Chronos T5 Tiny
