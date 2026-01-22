@@ -476,14 +476,35 @@ cmd_test_quick() {
     log "${CYAN}Testing only known-working models...${NC}"
     log ""
 
+    local tested=0
+    local passed=0
+    local failed=0
+
     for model in "${MODELS[@]}"; do
         local slug=$(get_field "$model" 1)
         local status=$(get_field "$model" 5)
 
         if [[ "$status" == "working" ]]; then
-            run_model_test "$slug"
+            ((tested++))
+            if run_model_test "$slug"; then
+                ((passed++))
+            else
+                ((failed++))
+            fi
         fi
     done
+
+    log ""
+    log "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    log "${CYAN}                 QUICK TEST SUMMARY                        ${NC}"
+    log "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    log ""
+    log "  Tested:  $tested"
+    log "  Passed:  ${GREEN}$passed${NC}"
+    log "  Failed:  ${RED}$failed${NC}"
+    log ""
+
+    generate_report
 }
 
 cmd_test_model() {
@@ -493,6 +514,9 @@ cmd_test_model() {
         exit 1
     fi
     run_model_test "$slug"
+
+    log ""
+    log "Results saved to: ${SAPHENEIA_DIR}/test_results/"
 }
 
 cmd_test_family() {
@@ -504,15 +528,36 @@ cmd_test_family() {
 
     log "${CYAN}Testing all $family models...${NC}"
 
+    local tested=0
+    local passed=0
+    local failed=0
+
     for model in "${MODELS[@]}"; do
         local slug=$(get_field "$model" 1)
         local model_family=$(get_field "$model" 4)
         local status=$(get_field "$model" 5)
 
         if [[ "$model_family" == "$family" && "$status" != "not_implemented" ]]; then
-            run_model_test "$slug"
+            ((tested++))
+            if run_model_test "$slug"; then
+                ((passed++))
+            else
+                ((failed++))
+            fi
         fi
     done
+
+    log ""
+    log "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    log "${CYAN}              ${family^^} FAMILY TEST SUMMARY                 ${NC}"
+    log "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    log ""
+    log "  Tested:  $tested"
+    log "  Passed:  ${GREEN}$passed${NC}"
+    log "  Failed:  ${RED}$failed${NC}"
+    log ""
+
+    generate_report
 }
 
 cmd_list() {
@@ -579,6 +624,9 @@ EOF
 main() {
     local cmd="${1:-help}"
     shift || true
+
+    # Ensure test results directory exists
+    mkdir -p "${SAPHENEIA_DIR}/test_results"
 
     case "$cmd" in
         test|all)      cmd_test_all ;;
