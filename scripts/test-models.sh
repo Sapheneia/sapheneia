@@ -303,11 +303,11 @@ run_model_test() {
     local details=""
 
     # Test 1: Health check
-    log -n "  [1/${total_tests}] Container health check... "
+    echo -en "  [1/${total_tests}] Container health check... "
     if test_container_health "$slug" "$port"; then
-        log "${GREEN}PASS${NC}"
+        echo -e "${GREEN}PASS${NC}"
     else
-        log "${RED}FAIL${NC} (container not running or unhealthy)"
+        echo -e "${RED}FAIL${NC} (container not running or unhealthy)"
         result="container_failed"
         details="Container not running on port $port"
         TEST_RESULTS[$slug]="$result|$details"
@@ -315,11 +315,11 @@ run_model_test() {
     fi
 
     # Test 2: Model initialization
-    log -n "  [2/${total_tests}] Model initialization... "
+    echo -en "  [2/${total_tests}] Model initialization... "
     if test_model_init "$slug" "$port" "$hf_id" "$family"; then
-        log "${GREEN}PASS${NC}"
+        echo -e "${GREEN}PASS${NC}"
     else
-        log "${RED}FAIL${NC} (initialization failed)"
+        echo -e "${RED}FAIL${NC} (initialization failed)"
         result="init_failed"
         details="Model failed to initialize"
         TEST_RESULTS[$slug]="$result|$details"
@@ -327,19 +327,19 @@ run_model_test() {
     fi
 
     # Test 3: Model status
-    log -n "  [3/${total_tests}] Model status ready... "
+    echo -en "  [3/${total_tests}] Model status ready... "
     # Wait a moment for initialization to complete
     sleep 2
     if test_model_status "$slug" "$port" "$family"; then
-        log "${GREEN}PASS${NC}"
+        echo -e "${GREEN}PASS${NC}"
     else
-        log "${YELLOW}WAIT${NC} (model may still be loading)"
+        echo -e "${YELLOW}WAIT${NC} (model may still be loading)"
         # Try again after longer wait
         sleep 10
         if test_model_status "$slug" "$port" "$family"; then
-            log "  [3/${total_tests}] Model status ready... ${GREEN}PASS${NC} (after wait)"
+            echo -e "  [3/${total_tests}] Model status ready... ${GREEN}PASS${NC} (after wait)"
         else
-            log "  [3/${total_tests}] Model status ready... ${RED}FAIL${NC}"
+            echo -e "  [3/${total_tests}] Model status ready... ${RED}FAIL${NC}"
             result="status_not_ready"
             details="Model did not reach ready status"
             TEST_RESULTS[$slug]="$result|$details"
@@ -348,13 +348,13 @@ run_model_test() {
     fi
 
     # Test 4: Inference
-    log -n "  [4/${total_tests}] Inference test... "
+    echo -en "  [4/${total_tests}] Inference test... "
     if test_inference "$slug" "$port" "$family"; then
-        log "${GREEN}PASS${NC}"
+        echo -e "${GREEN}PASS${NC}"
         result="working"
         details="Inference passed"
     else
-        log "${RED}FAIL${NC} (inference returned invalid response)"
+        echo -e "${RED}FAIL${NC} (inference returned invalid response)"
         result="inference_failed"
         details="Inference did not return valid forecast"
         TEST_RESULTS[$slug]="$result|$details"
@@ -363,13 +363,13 @@ run_model_test() {
 
     # Test 5: Full backtest with CSV export (optional)
     if [[ "$include_backtest" == "true" ]]; then
-        log -n "  [5/${total_tests}] Full backtest (${ticker})... "
+        echo -en "  [5/${total_tests}] Full backtest (${ticker})... "
         if test_backtest "$slug" "$ticker"; then
-            log "${GREEN}PASS${NC}"
+            echo -e "${GREEN}PASS${NC}"
             result="working_full"
             details="All tests passed including backtest"
         else
-            log "${RED}FAIL${NC}"
+            echo -e "${RED}FAIL${NC}"
             result="backtest_failed"
             details="Backtest or CSV export failed"
             TEST_RESULTS[$slug]="$result|$details"
