@@ -2,197 +2,164 @@
 
 This document tracks which forecast models work with AleutianFOSS + Sapheneia.
 
+**Last Updated:** 2026-01-21
+
 ## Quick Reference
 
-| Model Family | Status | Working Models | Notes |
-|-------------|--------|----------------|-------|
-| Chronos T5 | **WORKING** | tiny, mini, small, base, large | Fully tested |
-| Chronos Bolt | **UNTESTED** | mini, small, base | May not work - needs testing |
-| TimesFM | **PARTIAL** | 2.0 only | Container commented out |
-| Moirai | **NOT IMPLEMENTED** | - | No Sapheneia support |
-| Granite | **NOT IMPLEMENTED** | - | No Sapheneia support |
-| Moment | **NOT IMPLEMENTED** | - | No Sapheneia support |
-| Others | **NOT IMPLEMENTED** | - | No Sapheneia support |
+| Status | Count | Models |
+|--------|-------|--------|
+| **Working** | 5 | chronos-t5-tiny, chronos-t5-mini, chronos-t5-base, chronos-t5-large, timesfm-2-0 |
+| **Untested** | 4 | chronos-t5-small, chronos-bolt-mini, chronos-bolt-small, chronos-bolt-base |
+| **Not Implemented** | 32 | All others (Moirai, Granite, Moment, Yinglong, etc.) |
 
 ---
 
-## Supported Models (Sapheneia Implementation Exists)
+## Working Models (Verified)
 
-### Amazon Chronos T5 Series - WORKING
+These models have been tested and confirmed working:
 
-| Slug | HuggingFace ID | Port | Strategy Example |
-|------|----------------|------|------------------|
-| `chronos-t5-tiny` | amazon/chronos-t5-tiny | 12710 | `SPY/spy_chronos_tiny.yaml` |
-| `chronos-t5-mini` | amazon/chronos-t5-mini | 12711 | - |
-| `chronos-t5-small` | amazon/chronos-t5-small | 12712 | - |
-| `chronos-t5-base` | amazon/chronos-t5-base | 12713 | `SPY/spy_chronos_base.yaml` |
-| `chronos-t5-large` | amazon/chronos-t5-large | 12714 | - |
+| Model | HuggingFace ID | Family | Port |
+|-------|----------------|--------|------|
+| `chronos-t5-tiny` | amazon/chronos-t5-tiny | chronos | 12710 |
+| `chronos-t5-mini` | amazon/chronos-t5-mini | chronos | 12711 |
+| `chronos-t5-base` | amazon/chronos-t5-base | chronos | 12713 |
+| `chronos-t5-large` | amazon/chronos-t5-large | chronos | 12714 |
+| `timesfm-2-0` | google/timesfm-2.0-500m-pytorch | timesfm | 12721 |
 
-**Test Commands:**
+### Test Commands for Working Models
+
 ```bash
-# 1. Start and initialize the model
+# Test chronos-t5-tiny
 ./scripts/model-manager.sh start chronos-t5-tiny
 ./scripts/model-manager.sh init chronos-t5-tiny
+aleutian evaluate run --config simulations/strategies/SPY/spy_chronos_t5_tiny.yaml --api-version unified
 
-# 2. Run a backtest
-aleutian evaluate run --config simulations/strategies/SPY/spy_chronos_tiny.yaml --api-version unified
+# Test chronos-t5-base
+./scripts/model-manager.sh start chronos-t5-base
+./scripts/model-manager.sh init chronos-t5-base
+aleutian evaluate run --config simulations/strategies/SPY/spy_chronos_t5_base.yaml --api-version unified
+
+# Test timesfm-2-0 (requires uncommenting in docker-compose.yml)
+./scripts/model-manager.sh start timesfm-2-0
+./scripts/model-manager.sh init timesfm-2-0
+aleutian evaluate run --config simulations/strategies/SPY/spy_timesfm_2_0.yaml --api-version unified
 ```
-
-### Amazon Chronos Bolt Series - NEEDS TESTING
-
-These are defined in docker-compose but may have issues with the ChronosPipeline loader.
-
-| Slug | HuggingFace ID | Port | Status |
-|------|----------------|------|--------|
-| `chronos-bolt-mini` | amazon/chronos-bolt-mini | 12715 | **NEEDS TESTING** |
-| `chronos-bolt-small` | amazon/chronos-bolt-small | 12716 | **NEEDS TESTING** |
-| `chronos-bolt-base` | amazon/chronos-bolt-base | 12717 | **NEEDS TESTING** |
-
-**Issue:** Test file has comment `# Marked as broken` for chronos-bolt-mini.
-
-**Test Commands:**
-```bash
-# Test if Bolt models work
-./scripts/model-manager.sh start chronos-bolt-mini
-./scripts/model-manager.sh init chronos-bolt-mini
-
-# Check status
-curl http://localhost:12715/forecast/v1/chronos/status
-
-# If ready, try a backtest
-aleutian evaluate run --config simulations/strategies/SPY/spy_chronos_bolt.yaml --api-version unified
-```
-
-### Google TimesFM - PARTIAL
-
-TimesFM is implemented but container is commented out in docker-compose.yml.
-
-| Slug | HuggingFace ID | Port | Status |
-|------|----------------|------|--------|
-| `timesfm-2-0` | google/timesfm-2.0-500m-pytorch | 12720 | Implemented, needs uncomment |
-
-**To Enable:**
-1. Edit `docker-compose.yml`
-2. Uncomment the `forecast-timesfm-2-0` service section
-3. Start the container
 
 ---
 
-## NOT Implemented (In AleutianFOSS Routing But No Sapheneia Support)
+## Untested Models
 
-These models are listed in AleutianFOSS `timeseries.go` routing but have **no Sapheneia implementation**.
-Running backtests with these will fail.
+These models have Sapheneia container definitions but haven't been verified:
+
+| Model | HuggingFace ID | Notes |
+|-------|----------------|-------|
+| `chronos-t5-small` | amazon/chronos-t5-small | Should work (same family as working models) |
+| `chronos-bolt-mini` | amazon/chronos-bolt-mini | May have ChronosPipeline compatibility issues |
+| `chronos-bolt-small` | amazon/chronos-bolt-small | May have ChronosPipeline compatibility issues |
+| `chronos-bolt-base` | amazon/chronos-bolt-base | May have ChronosPipeline compatibility issues |
+
+### Test Commands for Untested Models
+
+```bash
+# Test chronos-t5-small
+./scripts/model-manager.sh start chronos-t5-small
+./scripts/model-manager.sh init chronos-t5-small
+curl http://localhost:12712/forecast/v1/chronos/status -H "Authorization: Bearer default_trading_api_key_please_change"
+
+# Test chronos-bolt-mini (may fail)
+./scripts/model-manager.sh start chronos-bolt-mini
+./scripts/model-manager.sh init chronos-bolt-mini
+curl http://localhost:12715/forecast/v1/chronos/status -H "Authorization: Bearer default_trading_api_key_please_change"
+```
+
+---
+
+## Not Implemented Models
+
+These models have AleutianFOSS routing but **no Sapheneia implementation yet**.
+Running backtests with these will fail with connection errors.
+
+### Google TimesFM (Partial)
+| Model | HuggingFace ID | Status |
+|-------|----------------|--------|
+| `timesfm-1-0` | google/timesfm-1.0-200m | No container |
+| `timesfm-2-5` | google/timesfm-2.5 | No container |
 
 ### Salesforce Moirai
-- `moirai-1-0-small`
-- `moirai-1-1-small`, `moirai-1-1-base`, `moirai-1-1-large`
-- `moirai-2-0-small`
+| Model | HuggingFace ID |
+|-------|----------------|
+| `moirai-1-0-small` | Salesforce/moirai-1.0-R-small |
+| `moirai-1-1-small` | Salesforce/moirai-1.1-R-small |
+| `moirai-1-1-base` | Salesforce/moirai-1.1-R-base |
+| `moirai-1-1-large` | Salesforce/moirai-1.1-R-large |
+| `moirai-2-0-small` | Salesforce/moirai-2.0-R-small |
 
 ### IBM Granite
-- `granite-ttm-r1`, `granite-ttm-r2`
-- `granite-flowstate`, `granite-patchtsmixer`, `granite-patchtst`
+| Model | HuggingFace ID |
+|-------|----------------|
+| `granite-ttm-r1` | ibm/granite-timeseries-ttm-r1 |
+| `granite-ttm-r2` | ibm/granite-timeseries-ttm-r2 |
+| `granite-flowstate` | ibm-granite/granite-timeseries-flowstate |
+| `granite-patchtsmixer` | ibm-granite/granite-timeseries-patchtsmixer |
+| `granite-patchtst` | ibm-granite/granite-timeseries-patchtst |
 
 ### AutonLab Moment
-- `moment-small`, `moment-base`, `moment-large`
+| Model | HuggingFace ID |
+|-------|----------------|
+| `moment-small` | AutonLab/MOMENT-1-small |
+| `moment-base` | AutonLab/MOMENT-1-base |
+| `moment-large` | AutonLab/MOMENT-1-large |
 
 ### Alibaba Yinglong
-- `yinglong-6m`, `yinglong-50m`, `yinglong-110m`, `yinglong-300m`
+| Model | HuggingFace ID |
+|-------|----------------|
+| `yinglong-6m` | Alibaba/yinglong-6m |
+| `yinglong-50m` | Alibaba/yinglong-50m |
+| `yinglong-110m` | Alibaba/yinglong-110m |
+| `yinglong-300m` | Alibaba/yinglong-300m |
 
-### Others
-- `lag-llama`, `kairos-10m`, `kairos-50m`
-- `timemoe-200m`, `timer`, `sundial`, `toto`
-- `falcon-tst`, `tempopfn`, `forecastpfn`
-- `chattime`, `opencity`, `units`
-
----
-
-## Testing Procedure
-
-### Pre-flight Check
-
-```bash
-# 1. Check what images are built
-podman images | grep forecast
-
-# 2. Check what containers are running
-podman ps | grep forecast
-
-# 3. List all models and status
-./scripts/model-manager.sh list
-```
-
-### Test Chronos T5 Series (Known Working)
-
-```bash
-# Start smallest model first
-./scripts/model-manager.sh start chronos-t5-tiny
-./scripts/model-manager.sh init chronos-t5-tiny
-
-# Verify it's ready
-curl http://localhost:12710/forecast/v1/chronos/status
-
-# Run test backtest
-aleutian evaluate run \
-  --config simulations/strategies/SPY/spy_chronos_tiny.yaml \
-  --api-version unified
-
-# Export results
-aleutian evaluate export <RUN_ID>
-```
-
-### Test Chronos Bolt Series (Unknown Status)
-
-```bash
-# Try Bolt mini
-./scripts/model-manager.sh start chronos-bolt-mini
-./scripts/model-manager.sh init chronos-bolt-mini
-
-# Check if initialization succeeded
-curl http://localhost:12715/forecast/v1/chronos/status
-
-# If status shows "ready", try backtest
-aleutian evaluate run \
-  --config simulations/strategies/SPY/spy_chronos_bolt.yaml \
-  --api-version unified
-```
-
-### Test TimesFM (Requires Manual Enable)
-
-```bash
-# 1. Edit docker-compose.yml to uncomment forecast-timesfm-2-0
-
-# 2. Start the container
-podman-compose up -d forecast-timesfm-2-0
-
-# 3. Initialize
-curl -X POST http://localhost:12720/forecast/v1/timesfm20/initialization \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer default_trading_api_key_please_change" \
-  -d '{}'
-
-# 4. Run backtest
-aleutian evaluate run \
-  --config simulations/strategies/SPY/spy_timesfm.yaml \
-  --api-version unified
-```
+### Other Models
+| Model | HuggingFace ID |
+|-------|----------------|
+| `lag-llama` | time-series-foundation-models/Lag-Llama |
+| `kairos-10m` | Salesforce/kairos-10m |
+| `kairos-50m` | Salesforce/kairos-50m |
+| `timemoe-200m` | Maple728/TimeMoE-200M |
+| `timer` | thuml/Timer |
+| `sundial` | Sundial/sundial |
+| `toto` | Databricks/toto |
+| `falcon-tst` | tii-falcon/falcon-tst |
+| `tempopfn` | Salesforce/TempoPFN |
+| `forecastpfn` | amazon/forecastpfn |
+| `chattime` | amazon/chattime |
+| `opencity` | OpenCity/opencity |
+| `units` | mzchen/UniTS |
 
 ---
 
-## Known Issues
+## Testing Framework
 
-### 1. Chronos Bolt Models
-- **Issue:** May fail to initialize
-- **Reason:** ChronosPipeline might not support Bolt models the same way as T5
-- **Status:** Needs testing to confirm
+Use the test script to systematically verify models:
 
-### 2. TimesFM Container Commented Out
-- **Issue:** Container won't start by default
-- **Solution:** Uncomment in docker-compose.yml
+```bash
+# List all models with status
+./scripts/test-models.sh list
 
-### 3. Most Models Not Implemented
-- **Issue:** AleutianFOSS routes to containers that don't exist
-- **Error:** Connection refused to `http://forecast-<model>:8000`
-- **Solution:** Need Sapheneia implementations for each model family
+# Test all testable models
+./scripts/test-models.sh test
+
+# Test only known-working models (quick verification)
+./scripts/test-models.sh quick
+
+# Test a specific model
+./scripts/test-models.sh model chronos-t5-tiny
+
+# Test all models in a family
+./scripts/test-models.sh family chronos
+
+# Generate report
+./scripts/test-models.sh report
+```
 
 ---
 
@@ -200,16 +167,13 @@ aleutian evaluate run \
 
 To add a new model family to Sapheneia:
 
-1. **Create module structure:**
+1. **Create Python module:**
    ```
    forecast/models/<family>/
    ├── __init__.py
-   ├── routes/
-   │   └── endpoints.py
-   ├── services/
-   │   └── model.py
-   └── schemas/
-       └── schema.py
+   ├── routes/endpoints.py
+   ├── services/model.py
+   └── schemas/schema.py
    ```
 
 2. **Register in MODEL_REGISTRY:**
@@ -219,22 +183,27 @@ To add a new model family to Sapheneia:
    Add conditional dependency installation
 
 4. **Add to docker-compose.yml:**
-   Create service definition
+   Create service definition with port assignment
 
-5. **Test thoroughly**
+5. **Update test-models.sh:**
+   Add model to MODELS array with status
+
+6. **Test thoroughly:**
+   ```bash
+   ./scripts/test-models.sh model <new-model-slug>
+   ```
 
 ---
 
-## Environment Variables
+## Port Assignments
 
-```bash
-# Required for backtests
-export ORCHESTRATOR_URL=http://localhost:12700
-export SAPHENEIA_API_KEY=default_trading_api_key_please_change
-
-# Optional: GPU support
-export DEVICE=cuda  # or cpu, mps
-
-# Optional: Model cache location
-export MODELS_CACHE_PATH=/path/to/models_cache
-```
+| Range | Family |
+|-------|--------|
+| 12710-12714 | Chronos T5 |
+| 12715-12717 | Chronos Bolt |
+| 12720-12722 | TimesFM |
+| 12730-12734 | Moirai |
+| 12740-12744 | Granite |
+| 12750-12752 | Moment |
+| 12760-12763 | Yinglong |
+| 12770-12782 | Others |
