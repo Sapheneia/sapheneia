@@ -743,17 +743,16 @@ EOF
 # =============================================================================
 
 main() {
-    local cmd="${1:-help}"
-    shift || true
-
     # Ensure test results directory exists
     mkdir -p "${SAPHENEIA_DIR}/test_results"
 
-    # Parse global options
+    # Parse all arguments
+    local cmd=""
     local include_backtest="false"
     local ticker="SPY"
+    local positional_args=()
 
-    while [[ "$1" == --* ]]; do
+    while [[ $# -gt 0 ]]; do
         case "$1" in
             --full)
                 include_backtest="true"
@@ -763,21 +762,33 @@ main() {
                 ticker="$2"
                 shift 2
                 ;;
+            --help|-h)
+                cmd="help"
+                shift
+                ;;
+            -*)
+                log "${RED}Unknown option: $1${NC}"
+                exit 1
+                ;;
             *)
-                break
+                positional_args+=("$1")
+                shift
                 ;;
         esac
     done
+
+    # First positional arg is the command
+    cmd="${positional_args[0]:-help}"
 
     case "$cmd" in
         test|all)      cmd_test_all "$include_backtest" "$ticker" ;;
         quick)         cmd_test_quick "$include_backtest" "$ticker" ;;
         full)          cmd_test_quick "true" "$ticker" ;;  # Alias for quick --full
-        model)         cmd_test_model "$1" "$include_backtest" "$ticker" ;;
-        family)        cmd_test_family "$1" "$include_backtest" "$ticker" ;;
+        model)         cmd_test_model "${positional_args[1]}" "$include_backtest" "$ticker" ;;
+        family)        cmd_test_family "${positional_args[1]}" "$include_backtest" "$ticker" ;;
         list|ls)       cmd_list ;;
         report)        generate_report ;;
-        help|--help|-h) cmd_help ;;
+        help)          cmd_help ;;
         *)
             log "${RED}Unknown command: $cmd${NC}"
             cmd_help
