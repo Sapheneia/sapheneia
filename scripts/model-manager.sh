@@ -140,8 +140,10 @@ get_container_health() {
 
 get_model_status() {
     local port="$1"
+    local api_key="${SAPHENEIA_API_KEY:-default_trading_api_key_please_change}"
     local response
-    response=$(curl -s "http://localhost:${port}/forecast/v1/chronos/status" 2>/dev/null)
+    response=$(curl -s "http://localhost:${port}/forecast/v1/chronos/status" \
+        -H "Authorization: Bearer ${api_key}" 2>/dev/null)
     if [[ -n "$response" ]]; then
         echo "$response" | grep -o '"status":"[^"]*"' | cut -d'"' -f4
     else
@@ -521,7 +523,8 @@ cmd_init() {
 
     log "Checking model status..."
     local status_response
-    status_response=$(curl -s "http://localhost:${port}${status_endpoint}")
+    status_response=$(curl -s "http://localhost:${port}${status_endpoint}" \
+        -H "Authorization: Bearer ${api_key}")
 
     if echo "$status_response" | grep -q '"status":"ready"'; then
         log ""
