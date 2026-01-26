@@ -33,7 +33,7 @@ services:
       - API_PORT=8000
       - MODEL_NAME=all
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
       # URLs for dedicated model containers (used by orchestration service)
       - CHRONOS_SERVICE_URL=${CHRONOS_SERVICE_URL:-http://forecast-chronos-t5-tiny:8000}
       - TIMESFM_SERVICE_URL=${TIMESFM_SERVICE_URL:-http://forecast-timesfm:8000}
@@ -76,7 +76,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -109,7 +109,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -142,7 +142,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -175,7 +175,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -208,7 +208,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -245,7 +245,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -278,7 +278,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -311,7 +311,7 @@ services:
       - HF_HOME=/models_cache
       - DEVICE=cpu
       - PYTHONPATH=/app
-      - API_SECRET_KEY=default_trading_api_key_please_change
+      - API_SECRET_KEY=${API_SECRET_KEY}
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
@@ -413,7 +413,6 @@ services:
       - TRADING_API_HOST=0.0.0.0
       - TRADING_API_PORT=9000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - TRADING_API_KEY=default_trading_api_key_please_change
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - PYTHONPATH=/app
     volumes:
