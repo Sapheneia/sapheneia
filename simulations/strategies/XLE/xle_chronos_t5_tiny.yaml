@@ -1,0 +1,26 @@
+metadata:
+  id: "xle-chronos-t5-tiny"
+  version: "1.0.0"
+  description: "XLE (Energy Select Sector SPDR) backtest using Chronos T5 Tiny (fastest)"
+  author: "Sapheneia"
+
+evaluation:
+  ticker: "XLE"
+  fetch_start_date: "20211201"
+  start_date: "20230101"
+  end_date: "20240101"
+
+forecast:
+  model: "amazon/chronos-t5-tiny"
+  context_size: 252
+  horizon_size: 20
+
+trading:
+  initial_capital: 100000.0
+  initial_position: 0.0
+  initial_cash: 100000.0
+  strategy_type: "threshold"
+  params:
+    threshold_type: "absolute"
+    threshold_value: 2.0
+    execution_size: 10.0

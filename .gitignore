@@ -197,7 +197,6 @@ cython_debug/
 .claude
 
 # Custom files
-local/
 uploads/
 webapp/uploads/
 ui/uploads/
@@ -228,3 +227,10 @@ app_old.py
 # macOS
 .DS_Store
 .DS_Store?
+
+# Local
+local/
+.claude/
+.mcp.json
+CLAUDE.md
+aleutian
