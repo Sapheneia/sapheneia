@@ -458,26 +458,26 @@ services:
   # Metrics Service (commented - uncomment to enable)
   # ===========================================================================
 
-  # metrics:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.metrics
-  #   container_name: sapheneia-metrics
-  #   ports:
-  #     - "${METRICS_PORT:-12702}:8000"
-  #   environment:
-  #     - METRICS_HOST=0.0.0.0
-  #     - METRICS_PORT=8000
-  #     - LOG_LEVEL=${METRICS_LOG_LEVEL:-INFO}
-  #   networks:
-  #     - aleutian-network
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 10s
+   metrics:
+     build:
+       context: .
+       dockerfile: Dockerfile.metrics
+     container_name: sapheneia-metrics
+     ports:
+       - "${METRICS_PORT:-12702}:8000"
+     environment:
+       - METRICS_HOST=0.0.0.0
+       - METRICS_PORT=8000
+       - LOG_LEVEL=${METRICS_LOG_LEVEL:-INFO}
+     networks:
+       - aleutian-network
+     restart: unless-stopped
+     healthcheck:
+       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+       interval: 30s
+       timeout: 10s
+       retries: 3
+       start_period: 10s
 
 networks:
   aleutian-network:
