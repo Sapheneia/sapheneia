@@ -150,6 +150,7 @@ func main() {
 	// Data endpoints - use server methods
 	router.POST("/v1/data/fetch", server.handleFetchData)
 	router.POST("/v1/data/query", server.handleQueryData)
+	router.POST("/v1/data/write_results", server.handleWriteResults)
 
 	slog.Info("Starting finance-data API server on :8000")
 	if err := router.Run(":8000"); err != nil {
@@ -386,6 +387,41 @@ type DataQueryRequest struct {
 	EndDate string `json:"end_date"` // Optional: end date (defaults to now)
 }
 
+// --- Simulation Result Structs (GAP-04) ---
+
+type SimulationResultPoint struct {
+	Date           string  `json:"date"`
+	Forecast       float64 `json:"forecast"`
+	Actual         float64 `json:"actual"`
+	Signal         string  `json:"signal"`
+	Position       float64 `json:"position"`
+	Cash           float64 `json:"cash"`
+	PortfolioValue float64 `json:"portfolio_value"`
+}
+
+type SimulationMetrics struct {
+	SharpeRatio  float64 `json:"sharpe_ratio"`
+	MaxDrawdown  float64 `json:"max_drawdown"`
+	CAGR         float64 `json:"cagr"`
+	CalmarRatio  float64 `json:"calmar_ratio"`
+	WinRate      float64 `json:"win_rate"`
+}
+
+type WriteResultsRequest struct {
+	RunID    string                  `json:"run_id"`
+	Ticker   string                  `json:"ticker"`
+	Model    string                  `json:"model"`
+	Strategy string                  `json:"strategy"`
+	Results  []SimulationResultPoint `json:"results"`
+	Metrics  SimulationMetrics       `json:"metrics"`
+}
+
+type WriteResultsResponse struct {
+	Status        string `json:"status"`
+	PointsWritten int    `json:"points_written"`
+	RunID         string `json:"run_id"`
+}
+
 type DataPoint struct {
 	Time     string  `json:"time"`
 	Open     float64 `json:"open"`
@@ -503,4 +539,130 @@ func (s *Server) handleQueryData(c *gin.Context) {
 
 	slog.Info("Query complete", "ticker", req.Ticker, "points_returned", len(dataPoints))
 	c.JSON(http.StatusOK, response)
+}
+
+// handleWriteResults writes simulation results to InfluxDB (GAP-04)
+func (s *Server) handleWriteResults(c *gin.Context) {
+	var req WriteResultsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate required fields
+	if req.RunID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "run_id is required"})
+		return
+	}
+	if req.Ticker == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ticker is required"})
+		return
+	}
+	if len(req.Results) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "results cannot be empty"})
+		return
+	}
+
+	slog.Info("Writing simulation results",
+		"run_id", req.RunID,
+		"ticker", req.Ticker,
+		"model", req.Model,
+		"points", len(req.Results),
+	)
+
+	// Common tags for all points
+	tags := map[string]string{
+		"run_id":   req.RunID,
+		"ticker":   req.Ticker,
+		"model":    req.Model,
+		"strategy": req.Strategy,
+	}
+
+	// Prepare batch of points
+	var points []*write.Point
+
+	// Convert result points
+	for _, result := range req.Results {
+		// Parse date
+		t, err := time.Parse("2006-01-02", result.Date)
+		if err != nil {
+			slog.Warn("Invalid date format, skipping point",
+				"date", result.Date,
+				"error", err,
+			)
+			continue
+		}
+
+		point := write.NewPoint(
+			"backtest_results",
+			tags,
+			map[string]interface{}{
+				"forecast":        result.Forecast,
+				"actual":          result.Actual,
+				"signal":          result.Signal,
+				"position":        result.Position,
+				"cash":            result.Cash,
+				"portfolio_value": result.PortfolioValue,
+			},
+			t,
+		)
+		points = append(points, point)
+	}
+
+	// Write metrics as a separate point (at the end date)
+	if len(req.Results) > 0 {
+		lastDate := req.Results[len(req.Results)-1].Date
+		t, _ := time.Parse("2006-01-02", lastDate)
+
+		metricsPoint := write.NewPoint(
+			"backtest_metrics",
+			tags,
+			map[string]interface{}{
+				"sharpe_ratio":  req.Metrics.SharpeRatio,
+				"max_drawdown":  req.Metrics.MaxDrawdown,
+				"cagr":          req.Metrics.CAGR,
+				"calmar_ratio":  req.Metrics.CalmarRatio,
+				"win_rate":      req.Metrics.WinRate,
+				"total_points":  len(req.Results),
+			},
+			t,
+		)
+		points = append(points, metricsPoint)
+	}
+
+	// Batch write to InfluxDB
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Write in batches of 1000
+	for i := 0; i < len(points); i += 1000 {
+		end := i + 1000
+		if end > len(points) {
+			end = len(points)
+		}
+
+		batch := points[i:end]
+		if err := s.WriteAPI.WritePoint(ctx, batch...); err != nil {
+			slog.Error("Failed to write batch", "error", err, "batch_start", i)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to write to InfluxDB",
+				"details": err.Error(),
+			})
+			return
+		}
+	}
+
+	slog.Info("Successfully wrote simulation results",
+		"run_id", req.RunID,
+		"points_written", len(points),
+	)
+
+	c.JSON(http.StatusOK, WriteResultsResponse{
+		Status:        "success",
+		PointsWritten: len(points),
+		RunID:         req.RunID,
+	})
 }

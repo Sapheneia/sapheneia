@@ -144,61 +144,132 @@ Sapheneia includes two independent applications:
 
 ```
 sapheneia/
-├── api/                                    # FastAPI Backend
-│   ├── main.py                             # Application entry point
+├── forecast/                               # Forecasting Models (Python)
+│   ├── main.py                             # FastAPI application entry point
 │   ├── core/                               # Shared infrastructure
 │   │   ├── config.py                       # Settings & environment vars
 │   │   ├── security.py                     # API key authentication
-│   │   └── data.py                         # Data fetching utilities
-│   └── models/                             # Model modules (NEW)
-│       ├── __init__.py                     # Model registry
-│       └── timesfm20/                      # TimesFM-2.0 implementation
-│           ├── routes/endpoints.py         # REST API endpoints
-│           ├── schemas/schema.py           # Pydantic models
-│           ├── services/
-│           │   ├── model.py                # Model management
-│           │   └── data.py                 # Data transformation
-│           └── local/                      # Model artifacts cache
+│   │   └── data_processing.py              # Data transformation utilities
+│   └── models/                             # Model implementations
+│       ├── chronos/                        # Amazon Chronos models
+│       │   ├── routes/                     # REST API endpoints
+│       │   ├── schemas/                    # Pydantic models
+│       │   └── services/                   # Model inference
+│       └── timesfm20/                      # Google TimesFM-2.0
+│           ├── routes/                     # REST API endpoints
+│           ├── schemas/                    # Pydantic models
+│           └── services/                   # Model inference
+│
+├── data/                                   # Data Service (Go)
+│   ├── main.go                             # Gin server with InfluxDB client
+│   ├── main_test.go                        # Go unit tests
+│   └── go.mod                              # Go module definition
+│
+├── metrics/                                # Metrics Service (Python)
+│   ├── main.py                             # FastAPI application
+│   ├── core/                               # Core metrics calculations
+│   └── routes/                             # API endpoints
+│
+├── trading/                                # Trading Service (Python)
+│   ├── main.py                             # FastAPI application entry point
+│   ├── core/                               # Core trading logic
+│   ├── routes/                             # API endpoints
+│   ├── schemas/                            # Pydantic schemas
+│   ├── services/                           # TradingStrategy class
+│   └── tests/                              # Test suite
+│
+├── orchestration/                          # Orchestration Layer (Python)
+│   ├── schema.py                           # Unified InferenceRequest/Response
+│   ├── adapters.py                         # Model-specific transformations
+│   ├── service.py                          # InferenceService routing
+│   ├── backtest.py                         # Backtest loop orchestration
+│   ├── clients/                            # Service clients
+│   │   ├── data_client.py                  # Go data service client
+│   │   ├── metrics_client.py               # Metrics service client
+│   │   └── trading_client.py               # Trading service client
+│   └── tests/                              # Orchestration tests
+│
+├── sapheneia/                              # CLI Package
+│   ├── __init__.py                         # Package version
+│   └── cli/                                # Click CLI
+│       ├── __init__.py                     # Main CLI entry point
+│       ├── config.py                       # StrategyConfig dataclass
+│       └── commands/                       # Command implementations
+│           ├── evaluate.py                 # Backtest command
+│           ├── forecast.py                 # Single forecast command
+│           ├── models.py                   # Model listing
+│           └── config.py                   # Config management
 │
 ├── ui/                                     # Flask Frontend
 │   ├── app.py                              # Web application
-│   ├── api_client.py                       # REST API client
 │   ├── templates/                          # HTML templates
 │   └── static/                             # CSS/JS assets
 │
-├── trading/                                # Trading Strategies API (NEW)
-│   ├── main.py                             # FastAPI application entry point
-│   ├── core/                               # Core infrastructure
-│   │   ├── config.py                       # Settings & environment vars
-│   │   ├── security.py                     # API key authentication
-│   │   ├── exceptions.py                   # Custom exception hierarchy
-│   │   └── rate_limit.py                   # Rate limiting configuration
-│   ├── routes/                             # API endpoints
-│   │   └── endpoints.py                    # Trading strategy endpoints
-│   ├── schemas/                            # Pydantic schemas
-│   │   └── schema.py                       # Request/response models
-│   ├── services/                           # Business logic
-│   │   └── trading.py                      # TradingStrategy class
-│   ├── tests/                              # Test suite
-│   │   ├── unit/                           # Unit tests
-│   │   └── integration/                    # Integration tests
-│   └── sample/                             # Sample code reference
+├── simulations/                            # Simulation configs & results
+│   ├── strategies/                         # Per-ticker strategy YAML files
+│   ├── backtests/                          # Backtest output
+│   └── forecasts/                          # Forecast output
 │
-├── data/                                   # Shared data directory
-│   ├── uploads/                            # User uploaded files
-│   └── results/                            # Forecast outputs
+├── tests/                                  # Integration tests
+├── scripts/                                # Utility scripts
+├── docs/                                   # Documentation
 │
-├── notebooks/                              # Jupyter notebooks
-├── logs/                                   # Application logs
-│
-├── Dockerfile.api                          # API Docker (multi-model)
-├── Dockerfile.ui                           # UI Docker
-├── Dockerfile.trading                      # Trading API Docker (NEW)
-├── docker-compose.yml                      # Service orchestration
+├── docker-compose.yml                      # Multi-service orchestration
 ├── setup.sh                                # Unified management script
-├── .env                                    # Local configuration
-├── .env.template                           # Configuration template
-└── pyproject.toml                          # Python dependencies
+├── pyproject.toml                          # Python dependencies & CLI entry
+└── CLAUDE.md                               # Development guidelines
+```
+
+### Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Sapheneia Platform                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────┐     ┌──────────────────────────────────────────┐  │
+│  │ sapheneia   │     │           orchestration/                 │  │
+│  │    CLI      │────▶│  InferenceService, BacktestOrchestrator  │  │
+│  └─────────────┘     │  (Pydantic schemas, adapters, clients)   │  │
+│                      └────────────────┬─────────────────────────┘  │
+│                                       │                             │
+│           ┌───────────────────────────┼───────────────────────┐    │
+│           │                           │                       │    │
+│           ▼                           ▼                       ▼    │
+│   ┌───────────────┐          ┌────────────────┐      ┌────────────┐│
+│   │   forecast/   │          │     data/      │      │  trading/  ││
+│   │  :12700       │          │    :12701      │      │   :12132   ││
+│   │  (Chronos,    │          │  (Go + Gin)    │      │  (FastAPI) ││
+│   │   TimesFM)    │          │  InfluxDB      │      │ Strategies ││
+│   └───────────────┘          └────────────────┘      └────────────┘│
+│                                       │                             │
+│                              ┌────────┴────────┐                   │
+│                              │    InfluxDB     │                   │
+│                              │     :12130      │                   │
+│                              └─────────────────┘                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### CLI Usage
+
+```bash
+# Install CLI
+pip install -e ".[cli]"
+
+# List available models
+sapheneia models list
+
+# Create strategy config
+sapheneia config init strategy.yaml --ticker SPY --model amazon/chronos-t5-tiny
+
+# Validate config
+sapheneia config validate strategy.yaml
+
+# Run backtest
+sapheneia evaluate --config strategy.yaml --timeout 60
+
+# Single forecast
+sapheneia forecast --ticker SPY --model chronos-t5-tiny --horizon 10
 ```
 
 ### Multi-Model Design

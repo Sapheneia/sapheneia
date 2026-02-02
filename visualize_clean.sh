@@ -6,15 +6,26 @@ echo "Fetching Prediction Data..."
 json_input=$(cat)
 
 # Extract and format using jq
+# Supports both old format (.prediction) and new format (.forecast + .quantiles array)
 echo "$json_input" | jq -r '
   "Step\tBEARISH(10%)\tMEDIAN(50%)\tBULLISH(90%)",
   "----\t------------\t-----------\t------------",
   (
-    [
-      .prediction.quantiles["10"],
-      .prediction.median,
-      .prediction.quantiles["90"]
-    ]
+    if .forecast then
+      # New API format
+      [
+        (.quantiles | map(select(.quantile == 0.1)) | .[0].values),
+        .forecast.values,
+        (.quantiles | map(select(.quantile == 0.9)) | .[0].values)
+      ]
+    else
+      # Old format
+      [
+        .prediction.quantiles["10"],
+        .prediction.median,
+        .prediction.quantiles["90"]
+      ]
+    end
     | transpose
     | to_entries
     | .[]

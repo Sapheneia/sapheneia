@@ -105,6 +105,55 @@ def get_model_endpoint(model_family: str) -> str:
 # DATE CALCULATIONS
 # =============================================================================
 
+class DateParseError(ValueError):
+    """Raised when a date string cannot be parsed."""
+    pass
+
+
+def parse_date(date_str: str, field_name: str = "date") -> datetime:
+    """
+    Parse a date string, supporting multiple formats.
+
+    Args:
+        date_str: Date string to parse
+        field_name: Name of the field for error messages
+
+    Returns:
+        Parsed datetime object
+
+    Raises:
+        DateParseError: If the date cannot be parsed
+    """
+    if not date_str:
+        raise DateParseError(f"{field_name} is required but was empty")
+
+    date_str = str(date_str).strip()
+
+    # Try YYYY-MM-DD format
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        pass
+
+    # Try YYYYMMDD format
+    if len(date_str) == 8 and date_str.isdigit():
+        try:
+            return datetime.strptime(date_str, "%Y%m%d")
+        except ValueError:
+            pass
+
+    # Try ISO format with time component
+    try:
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    raise DateParseError(
+        f"Invalid {field_name} format: '{date_str}'. "
+        f"Expected YYYY-MM-DD or YYYYMMDD format."
+    )
+
+
 def calculate_forecast_dates(
     context_end_date: str,
     horizon_length: int,
@@ -114,14 +163,17 @@ def calculate_forecast_dates(
     Calculate forecast start and end dates based on context end date and horizon.
 
     Args:
-        context_end_date: Last date of context data (YYYY-MM-DD)
+        context_end_date: Last date of context data (YYYY-MM-DD or YYYYMMDD)
         horizon_length: Number of periods to forecast
         period: Forecast period frequency
 
     Returns:
         Tuple of (forecast_start_date, forecast_end_date) in YYYY-MM-DD format
+
+    Raises:
+        DateParseError: If context_end_date cannot be parsed
     """
-    base_date = datetime.strptime(context_end_date, "%Y-%m-%d")
+    base_date = parse_date(context_end_date, "context_end_date")
 
     # Calculate delta based on period
     if period == Period.DAY_1:
@@ -350,13 +402,20 @@ def legacy_to_inference(
     """
     # Calculate approximate dates from data length
     # This is imprecise but maintains compatibility
-    from datetime import date
-    end_date = date.today()
+    import logging
+    from datetime import date as date_type
+    logger = logging.getLogger(__name__)
+
+    end_date = date_type.today()
     if legacy_request.as_of_date:
         try:
-            end_date = datetime.strptime(legacy_request.as_of_date, "%Y-%m-%d").date()
-        except ValueError:
-            pass
+            parsed = parse_date(legacy_request.as_of_date, "as_of_date")
+            end_date = parsed.date()
+        except DateParseError as e:
+            logger.warning(
+                f"Invalid as_of_date in legacy request: {legacy_request.as_of_date}. "
+                f"Using today's date. Error: {e}"
+            )
 
     # Estimate start date based on data length
     data_length = len(legacy_request.recent_data)

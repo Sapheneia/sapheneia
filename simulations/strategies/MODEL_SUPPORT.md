@@ -2,14 +2,15 @@
 
 This document tracks which forecast models work with AleutianFOSS + Sapheneia.
 
-**Last Updated:** 2026-01-21
+**Last Updated:** 2026-01-22
 
 ## Quick Reference
 
 | Status | Count | Models |
 |--------|-------|--------|
 | **Working** | 5 | chronos-t5-tiny, chronos-t5-mini, chronos-t5-base, chronos-t5-large, timesfm-2-0 |
-| **Untested** | 4 | chronos-t5-small, chronos-bolt-mini, chronos-bolt-small, chronos-bolt-base |
+| **Untested** | 1 | chronos-t5-small |
+| **Broken** | 3 | chronos-bolt-mini, chronos-bolt-small, chronos-bolt-base (incompatible model signature) |
 | **Not Implemented** | 32 | All others (Moirai, Granite, Moment, Yinglong, etc.) |
 
 ---
@@ -54,9 +55,6 @@ These models have Sapheneia container definitions but haven't been verified:
 | Model | HuggingFace ID | Notes |
 |-------|----------------|-------|
 | `chronos-t5-small` | amazon/chronos-t5-small | Should work (same family as working models) |
-| `chronos-bolt-mini` | amazon/chronos-bolt-mini | May have ChronosPipeline compatibility issues |
-| `chronos-bolt-small` | amazon/chronos-bolt-small | May have ChronosPipeline compatibility issues |
-| `chronos-bolt-base` | amazon/chronos-bolt-base | May have ChronosPipeline compatibility issues |
 
 ### Test Commands for Untested Models
 
@@ -65,12 +63,21 @@ These models have Sapheneia container definitions but haven't been verified:
 ./scripts/model-manager.sh start chronos-t5-small
 ./scripts/model-manager.sh init chronos-t5-small
 curl http://localhost:12712/forecast/v1/chronos/status -H "Authorization: Bearer default_trading_api_key_please_change"
-
-# Test chronos-bolt-mini (may fail)
-./scripts/model-manager.sh start chronos-bolt-mini
-./scripts/model-manager.sh init chronos-bolt-mini
-curl http://localhost:12715/forecast/v1/chronos/status -H "Authorization: Bearer default_trading_api_key_please_change"
 ```
+
+---
+
+## Broken Models
+
+These models have been tested and confirmed **not working** with the current Sapheneia implementation:
+
+| Model | HuggingFace ID | Reason |
+|-------|----------------|--------|
+| `chronos-bolt-mini` | amazon/chronos-bolt-mini | Incompatible model signature - Bolt uses different parameters than T5 |
+| `chronos-bolt-small` | amazon/chronos-bolt-small | Incompatible model signature - Bolt uses different parameters than T5 |
+| `chronos-bolt-base` | amazon/chronos-bolt-base | Incompatible model signature - Bolt uses different parameters than T5 |
+
+> **Note:** Chronos Bolt models use a different architecture than Chronos T5. The current `ChronosPipeline` implementation in Sapheneia does not support Bolt's parameter signature. Supporting Bolt would require a separate pipeline implementation.
 
 ---
 

@@ -43,6 +43,7 @@ FILTER_MODEL=""
 DRY_RUN=false
 SKIP_INIT=false
 SKIP_FETCH=false
+USE_SAPHENEIA=false  # Use Python CLI instead of Go CLI
 
 # Track which tickers we've already fetched data for
 declare -A FETCHED_TICKERS
@@ -79,6 +80,10 @@ while [[ $# -gt 0 ]]; do
             SKIP_FETCH=true
             shift
             ;;
+        --sapheneia|--python)
+            USE_SAPHENEIA=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -88,6 +93,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --dry-run         Show what would run without executing"
             echo "  --skip-init       Skip model initialization"
             echo "  --skip-fetch      Skip automatic data fetching (assumes data exists)"
+            echo "  --sapheneia       Use Python sapheneia CLI instead of Go aleutian CLI"
             echo "  --help            Show this help"
             echo ""
             echo "Models:"
@@ -410,7 +416,11 @@ run_strategy() {
     ensure_ticker_data "$ticker" "$strategy_file"
 
     if [[ "$DRY_RUN" == true ]]; then
-        log "  ${YELLOW}[DRY RUN] Would execute: aleutian evaluate run --config $strategy_file${NC}"
+        if [[ "$USE_SAPHENEIA" == true ]]; then
+            log "  ${YELLOW}[DRY RUN] Would execute: sapheneia evaluate --config $strategy_file${NC}"
+        else
+            log "  ${YELLOW}[DRY RUN] Would execute: aleutian evaluate run --config $strategy_file${NC}"
+        fi
         ((SUCCESS++))
         return
     fi
@@ -419,9 +429,17 @@ run_strategy() {
     local output
     local start_time=$(date +%s)
 
-    output=$(aleutian evaluate run \
-        --config "$strategy_file" \
-        --api-version unified 2>&1) || true
+    if [[ "$USE_SAPHENEIA" == true ]]; then
+        # Use Python sapheneia CLI
+        output=$(sapheneia evaluate \
+            --config "$strategy_file" \
+            --output "${RESULTS_DIR}" 2>&1) || true
+    else
+        # Use Go aleutian CLI
+        output=$(aleutian evaluate run \
+            --config "$strategy_file" \
+            --api-version unified 2>&1) || true
+    fi
 
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
@@ -519,6 +537,11 @@ main() {
     log "${BOLD}Configuration:${NC}"
     log "  Orchestrator URL: $ORCHESTRATOR_URL"
     log "  Results directory: $RESULTS_DIR"
+    if [[ "$USE_SAPHENEIA" == true ]]; then
+        log "  CLI: ${GREEN}sapheneia (Python)${NC}"
+    else
+        log "  CLI: aleutian (Go)"
+    fi
     [[ -n "$FILTER_TICKER" ]] && log "  Filter ticker: $FILTER_TICKER"
     [[ -n "$FILTER_MODEL" ]] && log "  Filter model: $FILTER_MODEL"
     [[ "$DRY_RUN" == true ]] && log "  ${YELLOW}DRY RUN MODE${NC}"

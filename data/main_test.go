@@ -662,6 +662,536 @@ func TestFetchYahooData_WithMockedHTTPClient_YahooAPIError(t *testing.T) {
 
 // --- Benchmark Tests ---
 
+// =============================================================================
+// GAP-04: WRITE RESULTS TESTS
+// =============================================================================
+// These tests verify the write_results endpoint for storing backtest results.
+
+func TestHandleWriteResults_ValidRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockWriteAPI := new(MockWriteAPIBlocking)
+	server := &Server{WriteAPI: mockWriteAPI}
+
+	// Setup mock to accept any writes
+	mockWriteAPI.On("WritePoint", mock.Anything, mock.Anything).Return(nil)
+
+	reqBody := WriteResultsRequest{
+		RunID:    "test-run-001",
+		Ticker:   "SPY",
+		Model:    "amazon/chronos-t5-tiny",
+		Strategy: "threshold",
+		Results: []SimulationResultPoint{
+			{
+				Date:           "2023-01-15",
+				Forecast:       385.2,
+				Actual:         383.0,
+				Signal:         "hold",
+				Position:       100.0,
+				Cash:           50000.0,
+				PortfolioValue: 88300.0,
+			},
+			{
+				Date:           "2023-01-16",
+				Forecast:       386.0,
+				Actual:         384.5,
+				Signal:         "buy",
+				Position:       110.0,
+				Cash:           45000.0,
+				PortfolioValue: 87295.0,
+			},
+		},
+		Metrics: SimulationMetrics{
+			SharpeRatio:  1.85,
+			MaxDrawdown:  -0.12,
+			CAGR:         0.18,
+			CalmarRatio:  1.5,
+			WinRate:      0.58,
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response WriteResultsResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "success", response.Status)
+	assert.Equal(t, "test-run-001", response.RunID)
+	// 2 result points + 1 metrics point = 3
+	assert.Equal(t, 3, response.PointsWritten)
+
+	mockWriteAPI.AssertExpectations(t)
+}
+
+func TestHandleWriteResults_MissingRunID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := &Server{}
+
+	reqBody := WriteResultsRequest{
+		RunID:  "", // Missing
+		Ticker: "SPY",
+		Results: []SimulationResultPoint{
+			{Date: "2023-01-15", Forecast: 385.2, Actual: 383.0},
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, "run_id is required", response["error"])
+}
+
+func TestHandleWriteResults_MissingTicker(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := &Server{}
+
+	reqBody := WriteResultsRequest{
+		RunID:  "test-run",
+		Ticker: "", // Missing
+		Results: []SimulationResultPoint{
+			{Date: "2023-01-15", Forecast: 385.2, Actual: 383.0},
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, "ticker is required", response["error"])
+}
+
+func TestHandleWriteResults_EmptyResults(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := &Server{}
+
+	reqBody := WriteResultsRequest{
+		RunID:   "test-run",
+		Ticker:  "SPY",
+		Results: []SimulationResultPoint{}, // Empty
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, "results cannot be empty", response["error"])
+}
+
+func TestHandleWriteResults_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := &Server{}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBufferString("invalid json"))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Contains(t, response, "error")
+	assert.Equal(t, "Invalid request body", response["error"])
+}
+
+func TestHandleWriteResults_InvalidDateFormat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockWriteAPI := new(MockWriteAPIBlocking)
+	server := &Server{WriteAPI: mockWriteAPI}
+
+	mockWriteAPI.On("WritePoint", mock.Anything, mock.Anything).Return(nil)
+
+	reqBody := WriteResultsRequest{
+		RunID:    "test-run",
+		Ticker:   "SPY",
+		Model:    "chronos",
+		Strategy: "threshold",
+		Results: []SimulationResultPoint{
+			{
+				Date:           "invalid-date", // Invalid format - will be skipped
+				Forecast:       385.2,
+				Actual:         383.0,
+				Signal:         "hold",
+				Position:       100.0,
+				Cash:           50000.0,
+				PortfolioValue: 88300.0,
+			},
+			{
+				Date:           "2023-01-16", // Valid
+				Forecast:       386.0,
+				Actual:         384.5,
+				Signal:         "buy",
+				Position:       110.0,
+				Cash:           45000.0,
+				PortfolioValue: 87295.0,
+			},
+		},
+		Metrics: SimulationMetrics{SharpeRatio: 1.5},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	// Should succeed but skip invalid date
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response WriteResultsResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+	// Only 1 valid result + 1 metrics = 2 points (invalid date skipped)
+	assert.Equal(t, 2, response.PointsWritten)
+}
+
+func TestHandleWriteResults_WriteError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockWriteAPI := new(MockWriteAPIBlocking)
+	server := &Server{WriteAPI: mockWriteAPI}
+
+	// Setup mock to return error
+	mockWriteAPI.On("WritePoint", mock.Anything, mock.Anything).
+		Return(fmt.Errorf("InfluxDB connection failed"))
+
+	reqBody := WriteResultsRequest{
+		RunID:    "test-run",
+		Ticker:   "SPY",
+		Model:    "chronos",
+		Strategy: "threshold",
+		Results: []SimulationResultPoint{
+			{Date: "2023-01-15", Forecast: 385.2, Actual: 383.0, Signal: "hold",
+				Position: 100.0, Cash: 50000.0, PortfolioValue: 88300.0},
+		},
+		Metrics: SimulationMetrics{SharpeRatio: 1.5},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/write_results", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleWriteResults(c)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Equal(t, "Failed to write to InfluxDB", response["error"])
+}
+
+// =============================================================================
+// GAP-06: BACKTEST MODE TESTS
+// =============================================================================
+// These tests verify the critical temporal isolation feature that prevents
+// look-ahead bias in backtesting scenarios.
+
+// TestHandleQueryData_BacktestMode verifies that providing end_date
+// creates proper temporal bounds to prevent look-ahead bias
+func TestHandleQueryData_BacktestMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockQueryAPI := new(MockQueryAPI)
+	server := &Server{
+		QueryAPI: mockQueryAPI,
+	}
+
+	// Capture the query string for inspection
+	var capturedQuery string
+	mockQueryAPI.On("Query", mock.Anything, mock.AnythingOfType("string")).
+		Run(func(args mock.Arguments) {
+			capturedQuery = args.Get(1).(string)
+		}).
+		Return((*api.QueryTableResult)(nil), fmt.Errorf("mock: no data"))
+
+	// Create request with end_date (backtest mode)
+	reqBody := DataQueryRequest{
+		Ticker:  "SPY",
+		Days:    90,
+		EndDate: "2023-01-15", // Historical date
+	}
+	body, _ := json.Marshal(reqBody)
+
+	// Setup Gin test context
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/query", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	// Execute
+	server.handleQueryData(c)
+
+	// CRITICAL: Verify query contains stop time bound
+	assert.Contains(t, capturedQuery, "stop:",
+		"Backtest mode query MUST contain stop: parameter")
+
+	assert.Contains(t, capturedQuery, "2023-01-15T23:59:59Z",
+		"Stop time must be end_date with T23:59:59Z suffix")
+
+	// Verify query structure is correct
+	assert.Contains(t, capturedQuery, "range(start:",
+		"Query must use range function")
+	assert.Contains(t, capturedQuery, `ticker == "SPY"`,
+		"Query must filter by ticker")
+
+	// Verify mock was called
+	mockQueryAPI.AssertExpectations(t)
+}
+
+// TestHandleQueryData_LiveMode verifies that WITHOUT end_date,
+// the query fetches up to current time (no stop bound)
+func TestHandleQueryData_LiveMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockQueryAPI := new(MockQueryAPI)
+	server := &Server{
+		QueryAPI: mockQueryAPI,
+	}
+
+	var capturedQuery string
+	mockQueryAPI.On("Query", mock.Anything, mock.AnythingOfType("string")).
+		Run(func(args mock.Arguments) {
+			capturedQuery = args.Get(1).(string)
+		}).
+		Return((*api.QueryTableResult)(nil), fmt.Errorf("mock: no data"))
+
+	// Create request WITHOUT end_date (live mode)
+	reqBody := DataQueryRequest{
+		Ticker: "SPY",
+		Days:   90,
+		// EndDate not provided - this is live mode
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/query", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	// Execute
+	server.handleQueryData(c)
+
+	// CRITICAL: Verify query does NOT contain stop: parameter
+	// Live mode should query up to current time
+	assert.NotContains(t, capturedQuery, "stop:",
+		"Live mode query should NOT contain stop: parameter")
+
+	// Verify basic query structure
+	assert.Contains(t, capturedQuery, "range(start:",
+		"Query must use range function")
+
+	mockQueryAPI.AssertExpectations(t)
+}
+
+// TestHandleQueryData_BacktestDateFormats tests various date formats
+func TestHandleQueryData_BacktestDateFormats(t *testing.T) {
+	testCases := []struct {
+		name           string
+		endDate        string
+		expectedInStop string
+	}{
+		{
+			name:           "YYYY-MM-DD format",
+			endDate:        "2023-01-15",
+			expectedInStop: "2023-01-15T23:59:59Z",
+		},
+		{
+			name:           "Start of year",
+			endDate:        "2023-01-01",
+			expectedInStop: "2023-01-01T23:59:59Z",
+		},
+		{
+			name:           "End of year",
+			endDate:        "2023-12-31",
+			expectedInStop: "2023-12-31T23:59:59Z",
+		},
+		{
+			name:           "Leap year date",
+			endDate:        "2024-02-29",
+			expectedInStop: "2024-02-29T23:59:59Z",
+		},
+		{
+			name:           "Mid-year date",
+			endDate:        "2023-06-15",
+			expectedInStop: "2023-06-15T23:59:59Z",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+
+			mockQueryAPI := new(MockQueryAPI)
+			server := &Server{QueryAPI: mockQueryAPI}
+
+			var capturedQuery string
+			mockQueryAPI.On("Query", mock.Anything, mock.AnythingOfType("string")).
+				Run(func(args mock.Arguments) {
+					capturedQuery = args.Get(1).(string)
+				}).
+				Return((*api.QueryTableResult)(nil), fmt.Errorf("mock: no data"))
+
+			reqBody := DataQueryRequest{
+				Ticker:  "TEST",
+				Days:    30,
+				EndDate: tc.endDate,
+			}
+			body, _ := json.Marshal(reqBody)
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("POST", "/v1/data/query", bytes.NewBuffer(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			server.handleQueryData(c)
+
+			assert.Contains(t, capturedQuery, tc.expectedInStop,
+				"Stop time should match expected format for %s", tc.name)
+		})
+	}
+}
+
+// TestHandleQueryData_BacktestVsLive_QueryDifference verifies the structural
+// difference between backtest and live mode queries
+func TestHandleQueryData_BacktestVsLive_QueryDifference(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Test backtest mode
+	var backtestQuery string
+	mockQueryAPIBacktest := new(MockQueryAPI)
+	serverBacktest := &Server{QueryAPI: mockQueryAPIBacktest}
+	mockQueryAPIBacktest.On("Query", mock.Anything, mock.AnythingOfType("string")).
+		Run(func(args mock.Arguments) {
+			backtestQuery = args.Get(1).(string)
+		}).
+		Return((*api.QueryTableResult)(nil), fmt.Errorf("mock"))
+
+	reqBacktest := DataQueryRequest{Ticker: "SPY", Days: 90, EndDate: "2023-01-15"}
+	bodyBacktest, _ := json.Marshal(reqBacktest)
+	wBacktest := httptest.NewRecorder()
+	cBacktest, _ := gin.CreateTestContext(wBacktest)
+	cBacktest.Request = httptest.NewRequest("POST", "/v1/data/query", bytes.NewBuffer(bodyBacktest))
+	cBacktest.Request.Header.Set("Content-Type", "application/json")
+	serverBacktest.handleQueryData(cBacktest)
+
+	// Test live mode
+	var liveQuery string
+	mockQueryAPILive := new(MockQueryAPI)
+	serverLive := &Server{QueryAPI: mockQueryAPILive}
+	mockQueryAPILive.On("Query", mock.Anything, mock.AnythingOfType("string")).
+		Run(func(args mock.Arguments) {
+			liveQuery = args.Get(1).(string)
+		}).
+		Return((*api.QueryTableResult)(nil), fmt.Errorf("mock"))
+
+	reqLive := DataQueryRequest{Ticker: "SPY", Days: 90}
+	bodyLive, _ := json.Marshal(reqLive)
+	wLive := httptest.NewRecorder()
+	cLive, _ := gin.CreateTestContext(wLive)
+	cLive.Request = httptest.NewRequest("POST", "/v1/data/query", bytes.NewBuffer(bodyLive))
+	cLive.Request.Header.Set("Content-Type", "application/json")
+	serverLive.handleQueryData(cLive)
+
+	// Compare queries
+	assert.Contains(t, backtestQuery, "stop:",
+		"Backtest query must have stop parameter")
+	assert.NotContains(t, liveQuery, "stop:",
+		"Live query must NOT have stop parameter")
+
+	// Both should have range(start:
+	assert.Contains(t, backtestQuery, "range(start:",
+		"Both queries should have range start")
+	assert.Contains(t, liveQuery, "range(start:",
+		"Both queries should have range start")
+}
+
+// TestHandleQueryData_BacktestStopTimeFormat verifies RFC3339 format
+func TestHandleQueryData_BacktestStopTimeFormat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockQueryAPI := new(MockQueryAPI)
+	server := &Server{QueryAPI: mockQueryAPI}
+
+	var capturedQuery string
+	mockQueryAPI.On("Query", mock.Anything, mock.AnythingOfType("string")).
+		Run(func(args mock.Arguments) {
+			capturedQuery = args.Get(1).(string)
+		}).
+		Return((*api.QueryTableResult)(nil), fmt.Errorf("mock"))
+
+	reqBody := DataQueryRequest{
+		Ticker:  "SPY",
+		Days:    90,
+		EndDate: "2023-06-15",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/data/query", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	server.handleQueryData(c)
+
+	// Verify RFC3339 format: YYYY-MM-DDTHH:MM:SSZ
+	// The stop time should be end_date + T23:59:59Z (end of day)
+	assert.Contains(t, capturedQuery, "2023-06-15T23:59:59Z",
+		"Stop time must be in RFC3339 format with end-of-day time")
+
+	// Verify it's properly used in the range function
+	assert.Regexp(t, `range\(start:.*stop:.*2023-06-15T23:59:59Z`, capturedQuery,
+		"Stop time should be in range() function")
+}
+
+// =============================================================================
+// END GAP-06 TESTS
+// =============================================================================
+
+// --- Benchmark Tests ---
+
 func BenchmarkHandleFetchData(b *testing.B) {
 	router := setupTestRouterSimple()
 

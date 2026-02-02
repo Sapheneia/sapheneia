@@ -56,24 +56,49 @@ class InferenceService:
     - Returns forecasts
     """
 
-    def __init__(self, base_url: str = "http://localhost:8000", api_key: Optional[str] = None):
+    # Default timeout in seconds (5 minutes)
+    DEFAULT_TIMEOUT = 300.0
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000",
+        api_key: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ):
         """
         Initialize inference service.
 
         Args:
             base_url: Base URL for model endpoints (fallback)
             api_key: Optional API key for authentication
+            timeout: Request timeout in seconds (default: 300, env: INFERENCE_TIMEOUT)
 
         Environment Variables (for distributed model containers):
             CHRONOS_SERVICE_URL: URL for Chronos model container (e.g., http://forecast-chronos-t5-tiny:8000)
             TIMESFM_SERVICE_URL: URL for TimesFM model container
+            INFERENCE_TIMEOUT: Default inference timeout in seconds
         """
         import os
         self.base_url = base_url
         self.chronos_url = os.getenv("CHRONOS_SERVICE_URL", base_url)
         self.timesfm_url = os.getenv("TIMESFM_SERVICE_URL", base_url)
         self.api_key = api_key
-        self.timeout = 300.0  # 5 minutes for model operations
+
+        # Timeout priority: explicit param > env var > default
+        if timeout is not None:
+            self.timeout = timeout
+        else:
+            env_timeout = os.getenv("INFERENCE_TIMEOUT")
+            if env_timeout:
+                try:
+                    self.timeout = float(env_timeout)
+                except ValueError:
+                    logger.warning(f"Invalid INFERENCE_TIMEOUT: {env_timeout}, using default")
+                    self.timeout = self.DEFAULT_TIMEOUT
+            else:
+                self.timeout = self.DEFAULT_TIMEOUT
+
+        logger.debug(f"InferenceService initialized with timeout={self.timeout}s")
 
     async def predict(self, request: InferenceRequest) -> InferenceResponse:
         """
@@ -155,9 +180,14 @@ class InferenceService:
         logger.info(f"Calling Chronos endpoint: {endpoint}")
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            headers = {"Content-Type": "application/json"}
+            headers = {
+                "Content-Type": "application/json",
+                "X-Request-ID": request.request_id,
+            }
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
+
+            logger.debug(f"Request ID {request.request_id} -> Chronos")
 
             resp = await client.post(
                 endpoint,
@@ -221,9 +251,14 @@ class InferenceService:
         timesfm_request = inference_to_timesfm(request)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            headers = {"Content-Type": "application/json"}
+            headers = {
+                "Content-Type": "application/json",
+                "X-Request-ID": request.request_id,
+            }
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
+
+            logger.debug(f"Request ID {request.request_id} -> TimesFM HTTP")
 
             # Call dedicated TimesFM container
             endpoint = f"{self.timesfm_url}/forecast/v1/timesfm20/inference"

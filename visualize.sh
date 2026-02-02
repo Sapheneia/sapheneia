@@ -5,14 +5,27 @@ input=$(cat)
 
 # Use jq to structure the data for awk
 # Format: Step | p10 | Median | p90
+# Supports both old format (.prediction) and new format (.forecast + .quantiles array)
 data=$(echo "$input" | jq -r '
-  [
-    .prediction.quantiles["10"],
-    .prediction.median,
-    .prediction.quantiles["90"]
-  ]
-  | transpose[]
-  | @tsv
+  if .forecast then
+    # New API format: .forecast.values for median, .quantiles array for percentiles
+    [
+      (.quantiles | map(select(.quantile == 0.1)) | .[0].values),
+      .forecast.values,
+      (.quantiles | map(select(.quantile == 0.9)) | .[0].values)
+    ]
+    | transpose[]
+    | @tsv
+  else
+    # Old format
+    [
+      .prediction.quantiles["10"],
+      .prediction.median,
+      .prediction.quantiles["90"]
+    ]
+    | transpose[]
+    | @tsv
+  end
 ')
 
 echo "=== Aleutian/Sapheneia Forecast (Chronos-T5) ==="
