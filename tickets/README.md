@@ -713,18 +713,21 @@ This section covers how to run backtests on the server.
 # 1. SSH to server
 ssh digits
 
-# 2. Start the stack (from AleutianFOSS directory)
+# 2. Start AleutianFOSS stack (provides InfluxDB, orchestrator, data fetcher)
 cd ~/projects/AleutianFOSS
 ./aleutian stack start --forecast-mode sapheneia
 
-# 3. Wait 60 seconds for containers to be healthy, then verify
+# 3. Start Sapheneia services (forecast gateway, trading, model container)
+cd ~/projects/sapheneia
+podman-compose up -d data forecast trading forecast-chronos-t5-tiny
+
+# 4. Wait 60 seconds for containers to be healthy, then verify
 podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(healthy|STATUS)"
 
-# 4. Initialize the forecast model (loads weights into GPU)
-cd ~/projects/sapheneia
+# 5. Initialize the forecast model (loads weights into GPU)
 ./scripts/model-manager.sh init chronos-t5-tiny
 
-# 5. Run a backtest
+# 6. Run a backtest
 ./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
 ```
 
@@ -732,7 +735,7 @@ cd ~/projects/sapheneia
 
 ### Step-by-Step Setup (Detailed)
 
-#### Step 1: Start the Stack
+#### Step 1: Start AleutianFOSS Stack
 
 From the **AleutianFOSS** directory, start with forecast mode:
 
@@ -741,15 +744,29 @@ cd ~/projects/AleutianFOSS
 ./aleutian stack start --forecast-mode sapheneia
 ```
 
-This starts:
+This starts the infrastructure:
 | Container | Port | Purpose |
 |-----------|------|---------|
 | user-influxdb | 12130 | Price data storage |
-| sapheneia-forecast | 12700 | Forecast gateway |
-| forecast-chronos-t5-tiny | 12710 | Chronos T5 Tiny model |
-| forecast-chronos-t5-mini | 12711 | Chronos T5 Mini model |
 | aleutian-go-orchestrator | 12210 | Go orchestrator |
 | aleutian-data-fetcher | 12001 | Data fetching service |
+
+#### Step 1b: Start Sapheneia Services
+
+From the **Sapheneia** directory, start the forecast services:
+
+```bash
+cd ~/projects/sapheneia
+podman-compose up -d data forecast trading forecast-chronos-t5-tiny
+```
+
+This starts:
+| Container | Port | Purpose |
+|-----------|------|---------|
+| sapheneia-forecast | 12700 | Forecast gateway |
+| sapheneia-data | 12701 | Data service |
+| sapheneia-trading | 12132 | Trading service |
+| forecast-chronos-t5-tiny | 12710 | Chronos T5 Tiny model |
 
 #### Step 2: Verify Containers Are Healthy
 
@@ -819,6 +836,11 @@ cat test_results/backtest_*.csv | head -20
 ### Stopping the Stack
 
 ```bash
+# Stop Sapheneia services
+cd ~/projects/sapheneia
+podman-compose down
+
+# Stop AleutianFOSS stack
 cd ~/projects/AleutianFOSS
 ./aleutian stack stop
 ```
