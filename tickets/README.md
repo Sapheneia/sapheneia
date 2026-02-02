@@ -8,6 +8,50 @@ Local development tickets for completing the Aleutian/Sapheneia integration.
 
 ---
 
+## 🚀 Quick Start (Server)
+
+```bash
+# Pull latest
+cd ~/projects/sapheneia
+git pull
+
+# Start stack (auto-detects GPU)
+./server_setup_scripts/start-stack.sh
+
+# Or force GPU mode
+./server_setup_scripts/start-stack.sh --gpu
+
+# Initialize model and run backtest
+./scripts/model-manager.sh init chronos-t5-tiny
+./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
+```
+
+The model should show `"device": "cuda"` when initialized (GPU mode).
+
+### Where Do Results Go?
+
+```
+Data Flow:
+  InfluxDB (prices) → Forecast Service → Trading Service → Go Orchestrator → Results
+
+Results Location:
+  • CSV files:     ~/projects/sapheneia/test_results/backtest_<run_id>.csv
+  • Run logs:      ~/projects/AleutianFOSS/ (aleutian CLI output)
+  • InfluxDB:      Predictions + metrics written to 'backtest-results' bucket
+
+Export results manually:
+  aleutian evaluate export <run_id>
+```
+
+| Output | Location | Format |
+|--------|----------|--------|
+| Trade history | `test_results/backtest_*.csv` | CSV |
+| Metrics (Sharpe, etc.) | Terminal + InfluxDB | JSON |
+| Equity curve | InfluxDB `backtest-results` bucket | Time series |
+| Run metadata | Go orchestrator logs | JSON |
+
+---
+
 ## Executive Summary
 
 All 10 GAP tickets have been implemented. Below is a brief summary of each for team discussion.
