@@ -698,3 +698,363 @@ All service clients follow the same pattern:
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Running Backtests - Team Guide
+
+This section covers how to run backtests on the server.
+
+### Quick Start
+
+```bash
+# SSH to server
+ssh digits
+cd /path/to/sapheneia
+
+# Interactive mode - pick model and ticker
+./scripts/run-backtest.sh
+
+# Direct run
+./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
+```
+
+---
+
+### Available Scripts
+
+| Script | Purpose | Location |
+|--------|---------|----------|
+| `run-backtest.sh` | **Interactive** single backtest runner | `scripts/` |
+| `model-manager.sh` | Container lifecycle (start/stop/init) | `scripts/` |
+| `test-models.sh` | Model testing suite | `scripts/` |
+| `run_all_backtests.sh` | Batch run all strategies | `simulations/strategies/` |
+
+---
+
+### 1. Interactive Backtest Runner (`run-backtest.sh`)
+
+The easiest way to run a single backtest. Lets you pick a model and ticker interactively.
+
+```bash
+# Interactive mode (recommended for first-time users)
+./scripts/run-backtest.sh
+
+# List available models and tickers
+./scripts/run-backtest.sh --list
+
+# Direct run with confirmation prompt
+./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
+
+# Direct run, skip confirmation
+./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY --yes
+```
+
+**Example Interactive Session:**
+```
+╔═══════════════════════════════════════════════════════════════╗
+║            Sapheneia Interactive Backtest Runner              ║
+╚═══════════════════════════════════════════════════════════════╝
+
+Available Models:
+
+   1) ● chronos-t5-tiny        Fastest, good for testing
+   2) ● chronos-t5-mini        Fast, slightly better accuracy
+   3) ○ chronos-t5-small       Balanced speed/accuracy
+   4) ○ chronos-t5-base        Good accuracy, slower
+   5) ○ chronos-t5-large       Best accuracy, slowest
+   6) ● timesfm-2-0            Google TimesFM 2.0
+
+  ● = running    ○ = not running
+
+Select model [1-6]: 1
+  ✓ Selected: chronos-t5-tiny
+
+Available Tickers:
+
+  BND      BTCUSDT  EEM      ETHUSD   FBND     GLD
+  IUSB     IWM      QQQ      RSP      SLV      SPY
+  TLT      USO      VTI      XLB      XLC      XLE
+  ...
+
+Enter ticker symbol: SPY
+  ✓ Selected: SPY
+
+═══════════════════════════════════════════════════════════════
+                    BACKTEST CONFIGURATION
+═══════════════════════════════════════════════════════════════
+
+  Model:     chronos-t5-tiny
+  HF ID:     amazon/chronos-t5-tiny
+  Port:      12710
+  Ticker:    SPY
+  Strategy:  spy_chronos_t5_tiny.yaml
+
+Strategy details:
+    start_date: "20230101"
+    end_date: "20240101"
+    context_size: 252
+    horizon_size: 20
+    initial_capital: 100000.0
+
+  Model status: RUNNING
+
+═══════════════════════════════════════════════════════════════
+
+Proceed with backtest? [Y/n]: y
+
+Starting backtest...
+```
+
+---
+
+### 2. Model Manager (`model-manager.sh`)
+
+Manages forecast model containers.
+
+```bash
+# List all models and their status
+./scripts/model-manager.sh list
+
+# Start a specific model
+./scripts/model-manager.sh start chronos-t5-tiny
+
+# Start all supported models
+./scripts/model-manager.sh start --all
+
+# Initialize model (load weights into memory)
+./scripts/model-manager.sh init chronos-t5-tiny
+
+# Check status of running containers
+./scripts/model-manager.sh status
+
+# Stop a model
+./scripts/model-manager.sh stop chronos-t5-tiny
+
+# View logs
+./scripts/model-manager.sh logs chronos-t5-tiny
+
+# Build container image
+./scripts/model-manager.sh build chronos-t5-tiny
+
+# Pre-download HuggingFace weights
+./scripts/model-manager.sh pull chronos-t5-tiny
+```
+
+**Typical Startup Sequence:**
+```bash
+# 1. Start the model container
+./scripts/model-manager.sh start chronos-t5-tiny
+
+# 2. Wait for container health check
+./scripts/model-manager.sh status
+
+# 3. Initialize the model (loads weights)
+./scripts/model-manager.sh init chronos-t5-tiny
+
+# 4. Verify model is ready
+curl http://localhost:12710/health
+```
+
+---
+
+### 3. Model Test Suite (`test-models.sh`)
+
+Systematically tests forecast models at multiple levels.
+
+```bash
+# Quick test - inference only (fast)
+./scripts/test-models.sh quick
+
+# Full test - includes backtest + CSV export
+./scripts/test-models.sh full
+
+# Test specific model
+./scripts/test-models.sh model chronos-t5-tiny
+
+# Test with full backtest
+./scripts/test-models.sh model chronos-t5-tiny --full
+
+# Test entire model family
+./scripts/test-models.sh family chronos
+
+# Test with different ticker
+./scripts/test-models.sh full --ticker QQQ
+
+# List all models and status
+./scripts/test-models.sh list
+
+# Generate status report
+./scripts/test-models.sh report
+```
+
+**Test Levels:**
+| Level | Test | What it checks |
+|-------|------|----------------|
+| 1 | Container health | Is the service running? |
+| 2 | Model init | Can it load weights? |
+| 3 | Status ready | Is model ready for inference? |
+| 4 | Inference | Can it generate forecasts? |
+| 5 | Backtest (--full) | Can it run full backtest + CSV? |
+
+**Output Files:**
+```
+test_results/
+├── MODEL_STATUS.md              # Latest summary
+├── model_test_report_*.md       # Timestamped reports
+└── backtest_*.csv               # CSV exports (--full only)
+```
+
+---
+
+### 4. Batch Backtest Runner (`run_all_backtests.sh`)
+
+Runs multiple backtests from strategy YAML files.
+
+```bash
+# Run all strategies for all tickers
+./simulations/strategies/run_all_backtests.sh
+
+# Run only SPY strategies
+./simulations/strategies/run_all_backtests.sh --ticker SPY
+
+# Run only chronos-t5-tiny strategies
+./simulations/strategies/run_all_backtests.sh --model chronos-t5-tiny
+
+# Combine filters
+./simulations/strategies/run_all_backtests.sh --ticker SPY --model chronos-t5-tiny
+
+# Dry run (show what would run)
+./simulations/strategies/run_all_backtests.sh --dry-run
+
+# Skip data fetching (assumes data exists)
+./simulations/strategies/run_all_backtests.sh --skip-fetch
+
+# Use Python CLI instead of Go CLI
+./simulations/strategies/run_all_backtests.sh --sapheneia
+```
+
+**Strategy Files Location:**
+```
+simulations/strategies/
+├── SPY/
+│   ├── spy_chronos_t5_tiny.yaml
+│   ├── spy_chronos_t5_base.yaml
+│   ├── spy_timesfm_2_0.yaml
+│   └── ...
+├── QQQ/
+│   └── ...
+├── BTCUSDT/
+│   └── ...
+└── results/
+    └── 20250202_143022/
+        ├── run_log.txt
+        └── backtest_*.csv
+```
+
+---
+
+### Server Testing Checklist
+
+Before running backtests, verify the stack is healthy:
+
+```bash
+# 1. Check all containers are running
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# 2. Health checks
+curl -s http://localhost:12130/ping && echo "InfluxDB OK"
+curl -s http://localhost:12701/health | jq .status  # Data service
+curl -s http://localhost:12700/health | jq .status  # Forecast gateway
+curl -s http://localhost:12710/health | jq .status  # Chronos model
+
+# 3. Check model is initialized
+curl -s http://localhost:12710/forecast/v1/chronos/status | jq .
+
+# 4. Quick inference test
+curl -X POST http://localhost:12710/forecast/v1/inference \
+  -H "Content-Type: application/json" \
+  -d '{"context": [100,101,102,103,104], "prediction_length": 3}' | jq .
+```
+
+---
+
+### Troubleshooting
+
+**Container won't start:**
+```bash
+# Check logs
+podman logs forecast-chronos-t5-tiny
+
+# Check if port is in use
+ss -tlnp | grep 12710
+
+# Restart
+./scripts/model-manager.sh stop chronos-t5-tiny
+./scripts/model-manager.sh start chronos-t5-tiny
+```
+
+**Model initialization fails:**
+```bash
+# Check GPU
+nvidia-smi
+
+# Check container has GPU access
+podman exec forecast-chronos-t5-tiny nvidia-smi
+
+# Try manual init
+curl -X POST http://localhost:12710/forecast/v1/chronos/initialization \
+  -H "Content-Type: application/json" \
+  -d '{"model_variant": "amazon/chronos-t5-tiny"}'
+```
+
+**Backtest returns no data:**
+```bash
+# Check InfluxDB has data
+curl -G 'http://localhost:12130/query' \
+  --data-urlencode "db=sapheneia" \
+  --data-urlencode "q=SELECT COUNT(*) FROM prices WHERE ticker='SPY'"
+
+# Fetch data if missing
+aleutian timeseries fetch SPY --days 500
+```
+
+**Model status shows "not ready":**
+```bash
+# Wait and retry (large models take time)
+sleep 30
+curl -s http://localhost:12710/forecast/v1/chronos/status | jq .
+
+# Check for OOM in logs
+podman logs forecast-chronos-t5-tiny | tail -50
+```
+
+---
+
+### Model Reference
+
+| Model | Port | Speed | Accuracy | GPU Memory |
+|-------|------|-------|----------|------------|
+| chronos-t5-tiny | 12710 | ⚡⚡⚡ | ★★☆ | ~2GB |
+| chronos-t5-mini | 12711 | ⚡⚡⚡ | ★★☆ | ~2GB |
+| chronos-t5-small | 12712 | ⚡⚡ | ★★★ | ~4GB |
+| chronos-t5-base | 12713 | ⚡ | ★★★★ | ~8GB |
+| chronos-t5-large | 12714 | 🐢 | ★★★★★ | ~16GB |
+| timesfm-2-0 | 12721 | ⚡⚡ | ★★★★ | ~8GB |
+
+**Recommended for testing:** `chronos-t5-tiny` (fastest, good enough for validation)
+
+**Recommended for production:** `chronos-t5-base` or `timesfm-2-0`
+
+---
+
+### Available Tickers
+
+```
+ETFs:        SPY, QQQ, IWM, VTI, RSP
+Sectors:     XLB, XLC, XLE, XLF, XLI, XLK, XLP, XLRE, XLU, XLV, XLY
+Bonds:       TLT, BND, FBND, IUSB
+Commodities: GLD, SLV, USO
+Intl:        EEM
+Crypto:      BTCUSDT, ETHUSD
+```
