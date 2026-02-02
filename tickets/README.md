@@ -724,12 +724,19 @@ podman-compose up -d data forecast trading forecast-chronos-t5-tiny
 # 4. Wait 60 seconds for containers to be healthy, then verify
 podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(healthy|STATUS)"
 
-# 5. Initialize the forecast model (loads weights into GPU)
+# 5. Set API keys (REQUIRED - services will reject requests without these)
+export SAPHENEIA_API_KEY="change_me_in_production_abc123"
+export SAPHENEIA_TRADING_API_KEY="change_me_trading_key_abc123"
+
+# 6. Initialize the forecast model (loads weights into GPU)
 ./scripts/model-manager.sh init chronos-t5-tiny
 
-# 6. Run a backtest
+# 7. Run a backtest
 ./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
 ```
+
+> **Note:** The API keys above are development defaults from `.env.template`.
+> For production, use secure keys set in your `.env` file.
 
 ---
 
@@ -768,7 +775,36 @@ This starts:
 | sapheneia-trading | 12132 | Trading service |
 | forecast-chronos-t5-tiny | 12710 | Chronos T5 Tiny model |
 
-#### Step 2: Verify Containers Are Healthy
+#### Step 2: Set API Keys
+
+**IMPORTANT:** Both services require API keys. Without these, you'll get "Invalid API key" errors.
+
+```bash
+# Forecast service API key
+export SAPHENEIA_API_KEY="change_me_in_production_abc123"
+
+# Trading service API key (different from forecast!)
+export SAPHENEIA_TRADING_API_KEY="change_me_trading_key_abc123"
+```
+
+| Service | Environment Variable | Default Dev Key |
+|---------|---------------------|-----------------|
+| Forecast (port 12710) | `SAPHENEIA_API_KEY` | `change_me_in_production_abc123` |
+| Trading (port 12132) | `SAPHENEIA_TRADING_API_KEY` | `change_me_trading_key_abc123` |
+
+> **Where do these keys come from?**
+> - Defined in `.env.template` in the sapheneia repo
+> - Containers read from `.env` at startup
+> - Check actual values: `podman exec <container> env | grep KEY`
+
+**Pro tip:** Add these to your `~/.bashrc` so you don't have to set them every session:
+```bash
+echo 'export SAPHENEIA_API_KEY="change_me_in_production_abc123"' >> ~/.bashrc
+echo 'export SAPHENEIA_TRADING_API_KEY="change_me_trading_key_abc123"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Step 3: Verify Containers Are Healthy
 
 Wait ~60 seconds, then check:
 
@@ -784,7 +820,7 @@ forecast-chronos-t5-tiny  Up 5 minutes (healthy)
 user-influxdb             Up 5 minutes (healthy)
 ```
 
-#### Step 3: Initialize the Forecast Model
+#### Step 4: Initialize the Forecast Model
 
 **Important:** The model container is running but the model weights aren't loaded yet. You must initialize:
 
@@ -807,7 +843,7 @@ curl -s http://localhost:12710/forecast/v1/chronos/status | jq .
 
 Should return `"ready": true`.
 
-#### Step 4: Run a Backtest
+#### Step 5: Run a Backtest
 
 **Interactive mode** (pick model and ticker):
 ```bash
@@ -824,7 +860,7 @@ Should return `"ready": true`.
 ./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY --yes
 ```
 
-#### Step 5: View Results
+#### Step 6: View Results
 
 ```bash
 ls -la test_results/
