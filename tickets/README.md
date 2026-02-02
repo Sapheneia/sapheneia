@@ -709,34 +709,53 @@ This section covers how to run backtests on the server.
 
 ### Quick Start (Copy-Paste Ready)
 
+**Option A: Use the start script (recommended)**
+
 ```bash
 # 1. SSH to server
 ssh digits
 
-# 2. Start AleutianFOSS stack (provides InfluxDB, orchestrator, data fetcher)
-cd ~/projects/AleutianFOSS
-./aleutian stack start --forecast-mode sapheneia
-
-# 3. Start Sapheneia services (forecast gateway, trading, model container)
+# 2. Start everything with one command
 cd ~/projects/sapheneia
-podman-compose up -d data forecast trading forecast-chronos-t5-tiny
+./server_setup_scripts/start-stack.sh
 
-# 4. Wait 60 seconds for containers to be healthy, then verify
-podman ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(healthy|STATUS)"
+# 3. Initialize the forecast model
+./scripts/model-manager.sh init chronos-t5-tiny
 
-# 5. Set API keys (REQUIRED - services will reject requests without these)
+# 4. Run a backtest
+./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
+```
+
+**Option B: Manual start (if you need more control)**
+
+```bash
+# 1. SSH to server
+ssh digits
+
+# 2. Set API keys (REQUIRED)
 export SAPHENEIA_API_KEY="change_me_in_production_abc123"
 export SAPHENEIA_TRADING_API_KEY="change_me_trading_key_abc123"
 
-# 6. Initialize the forecast model (loads weights into GPU)
+# 3. Start AleutianFOSS stack
+cd ~/projects/AleutianFOSS
+./aleutian stack start --forecast-mode sapheneia
+
+# 4. Start Sapheneia services
+cd ~/projects/sapheneia
+podman-compose up -d data forecast trading forecast-chronos-t5-tiny
+
+# 5. Wait 60 seconds, verify healthy
+podman ps --format "table {{.Names}}\t{{.Status}}" | grep healthy
+
+# 6. Initialize the forecast model
 ./scripts/model-manager.sh init chronos-t5-tiny
 
 # 7. Run a backtest
 ./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
 ```
 
-> **Note:** The API keys above are development defaults from `.env.template`.
-> For production, use secure keys set in your `.env` file.
+> **Note:** The API keys are development defaults from `.env.template`.
+> The `start-stack.sh` script sets these automatically.
 
 ---
 
