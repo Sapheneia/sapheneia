@@ -253,11 +253,11 @@ run_backtest() {
     mkdir -p "$RESULTS_DIR"
 
     # Run the backtest
-    echo -e "${DIM}$ aleutian evaluate run --config $strategy_file --api-version unified${NC}"
+    echo -e "${DIM}$ aleutian evaluate run --config $strategy_file --api-version legacy${NC}"
     echo ""
 
     local output
-    output=$(aleutian evaluate run --config "$strategy_file" --api-version unified 2>&1)
+    output=$(aleutian evaluate run --config "$strategy_file" --api-version legacy 2>&1)
     local exit_code=$?
 
     echo "$output"
