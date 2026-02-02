@@ -262,6 +262,248 @@ pip install pytest-cov
 | legacy_adapters.py | 95% | ✅ 95%+ |
 | legacy_service.py | 90% | ✅ 90%+ |
 
+## Shell Script Testing
+
+The `scripts/` directory contains operational scripts for managing forecast models and running tests.
+
+### Available Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/model-manager.sh` | Container lifecycle management (start/stop/init models) |
+| `scripts/test-models.sh` | Systematic testing of all forecast models |
+| `simulations/strategies/run_all_backtests.sh` | Run all backtest strategies with CSV export |
+| `visualize.sh` | Terminal visualization of forecast results |
+
+### model-manager.sh
+
+Manages forecast model containers (podman/docker):
+
+```bash
+# List all models and their status
+./scripts/model-manager.sh list
+
+# Start a specific model container
+./scripts/model-manager.sh start chronos-t5-tiny
+
+# Start all models
+./scripts/model-manager.sh start --all
+
+# Initialize model after container starts
+./scripts/model-manager.sh init chronos-t5-tiny
+
+# Check running containers
+./scripts/model-manager.sh status
+
+# Stop a model
+./scripts/model-manager.sh stop chronos-t5-tiny
+
+# Build container image
+./scripts/model-manager.sh build chronos-t5-tiny
+
+# Pre-download HuggingFace model weights
+./scripts/model-manager.sh pull chronos-t5-tiny
+```
+
+### test-models.sh
+
+Systematic testing of forecast models at 4 levels:
+1. Container starts (health check passes)
+2. Model initializes (API returns ready)
+3. Inference works (forecast returns valid data)
+4. Backtest works (aleutian evaluate succeeds)
+
+```bash
+# Test all models
+./scripts/test-models.sh
+
+# Quick test (known-working models only)
+./scripts/test-models.sh --quick
+
+# Test specific model
+./scripts/test-models.sh --model chronos-t5-tiny
+
+# Test model family
+./scripts/test-models.sh --family chronos
+
+# Show last test report
+./scripts/test-models.sh --report
+```
+
+### run_all_backtests.sh
+
+Runs backtest strategies and exports results:
+
+```bash
+# Run all strategies (auto-fetches missing data)
+./simulations/strategies/run_all_backtests.sh
+
+# Run only SPY strategies
+./simulations/strategies/run_all_backtests.sh --ticker SPY
+
+# Run only chronos_tiny strategies
+./simulations/strategies/run_all_backtests.sh --model tiny
+
+# Dry run (show what would run)
+./simulations/strategies/run_all_backtests.sh --dry-run
+
+# Skip data fetching
+./simulations/strategies/run_all_backtests.sh --skip-fetch
+```
+
+---
+
+## Server Testing Guide
+
+Step-by-step instructions for testing on the DIGITS server.
+
+### Prerequisites
+
+Ensure these services are running:
+- InfluxDB (port 12130)
+- Data service (port 12701)
+- Forecast service (port 12700)
+- At least one model container (e.g., chronos-t5-tiny on port 12710)
+
+### Step 1: Check Service Status
+
+```bash
+# SSH to server
+ssh digits
+
+# Check running containers
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Or with docker
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+Expected services:
+| Service | Port | Health Check |
+|---------|------|--------------|
+| influxdb | 12130 | `curl http://localhost:12130/ping` |
+| sapheneia-data | 12701 | `curl http://localhost:12701/health` |
+| sapheneia-forecast | 12700 | `curl http://localhost:12700/health` |
+| forecast-chronos-t5-tiny | 12710 | `curl http://localhost:12710/health` |
+
+### Step 2: Verify Services Health
+
+```bash
+# Check InfluxDB
+curl -s http://localhost:12130/ping && echo "InfluxDB OK"
+
+# Check data service
+curl -s http://localhost:12701/health | jq .
+
+# Check forecast service
+curl -s http://localhost:12700/health | jq .
+
+# Check model container
+curl -s http://localhost:12710/health | jq .
+```
+
+### Step 3: Initialize Model (if needed)
+
+```bash
+# Using model-manager
+./scripts/model-manager.sh init chronos-t5-tiny
+
+# Or manually via API
+curl -X POST http://localhost:12710/init \
+  -H "Content-Type: application/json" \
+  -d '{"model_name": "amazon/chronos-t5-tiny"}'
+```
+
+### Step 4: Test Single Forecast
+
+```bash
+# Quick forecast test
+curl -X POST http://localhost:12700/forecast \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${SAPHENEIA_API_KEY}" \
+  -d '{
+    "name": "SPY",
+    "model": "amazon/chronos-t5-tiny",
+    "context_size": 90,
+    "horizon_size": 10
+  }' | jq .
+```
+
+### Step 5: Run Model Tests
+
+```bash
+# Test specific model
+./scripts/test-models.sh --model chronos-t5-tiny
+
+# Quick test of working models
+./scripts/test-models.sh --quick
+```
+
+### Step 6: Run Python Unit Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio pytest-cov
+
+# Run orchestration tests
+pytest orchestration/tests/ -v
+
+# Run with coverage
+pytest orchestration/tests/ --cov=orchestration --cov-report=term-missing
+```
+
+### Step 7: Run Full Backtest
+
+```bash
+# Single ticker backtest
+./simulations/strategies/run_all_backtests.sh --ticker SPY --model tiny
+
+# Or using aleutian CLI directly
+aleutian evaluate \
+  --config simulations/strategies/spy_chronos_tiny.yaml \
+  --output results/
+```
+
+### Troubleshooting
+
+#### Container won't start
+```bash
+# Check logs
+podman logs forecast-chronos-t5-tiny
+
+# Check if port is in use
+ss -tlnp | grep 12710
+```
+
+#### Model initialization fails
+```bash
+# Check GPU availability
+nvidia-smi
+
+# Check model container logs
+podman logs -f forecast-chronos-t5-tiny
+```
+
+#### Forecast returns empty
+```bash
+# Verify data exists in InfluxDB
+curl -G 'http://localhost:12130/query' \
+  --data-urlencode "db=sapheneia" \
+  --data-urlencode "q=SELECT COUNT(*) FROM prices WHERE ticker='SPY'"
+```
+
+#### Connection refused
+```bash
+# Check if service is bound to correct interface
+podman inspect forecast-chronos-t5-tiny | jq '.[0].NetworkSettings'
+
+# Restart the service
+./scripts/model-manager.sh stop chronos-t5-tiny
+./scripts/model-manager.sh start chronos-t5-tiny
+```
+
+---
+
 ## Future Tests
 
 - Integration tests with real containers
