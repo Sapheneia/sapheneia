@@ -11,44 +11,108 @@ Local development tickets for completing the Aleutian/Sapheneia integration.
 ## 🚀 Quick Start (Server)
 
 ```bash
-# Pull latest
+# 1. Pull latest
 cd ~/projects/sapheneia
 git pull
 
-# Start stack (auto-detects GPU)
+# 2. Start stack (auto-detects GPU)
 ./server_setup_scripts/start-stack.sh
 
-# Or force GPU mode
-./server_setup_scripts/start-stack.sh --gpu
-
-# Initialize model and run backtest
+# 3. Initialize model
 ./scripts/model-manager.sh init chronos-t5-tiny
+
+# 4. Run backtest (interactive - pick model/ticker)
+./scripts/run-backtest.sh
+
+# Or direct run:
 ./scripts/run-backtest.sh -m chronos-t5-tiny -t SPY
 ```
 
 The model should show `"device": "cuda"` when initialized (GPU mode).
 
+---
+
+### 📊 Viewing Results
+
+After a backtest completes, you'll see output like:
+```
+✓ Backtest completed in 78s
+  Run ID: spy-chronos-t5-tiny_v1.0.0_20260202_163136
+```
+
+**1. View Metrics (shown at end of run):**
+```
+===================================================
+                    RESULTS
+===================================================
+  Total Return:    12.34%
+  Sharpe Ratio:    1.45
+  Max Drawdown:    -8.2%
+  Win Rate:        54.3%
+  Total Trades:    47
+===================================================
+```
+
+**2. Export to CSV:**
+```bash
+# Use the Run ID from the backtest output
+aleutian evaluate export spy-chronos-t5-tiny_v1.0.0_20260202_163136
+
+# CSV saved to current directory
+ls -la backtest_*.csv
+
+# View the CSV
+head -20 backtest_spy-chronos-t5-tiny_v1.0.0_20260202_163136.csv
+```
+
+**3. Query Equity Curve from InfluxDB:**
+```bash
+# Query equity curve for a specific run
+curl -G 'http://localhost:12130/api/v2/query' \
+  -H "Authorization: Token your_super_secret_admin_token" \
+  -H "Content-Type: application/vnd.flux" \
+  --data-urlencode 'org=aleutian-finance' \
+  --data-urlencode 'query=
+    from(bucket: "backtest-results")
+    |> range(start: -30d)
+    |> filter(fn: (r) => r["run_id"] == "spy-chronos-t5-tiny_v1.0.0_20260202_163136")
+    |> filter(fn: (r) => r["_field"] == "equity")
+  '
+```
+
+**4. View in Grafana (if configured):**
+```
+http://localhost:3000
+Dashboard: Backtest Results
+```
+
+**5. List Recent Runs:**
+```bash
+# Find recent CSV exports
+ls -lt test_results/backtest_*.csv | head -5
+
+# Or query InfluxDB for run IDs
+curl -G 'http://localhost:12130/api/v2/query' \
+  -H "Authorization: Token your_super_secret_admin_token" \
+  --data-urlencode 'org=aleutian-finance' \
+  --data-urlencode 'query=
+    from(bucket: "backtest-results")
+    |> range(start: -7d)
+    |> group(columns: ["run_id"])
+    |> distinct(column: "run_id")
+  '
+```
+
+---
+
 ### Where Do Results Go?
 
-```
-Data Flow:
-  InfluxDB (prices) → Forecast Service → Trading Service → Go Orchestrator → Results
-
-Results Location:
-  • CSV files:     ~/projects/sapheneia/test_results/backtest_<run_id>.csv
-  • Run logs:      ~/projects/AleutianFOSS/ (aleutian CLI output)
-  • InfluxDB:      Predictions + metrics written to 'backtest-results' bucket
-
-Export results manually:
-  aleutian evaluate export <run_id>
-```
-
-| Output | Location | Format |
-|--------|----------|--------|
-| Trade history | `test_results/backtest_*.csv` | CSV |
-| Metrics (Sharpe, etc.) | Terminal + InfluxDB | JSON |
-| Equity curve | InfluxDB `backtest-results` bucket | Time series |
-| Run metadata | Go orchestrator logs | JSON |
+| Output | Location | How to Access |
+|--------|----------|---------------|
+| **Metrics** | Terminal | Shown at end of `aleutian evaluate run` |
+| **Trade History** | `backtest_<run_id>.csv` | `aleutian evaluate export <run_id>` |
+| **Equity Curve** | InfluxDB | Query `backtest-results` bucket |
+| **Run Logs** | Terminal / Go orchestrator | Printed during run |
 
 ---
 
