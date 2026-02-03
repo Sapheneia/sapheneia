@@ -95,7 +95,7 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
         returns: Return values (can be Series, array, or list)
 
     Returns:
-        Validated pandas Series
+        Validated pandas Series with DatetimeIndex (required by quantstats)
 
     Raises:
         ValueError: If returns are invalid
@@ -119,6 +119,17 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
 
     if len(returns_clean) < 2:
         raise ValueError(f"Need at least 2 valid returns, got {len(returns_clean)}")
+
+    # Ensure DatetimeIndex - quantstats requires this for some calculations
+    # If no datetime index, create a synthetic one starting from a base date
+    if not isinstance(returns_clean.index, pd.DatetimeIndex):
+        # Create synthetic daily dates starting from 2020-01-01
+        synthetic_dates = pd.date_range(
+            start='2020-01-01',
+            periods=len(returns_clean),
+            freq='D'
+        )
+        returns_clean = pd.Series(returns_clean.values, index=synthetic_dates)
 
     return returns_clean
 
