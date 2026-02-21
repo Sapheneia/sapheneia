@@ -284,7 +284,9 @@ def test_compute_empty_returns(client):
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 400
-    assert "empty" in response.json()["detail"].lower()
+    body = response.json()
+    # Structured error format: check message field
+    assert "empty" in body.get("message", body.get("detail", "")).lower()
 
 
 def test_compute_insufficient_data(client):
@@ -345,3 +347,44 @@ def test_compute_defaults(client):
     # Default is 'performance' with interpretation
     assert "interpretation" in data
     assert "metadata" in data
+
+
+# --- GAP-15 Structured Error Response Tests ---
+
+def test_structured_error_has_correct_keys(client):
+    """Error responses should have error, message, details keys (not 'detail')."""
+    payload = {
+        "returns": [],
+        "metric": "performance",
+    }
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 400
+    body = response.json()
+    assert "error" in body
+    assert "message" in body
+    assert "details" in body
+    # Ensure old FastAPI default format is NOT used
+    assert "detail" not in body
+
+
+def test_structured_error_has_request_id(client):
+    """Error response details should include request_id."""
+    payload = {
+        "returns": [],
+        "metric": "performance",
+    }
+    response = client.post("/metrics/v1/compute/", json=payload)
+    body = response.json()
+    assert "request_id" in body.get("details", {})
+
+
+def test_insufficient_data_returns_validation_error_code(client):
+    """Insufficient data should return VALIDATION_ERROR code."""
+    payload = {
+        "returns": [0.01],  # Only 1 return, need at least 2
+        "metric": "sharpe",
+    }
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"] == "VALIDATION_ERROR"

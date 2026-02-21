@@ -26,6 +26,7 @@ class ResultPoint:
     portfolio_value: float
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize result point to dict for InfluxDB storage."""
         return {
             "date": self.date,
             "forecast": self.forecast,
@@ -47,6 +48,7 @@ class MetricsSummary:
     win_rate: float
 
     def to_dict(self) -> Dict[str, float]:
+        """Serialize metrics summary to dict for InfluxDB storage."""
         return {
             "sharpe_ratio": self.sharpe_ratio,
             "max_drawdown": self.max_drawdown,

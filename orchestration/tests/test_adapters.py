@@ -29,6 +29,7 @@ from orchestration.schema import (
     LegacyForecastResponse,
     ModelParams,
 )
+from shared.errors import ComputationError
 
 
 class TestDetermineModelFamily:
@@ -545,3 +546,49 @@ class TestInferenceToLegacy:
         result = inference_to_legacy(sample_inference_response)
 
         assert result.message == "Success"
+
+
+# =============================================================================
+# GAP-15 ERROR PATH TESTS
+# =============================================================================
+
+class TestChronosToInferenceErrors:
+    """Tests for ComputationError in chronos_to_inference."""
+
+    def test_no_median_or_mean_raises(self, sample_inference_request):
+        """Response missing both median and mean should raise ComputationError."""
+        bad_response = {"prediction": {"quantiles": {"10": [1.0]}}}
+        with pytest.raises(ComputationError) as exc_info:
+            chronos_to_inference(bad_response, sample_inference_request, 100)
+        assert "missing forecast values" in exc_info.value.message
+
+    def test_empty_median_and_mean_raises(self, sample_inference_request):
+        """Response with empty median and mean lists should raise ComputationError."""
+        bad_response = {"prediction": {"median": [], "mean": []}}
+        with pytest.raises(ComputationError):
+            chronos_to_inference(bad_response, sample_inference_request, 100)
+
+
+class TestTimesFMToInferenceErrors:
+    """Tests for ComputationError in timesfm_to_inference."""
+
+    def test_missing_point_forecast_key_raises(self, sample_inference_request):
+        """Response missing point_forecast key should raise ComputationError."""
+        bad_response = {"other_key": [1.0]}
+        with pytest.raises(ComputationError) as exc_info:
+            timesfm_to_inference(bad_response, sample_inference_request, 100)
+        assert "missing 'point_forecast'" in exc_info.value.message
+
+    def test_empty_point_forecast_list_raises(self, sample_inference_request):
+        """Empty point_forecast list should raise ComputationError."""
+        bad_response = {"point_forecast": []}
+        with pytest.raises(ComputationError) as exc_info:
+            timesfm_to_inference(bad_response, sample_inference_request, 100)
+        assert "empty" in exc_info.value.message.lower()
+
+    def test_empty_inner_forecast_raises(self, sample_inference_request):
+        """point_forecast: [[]] should raise ComputationError."""
+        bad_response = {"point_forecast": [[]]}
+        with pytest.raises(ComputationError) as exc_info:
+            timesfm_to_inference(bad_response, sample_inference_request, 100)
+        assert "empty" in exc_info.value.message.lower()

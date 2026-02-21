@@ -44,6 +44,7 @@ class BacktestConfig:
     inference_timeout: Optional[float] = None  # Seconds, None uses service default
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize config to dict for result storage and audit logging."""
         return {
             "ticker": self.ticker,
             "model": self.model,
@@ -70,6 +71,8 @@ class BacktestResult:
     evaluation_dates: List[str]
     run_id: str = ""
     duration_seconds: float = 0.0
+    failed_dates: List[str] = field(default_factory=list)
+    error_count: int = 0
 
     @property
     def total_return(self) -> float:
@@ -84,6 +87,7 @@ class BacktestResult:
         return self.equity_curve[-1] if self.equity_curve else 0.0
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize backtest result to dict including computed properties."""
         return {
             "run_id": self.run_id,
             "config": self.config.to_dict(),
@@ -93,10 +97,12 @@ class BacktestResult:
             "metrics": self.metrics.to_dict(),
             "evaluation_dates_count": len(self.evaluation_dates),
             "duration_seconds": self.duration_seconds,
+            "error_count": self.error_count,
+            "failed_dates": self.failed_dates,
         }
 
 
-# Type alias for data provider function
+#: Type alias for data provider: async function(ticker, date, days) -> prices.
 DataProvider = Callable[[str, str, int], Awaitable[List[float]]]
 
 
@@ -147,6 +153,10 @@ async def run_backtest(
     )
 
     logger.info(f"  Evaluation dates: {len(evaluation_dates)}")
+
+    # Error tracking
+    failed_dates: List[str] = []
+    error_count = 0
 
     # Main backtest loop
     for i, eval_date in enumerate(evaluation_dates):
@@ -223,17 +233,26 @@ async def run_backtest(
 
         except Exception as e:
             logger.error(f"Error on {eval_date}: {e}")
+            error_count += 1
+            failed_dates.append(eval_date)
             # Continue with next date - don't fail entire backtest
             continue
 
     # PHASE 5: Compute metrics
     logger.info("Computing final metrics...")
-    returns = prices_to_returns(portfolio_manager.equity_curve)
-    metrics = await metrics_client.compute_metrics(
-        returns=returns,
-        risk_free_rate=config.risk_free_rate,
-        periods_per_year=252,
-    )
+    try:
+        returns = prices_to_returns(portfolio_manager.equity_curve)
+        metrics = await metrics_client.compute_metrics(
+            returns=returns,
+            risk_free_rate=config.risk_free_rate,
+            periods_per_year=252,
+        )
+    except Exception as e:
+        logger.error(f"Metrics computation failed: {e}. Using fallback zero metrics.")
+        metrics = metrics_client._get_fallback_metrics()
+
+    if error_count > 0:
+        logger.warning(f"Backtest completed with {error_count} errors on dates: {failed_dates}")
 
     duration = time.time() - start_time
 
@@ -245,6 +264,8 @@ async def run_backtest(
         evaluation_dates=evaluation_dates,
         run_id=run_id,
         duration_seconds=duration,
+        failed_dates=failed_dates,
+        error_count=error_count,
     )
 
     # Log summary

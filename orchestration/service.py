@@ -14,10 +14,19 @@ This service:
 - Tracks inference timing for metadata
 """
 
+import asyncio
 import logging
 import time
 import httpx
 from typing import Optional
+
+from shared.errors import (
+    SapheneiaError,
+    ValidationError,
+    ModelUnavailableError,
+    ServiceUnavailableError,
+    ServiceTimeoutError,
+)
 
 from .schema import (
     InferenceRequest,
@@ -179,23 +188,44 @@ class InferenceService:
         endpoint = f"{self.chronos_url}/forecast/v1/inference"
         logger.info(f"Calling Chronos endpoint: {endpoint}")
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            headers = {
-                "Content-Type": "application/json",
-                "X-Request-ID": request.request_id,
-            }
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Request-ID": request.request_id,
+                }
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
 
-            logger.debug(f"Request ID {request.request_id} -> Chronos")
+                logger.debug(f"Request ID {request.request_id} -> Chronos")
 
-            resp = await client.post(
-                endpoint,
-                json=chronos_request,
-                headers=headers,
+                resp = await client.post(
+                    endpoint,
+                    json=chronos_request,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                chronos_data = resp.json()
+        except httpx.ConnectError as e:
+            raise ServiceUnavailableError(
+                message=f"Chronos service unreachable at {endpoint}",
+                details={"endpoint": endpoint, "error": str(e)},
             )
-            resp.raise_for_status()
-            chronos_data = resp.json()
+        except httpx.ReadTimeout as e:
+            raise ServiceTimeoutError(
+                message=f"Chronos inference timed out after {self.timeout}s",
+                details={"endpoint": endpoint, "timeout": self.timeout},
+            )
+        except httpx.HTTPStatusError as e:
+            if 400 <= e.response.status_code < 500:
+                raise ValidationError(
+                    message=f"Chronos rejected request: {e.response.status_code}",
+                    details={"status_code": e.response.status_code, "model": request.model},
+                )
+            raise ModelUnavailableError(
+                message=f"Chronos returned {e.response.status_code}",
+                details={"status_code": e.response.status_code, "model": request.model},
+            )
 
         inference_time_ms = int((time.time() - start_time) * 1000)
 
@@ -224,16 +254,16 @@ class InferenceService:
         # Import and call TimesFM service directly
         try:
             from forecast.models.timesfm20.services import model as timesfm_model_service
-            import asyncio
 
             loop = asyncio.get_event_loop()
-            results_dict = await loop.run_in_executor(
+            executor_future = loop.run_in_executor(
                 None,
                 timesfm_model_service.run_inference,
                 timesfm_request["target_inputs"],
                 timesfm_request["covariates"],
                 timesfm_request["parameters"],
             )
+            results_dict = await asyncio.wait_for(executor_future, timeout=self.timeout)
 
             inference_time_ms = int((time.time() - start_time) * 1000)
 
@@ -243,32 +273,70 @@ class InferenceService:
         except ImportError:
             logger.warning("TimesFM service not available, falling back to HTTP")
             return await self._run_timesfm_http(request, start_time)
+        except asyncio.TimeoutError:
+            raise ServiceTimeoutError(
+                message=f"TimesFM inference timed out after {self.timeout}s",
+                details={"model": request.model, "timeout": self.timeout},
+            )
 
     async def _run_timesfm_http(self, request: InferenceRequest, start_time: float) -> InferenceResponse:
         """
-        Fallback HTTP call for TimesFM when service layer not available.
+        Fallback HTTP call for TimesFM when direct Python import is unavailable.
+
+        Args:
+            request: Inference request to send.
+            start_time: Timestamp from caller for total latency tracking.
+
+        Returns:
+            InferenceResponse with forecast values from the TimesFM container.
+
+        Raises:
+            ServiceUnavailableError: If the TimesFM container is unreachable.
+            ServiceTimeoutError: If the HTTP request times out.
+            ValidationError: If the container returns a 4xx error.
+            ModelUnavailableError: If the container returns a 5xx error.
         """
         timesfm_request = inference_to_timesfm(request)
+        endpoint = f"{self.timesfm_url}/forecast/v1/timesfm20/inference"
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            headers = {
-                "Content-Type": "application/json",
-                "X-Request-ID": request.request_id,
-            }
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Request-ID": request.request_id,
+                }
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
 
-            logger.debug(f"Request ID {request.request_id} -> TimesFM HTTP")
+                logger.debug(f"Request ID {request.request_id} -> TimesFM HTTP")
 
-            # Call dedicated TimesFM container
-            endpoint = f"{self.timesfm_url}/forecast/v1/timesfm20/inference"
-            resp = await client.post(
-                endpoint,
-                json=timesfm_request,
-                headers=headers,
+                resp = await client.post(
+                    endpoint,
+                    json=timesfm_request,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                timesfm_data = resp.json()
+        except httpx.ConnectError as e:
+            raise ServiceUnavailableError(
+                message=f"TimesFM service unreachable at {endpoint}",
+                details={"endpoint": endpoint, "error": str(e)},
             )
-            resp.raise_for_status()
-            timesfm_data = resp.json()
+        except httpx.ReadTimeout as e:
+            raise ServiceTimeoutError(
+                message=f"TimesFM HTTP inference timed out after {self.timeout}s",
+                details={"endpoint": endpoint, "timeout": self.timeout},
+            )
+        except httpx.HTTPStatusError as e:
+            if 400 <= e.response.status_code < 500:
+                raise ValidationError(
+                    message=f"TimesFM rejected request: {e.response.status_code}",
+                    details={"status_code": e.response.status_code, "model": request.model},
+                )
+            raise ModelUnavailableError(
+                message=f"TimesFM returned {e.response.status_code}",
+                details={"status_code": e.response.status_code, "model": request.model},
+            )
 
         inference_time_ms = int((time.time() - start_time) * 1000)
         return timesfm_to_inference(timesfm_data, request, inference_time_ms)

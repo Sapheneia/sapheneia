@@ -27,6 +27,9 @@ from .core.security import get_api_key
 # Import custom exceptions (Phase 7: Error Handling)
 from .core.exceptions import SapheneiaException
 
+# Import shared error handlers for orchestration code running in this process
+from shared.errors import SapheneiaError as SharedSapheneiaError, register_error_handlers
+
 # Import model registry
 from .models import get_available_models, get_all_models_info
 
@@ -189,6 +192,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+# Register shared SapheneiaError handlers (for orchestration code running in this process)
+register_error_handlers(app)
 logger.info("Custom exception handlers configured")
 
 

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class CircuitState(Enum):
+    """Circuit breaker states for metrics service resilience."""
     CLOSED = "closed"      # Normal operation
     OPEN = "open"          # Failing, reject requests
     HALF_OPEN = "half_open"  # Testing recovery
@@ -34,6 +35,7 @@ class MetricsResponse:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MetricsResponse":
+        """Create MetricsResponse from compute endpoint response dict."""
         return cls(
             sharpe_ratio=data.get("sharpe_ratio", 0.0),
             max_drawdown=data.get("max_drawdown", 0.0),
@@ -43,6 +45,7 @@ class MetricsResponse:
         )
 
     def to_dict(self) -> Dict[str, float]:
+        """Serialize metrics to dict for storage or transmission."""
         return {
             "sharpe_ratio": self.sharpe_ratio,
             "max_drawdown": self.max_drawdown,

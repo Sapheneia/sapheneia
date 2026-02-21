@@ -16,6 +16,8 @@ Supported Model Families:
 
 from typing import List, Dict, Any, Tuple
 from datetime import datetime, timedelta
+
+from shared.errors import ComputationError
 from .schema import (
     InferenceRequest,
     InferenceResponse,
@@ -250,6 +252,11 @@ def chronos_to_inference(
 
     # Use median as point forecast
     forecast_values = prediction.get("median", prediction.get("mean", []))
+    if not forecast_values:
+        raise ComputationError(
+            message="Chronos response missing forecast values (no 'median' or 'mean' key)",
+            details={"model_family": "chronos", "available_keys": list(prediction.keys())},
+        )
 
     # Calculate forecast dates
     start_date, end_date = calculate_forecast_dates(
@@ -342,7 +349,23 @@ def timesfm_to_inference(
         Unified InferenceResponse
     """
     # Extract first series from batch format
-    point_forecast = timesfm_response.get("point_forecast", [[]])[0]
+    try:
+        point_forecast = timesfm_response["point_forecast"][0]
+    except KeyError:
+        raise ComputationError(
+            message="TimesFM response missing 'point_forecast' key",
+            details={"model_family": "timesfm", "available_keys": list(timesfm_response.keys())},
+        )
+    except IndexError:
+        raise ComputationError(
+            message="TimesFM 'point_forecast' is empty",
+            details={"model_family": "timesfm"},
+        )
+    if not point_forecast:
+        raise ComputationError(
+            message="TimesFM returned empty forecast values",
+            details={"model_family": "timesfm"},
+        )
 
     # Calculate forecast dates
     start_date, end_date = calculate_forecast_dates(

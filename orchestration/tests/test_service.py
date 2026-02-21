@@ -16,6 +16,12 @@ from orchestration.schema import (
     Period,
     DataSource,
 )
+from shared.errors import (
+    ModelUnavailableError,
+    ServiceUnavailableError,
+    ServiceTimeoutError,
+    ValidationError as SapheneiaValidationError,
+)
 
 
 class TestInferenceServiceInit:
@@ -207,24 +213,25 @@ class TestChronosInference:
             assert headers["Authorization"] == "Bearer test-key"
 
     @pytest.mark.asyncio
-    async def test_chronos_http_error_propagates(
+    async def test_chronos_http_error_wrapped_as_structured_error(
         self,
         service,
         sample_inference_request,
     ):
-        """HTTP errors should propagate from Chronos."""
+        """HTTP 500 errors should be wrapped as ModelUnavailableError."""
         with patch("httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_response = Mock()
+            mock_response.status_code = 500
             mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
                 "Server error",
                 request=Mock(),
-                response=Mock(status_code=500),
+                response=mock_response,
             )
             mock_instance.post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            with pytest.raises(httpx.HTTPStatusError):
+            with pytest.raises(ModelUnavailableError):
                 await service._run_chronos_inference(sample_inference_request)
 
     @pytest.mark.asyncio
@@ -527,13 +534,25 @@ class TestServiceErrorHandling:
 
         assert "Unknown model family" in str(exc_info.value)
 
+
+
+# =============================================================================
+# GAP-15 STRUCTURED ERROR TESTS
+# =============================================================================
+
+class TestChronosStructuredErrors:
+    """Tests for structured error wrapping in Chronos inference."""
+
+    @pytest.fixture
+    def service(self):
+        return InferenceService(base_url="http://test:8000")
+
     @pytest.mark.asyncio
-    async def test_connection_error_propagates(
-        self,
-        service,
-        sample_inference_request,
+    async def test_connect_error_raises_service_unavailable(
+        self, service, sample_inference_request,
     ):
-        """Connection errors should propagate."""
+        """httpx.ConnectError should become ServiceUnavailableError."""
+
         with patch("httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post = AsyncMock(
@@ -541,5 +560,136 @@ class TestServiceErrorHandling:
             )
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            with pytest.raises(httpx.ConnectError):
+            with pytest.raises(ServiceUnavailableError) as exc_info:
                 await service._run_chronos_inference(sample_inference_request)
+            assert "unreachable" in exc_info.value.message.lower()
+
+    @pytest.mark.asyncio
+    async def test_read_timeout_raises_service_timeout(
+        self, service, sample_inference_request,
+    ):
+        """httpx.ReadTimeout should become ServiceTimeoutError."""
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post = AsyncMock(
+                side_effect=httpx.ReadTimeout("timed out")
+            )
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            with pytest.raises(ServiceTimeoutError):
+                await service._run_chronos_inference(sample_inference_request)
+
+    @pytest.mark.asyncio
+    async def test_http_400_raises_validation_error(
+        self, service, sample_inference_request,
+    ):
+        """HTTPStatusError 400 should become ValidationError."""
+
+        mock_resp = Mock()
+        mock_resp.status_code = 400
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post = AsyncMock(return_value=Mock(
+                raise_for_status=Mock(side_effect=httpx.HTTPStatusError(
+                    "Bad Request", request=Mock(), response=mock_resp,
+                ))
+            ))
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            with pytest.raises(SapheneiaValidationError):
+                await service._run_chronos_inference(sample_inference_request)
+
+    @pytest.mark.asyncio
+    async def test_http_500_raises_model_unavailable(
+        self, service, sample_inference_request,
+    ):
+        """HTTPStatusError 500 should become ModelUnavailableError."""
+
+        mock_resp = Mock()
+        mock_resp.status_code = 500
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post = AsyncMock(return_value=Mock(
+                raise_for_status=Mock(side_effect=httpx.HTTPStatusError(
+                    "Server Error", request=Mock(), response=mock_resp,
+                ))
+            ))
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            with pytest.raises(ModelUnavailableError):
+                await service._run_chronos_inference(sample_inference_request)
+
+
+class TestTimesFMStructuredErrors:
+    """Tests for structured error wrapping in TimesFM inference."""
+
+    @pytest.fixture
+    def service(self):
+        return InferenceService(base_url="http://test:8000", timeout=5.0)
+
+    @pytest.mark.asyncio
+    async def test_asyncio_timeout_raises_service_timeout(
+        self, service, sample_inference_request,
+    ):
+        """asyncio.TimeoutError in executor should become ServiceTimeoutError."""
+        import asyncio
+
+        sample_inference_request.model = "google/timesfm-2.0"
+
+        with patch(
+            "orchestration.service.timesfm_to_inference"
+        ), patch(
+            "orchestration.service.inference_to_timesfm",
+            return_value={"target_inputs": [[1.0]], "covariates": None, "parameters": {}},
+        ):
+            # Mock the import to succeed but make the executor timeout
+            mock_model = Mock()
+            mock_model.run_inference = Mock(return_value={"point_forecast": [[1.0]]})
+
+            with patch.dict("sys.modules", {"forecast.models.timesfm20.services": Mock(model=mock_model)}):
+                with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
+                    with pytest.raises(ServiceTimeoutError):
+                        await service._run_timesfm_inference(sample_inference_request)
+
+    @pytest.mark.asyncio
+    async def test_timesfm_http_connect_error(
+        self, service, sample_inference_request,
+    ):
+        """TimesFM HTTP fallback ConnectError should become ServiceUnavailableError."""
+        from shared.errors import ServiceUnavailableError
+        import time
+
+        sample_inference_request.model = "google/timesfm-2.0"
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post = AsyncMock(
+                side_effect=httpx.ConnectError("refused")
+            )
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            with pytest.raises(ServiceUnavailableError):
+                await service._run_timesfm_http(sample_inference_request, time.time())
+
+    @pytest.mark.asyncio
+    async def test_timesfm_http_timeout_error(
+        self, service, sample_inference_request,
+    ):
+        """TimesFM HTTP fallback ReadTimeout should become ServiceTimeoutError."""
+        from shared.errors import ServiceTimeoutError
+        import time
+
+        sample_inference_request.model = "google/timesfm-2.0"
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.post = AsyncMock(
+                side_effect=httpx.ReadTimeout("timed out")
+            )
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            with pytest.raises(ServiceTimeoutError):
+                await service._run_timesfm_http(sample_inference_request, time.time())

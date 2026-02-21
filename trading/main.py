@@ -23,6 +23,9 @@ from .core.rate_limit import limiter, rate_limit_exceeded_handler, get_rate_limi
 # Import custom exceptions
 from .core.exceptions import TradingException
 
+# Import shared error handlers
+from shared.errors import register_error_handlers
+
 # Import routers
 from .routes import endpoints
 
@@ -180,6 +183,13 @@ async def request_size_limit_middleware(request: Request, call_next):
                 logger.warning(
                     f"[{request_id}] Invalid content-length header: {request.headers.get('content-length')}"
                 )
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "INVALID_REQUEST",
+                        "message": "Invalid Content-Length header",
+                    },
+                )
 
     response = await call_next(request)
     return response
@@ -249,6 +259,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
     return response
 
 
+# Register shared SapheneiaError handlers (alongside existing TradingException handler)
+register_error_handlers(app)
 logger.info("Custom exception handlers configured")
 
 

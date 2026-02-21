@@ -37,22 +37,25 @@ type Server struct {
 	HTTPClient HTTPClient
 }
 
-// --- Yahoo Finance Structs (Unchanged) ---
+// YahooChartResponse is the top-level response from the Yahoo Finance v8 chart API.
 type YahooChartResponse struct {
 	Chart struct {
 		Result []YahooResult `json:"result"`
 		Error  interface{}   `json:"error"`
 	} `json:"chart"`
 }
+// YahooResult holds one chart result with metadata, timestamps, and OHLCV indicators.
 type YahooResult struct {
 	Meta       YahooMeta       `json:"meta"`
 	Timestamp  []int64         `json:"timestamp"`
 	Indicators YahooIndicators `json:"indicators"`
 }
+// YahooMeta contains ticker metadata (currency, symbol) from the Yahoo response.
 type YahooMeta struct {
 	Currency string `json:"currency"`
 	Symbol   string `json:"symbol"`
 }
+// YahooIndicators contains OHLCV quote data and adjusted close prices.
 type YahooIndicators struct {
 	Quote []struct {
 		Open   []float64 `json:"open"`
@@ -66,13 +69,14 @@ type YahooIndicators struct {
 	} `json:"adjclose"`
 }
 
-// --- API Request/Response Structs ---
+// DataFetchRequest is the request body for POST /v1/data/fetch.
 type DataFetchRequest struct {
 	Tickers   []string `json:"names"`
 	StartDate string   `json:"start_date"` // e.g., "2020-01-01"
 	Interval  string   `json:"interval"`   // e.g., "1d", "1h", "1m"
 }
 
+// DataFetchResponse is the response body for POST /v1/data/fetch.
 type DataFetchResponse struct {
 	Status  string            `json:"status"`
 	Message string            `json:"message"`
@@ -381,14 +385,14 @@ func (s *Server) fetchYahooData(ticker string, startTime time.Time, interval str
 
 // --- Query Data Handler ---
 
+// DataQueryRequest is the request body for POST /v1/data/query.
 type DataQueryRequest struct {
 	Ticker string `json:"ticker"`
 	Days   int    `json:"days"`   // Number of days to query
 	EndDate string `json:"end_date"` // Optional: end date (defaults to now)
 }
 
-// --- Simulation Result Structs (GAP-04) ---
-
+// SimulationResultPoint represents a single daily result from a backtest run.
 type SimulationResultPoint struct {
 	Date           string  `json:"date"`
 	Forecast       float64 `json:"forecast"`
@@ -399,6 +403,7 @@ type SimulationResultPoint struct {
 	PortfolioValue float64 `json:"portfolio_value"`
 }
 
+// SimulationMetrics holds aggregate performance metrics for a backtest run.
 type SimulationMetrics struct {
 	SharpeRatio  float64 `json:"sharpe_ratio"`
 	MaxDrawdown  float64 `json:"max_drawdown"`
@@ -407,6 +412,7 @@ type SimulationMetrics struct {
 	WinRate      float64 `json:"win_rate"`
 }
 
+// WriteResultsRequest is the request body for POST /v1/data/write_results.
 type WriteResultsRequest struct {
 	RunID    string                  `json:"run_id"`
 	Ticker   string                  `json:"ticker"`
@@ -416,12 +422,14 @@ type WriteResultsRequest struct {
 	Metrics  SimulationMetrics       `json:"metrics"`
 }
 
+// WriteResultsResponse is the response body for POST /v1/data/write_results.
 type WriteResultsResponse struct {
 	Status        string `json:"status"`
 	PointsWritten int    `json:"points_written"`
 	RunID         string `json:"run_id"`
 }
 
+// DataPoint represents a single OHLCV data point returned by the query endpoint.
 type DataPoint struct {
 	Time     string  `json:"time"`
 	Open     float64 `json:"open"`
@@ -432,12 +440,14 @@ type DataPoint struct {
 	AdjClose float64 `json:"adj_close"`
 }
 
+// DataQueryResponse is the response body for POST /v1/data/query.
 type DataQueryResponse struct {
 	Ticker string      `json:"ticker"`
 	Data   []DataPoint `json:"data"`
 	Count  int         `json:"count"`
 }
 
+// handleQueryData queries historical OHLCV data from InfluxDB with optional end_date for backtest mode.
 func (s *Server) handleQueryData(c *gin.Context) {
 	var req DataQueryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

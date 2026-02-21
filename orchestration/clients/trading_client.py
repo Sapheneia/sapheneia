@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class TradeAction(str, Enum):
+    """Trade action decision from the trading service."""
     BUY = "buy"
     SELL = "sell"
     HOLD = "hold"
 
 
 class StrategyType(str, Enum):
+    """Available trading strategy types for signal generation."""
     THRESHOLD = "threshold"
     RETURN = "return"
     QUANTILE = "quantile"
@@ -44,6 +46,7 @@ class TradeResult:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> "TradeResult":
+        """Create TradeResult from trading service response dict and optional metadata."""
         metadata = metadata or {}
         return cls(
             action=TradeAction(data.get("action", "hold")),
@@ -72,6 +75,7 @@ class TradeResult:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize trade result to dict for storage or transmission."""
         return {
             "action": self.action.value,
             "size": self.size,
@@ -98,6 +102,7 @@ class PortfolioState:
         return self.cash + (self.position * current_price)
 
     def to_dict(self) -> Dict[str, float]:
+        """Serialize portfolio state to dict for checkpointing."""
         return {
             "position": self.position,
             "cash": self.cash,
@@ -106,6 +111,7 @@ class PortfolioState:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PortfolioState":
+        """Restore portfolio state from checkpoint dict."""
         return cls(
             position=data.get("position", 0.0),
             cash=data.get("cash", 0.0),
@@ -237,6 +243,7 @@ class PortfolioManager:
     """
 
     def __init__(self, initial_capital: float, checkpoint_interval: int = 10):
+        """Initialize portfolio manager with starting capital and checkpoint frequency."""
         self.portfolio = PortfolioState(
             position=0.0,
             cash=initial_capital,

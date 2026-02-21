@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 from metrics.core import metrics
+from shared.errors import ValidationError, ComputationError
 
 router = APIRouter(prefix="/compute", tags=["Metrics Computation"])
 
@@ -185,6 +186,12 @@ async def compute_metrics(request: ComputeRequest) -> Dict[str, Any]:
             )
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(
+            message=str(e),
+            details={"metric": request.metric},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Calculation error: {str(e)}")
+        raise ComputationError(
+            message=f"Calculation error: {str(e)}",
+            details={"metric": request.metric},
+        )
