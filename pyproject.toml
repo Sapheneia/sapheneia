@@ -11,6 +11,9 @@ dependencies = [
     "python-dateutil>=2.8.0",
 ]
 
+[project.scripts]
+sapheneia = "sapheneia.cli:main"
+
 [project.optional-dependencies]
 # Forecasting API dependencies
 forecasting = [
@@ -67,6 +70,13 @@ ui = [
     "werkzeug>=3.0.0",
     "python-magic>=0.4.27",
 ]
+
+# CLI dependencies
+cli = [
+    "click>=8.1.0",
+    "pyyaml>=6.0.0",
+    "httpx>=0.25.0",
+]
 # MLOps dependencies (for Aleutian Local integration)
 mlops = [
     "mlflow>=2.10.0",
@@ -87,19 +97,19 @@ dev = [
 # Note: Use --all-extras flag with uv sync instead, or install specific extras
 # This is kept for compatibility with pip install -e ".[all]"
 all = [
-    "sapheneia[forecasting,metrics,ui,mlops,dev]",
+    "sapheneia[forecasting,metrics,ui,mlops,cli,dev]",
 ]
 
 [tool.setuptools]
-# Use find to discover all packages under forecast and ui
+# Use find to discover all packages under forecast, ui, sapheneia, and orchestration
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["forecast*", "ui*"]
+include = ["forecast*", "ui*", "sapheneia*", "orchestration*"]
 exclude = ["*.tests", "*.tests.*", "tests.*", "tests"]
 
 # Pytest configuration (Phase 6: Testing Infrastructure)
 [tool.pytest.ini_options]
-testpaths = ["tests", "forecast/models", "trading/tests"]
+testpaths = ["tests", "forecast/models", "trading/tests", "orchestration/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -109,6 +119,7 @@ addopts = [
     "--tb=short",
     "--cov=forecast",
     "--cov=trading",
+    "--cov=orchestration",
     "--cov-report=html",
     "--cov-report=term",
     "--cov-report=xml",
@@ -126,7 +137,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["forecast", "trading", "metrics"]
+source = ["forecast", "trading", "metrics", "orchestration", "sapheneia"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

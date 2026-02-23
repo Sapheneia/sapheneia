@@ -61,9 +61,9 @@ declare -a MODELS=(
     "chronos-t5-large|amazon/chronos-t5-large|12714|chronos|working|Verified working"
 
     # === AMAZON CHRONOS BOLT ===
-    "chronos-bolt-mini|amazon/chronos-bolt-mini|12715|chronos|untested|May have ChronosPipeline compatibility issues"
-    "chronos-bolt-small|amazon/chronos-bolt-small|12716|chronos|untested|May have ChronosPipeline compatibility issues"
-    "chronos-bolt-base|amazon/chronos-bolt-base|12717|chronos|untested|May have ChronosPipeline compatibility issues"
+    "chronos-bolt-mini|amazon/chronos-bolt-mini|12715|chronos-bolt|broken|Incompatible model signature - Bolt uses different params than T5"
+    "chronos-bolt-small|amazon/chronos-bolt-small|12716|chronos-bolt|broken|Incompatible model signature - Bolt uses different params than T5"
+    "chronos-bolt-base|amazon/chronos-bolt-base|12717|chronos-bolt|broken|Incompatible model signature - Bolt uses different params than T5"
 
     # === GOOGLE TIMESFM ===
     "timesfm-1-0|google/timesfm-1.0-200m|12720|timesfm|not_implemented|No Sapheneia container"

@@ -7,6 +7,7 @@ Tests the metrics_api/core/metrics.py module functions and calculations.
 import pytest
 import pandas as pd
 import numpy as np
+from unittest.mock import patch
 from metrics.core.metrics import (
     calculate_sharpe_ratio,
     calculate_max_drawdown,
@@ -203,8 +204,6 @@ def test_calmar_ratio_positive_returns():
     # Include at least one negative return to create drawdown
     returns = pd.Series([0.01, -0.005, 0.02, 0.015, 0.01])
     calmar = calculate_calmar_ratio(returns)
-    print(f"Returns: {returns.tolist()}")
-    print(f"Calmar ratio: {calmar}")
 
     assert calmar > 0  # Should be positive with net positive returns
 
@@ -496,13 +495,53 @@ def test_metrics_invalid_input_type():
 
 
 def test_metrics_with_inf_values():
-    """Test handling of infinite values."""
+    """Test that Inf values are removed and metrics still compute."""
     returns = pd.Series([0.01, np.inf, 0.02, 0.03])
-    # quantstats should handle this gracefully or we catch it
-    try:
-        metrics = calculate_performance_metrics(returns)
-        # If it succeeds, inf should be handled
-        assert isinstance(metrics, dict)
-    except (ValueError, Exception):
-        # If it raises an error, that's also acceptable
-        pass
+    metrics = calculate_performance_metrics(returns)
+    assert isinstance(metrics, dict)
+    assert "sharpe_ratio" in metrics
+    assert not np.isinf(metrics["sharpe_ratio"])
+
+
+# --- GAP-15 Edge Case Tests ---
+
+def test_validate_returns_with_inf_removed():
+    """_validate_returns should remove Inf values and continue."""
+    returns = pd.Series([0.01, np.inf, 0.02, -np.inf, 0.03])
+    validated = _validate_returns(returns)
+    assert not np.isinf(validated).any()
+    assert len(validated) == 3
+
+
+def test_sharpe_ratio_exception_returns_zero():
+    """calculate_sharpe_ratio should return 0.0 on internal exception, not crash."""
+    # This tests the try/except in calculate_sharpe_ratio
+    with patch("metrics.core.metrics.qs.stats.sharpe", side_effect=Exception("qs error")):
+        result = calculate_sharpe_ratio([0.01, 0.02, 0.03])
+        assert result == 0.0
+
+
+def test_cagr_exception_returns_zero():
+    """calculate_cagr should return 0.0 on internal exception."""
+    with patch("metrics.core.metrics.qs.stats.cagr", side_effect=Exception("qs error")):
+        result = calculate_cagr([0.01, 0.02, 0.03])
+        assert result == 0.0
+
+
+def test_calmar_exception_returns_zero():
+    """calculate_calmar_ratio should return 0.0 on internal exception."""
+    with patch("metrics.core.metrics.qs.stats.calmar", side_effect=Exception("qs error")):
+        result = calculate_calmar_ratio([0.01, 0.02, 0.03])
+        assert result == 0.0
+
+
+def test_performance_metrics_partial_failure():
+    """If one metric fails, others should still compute."""
+    returns = [0.01, -0.02, 0.03, 0.02, -0.01]
+    with patch("metrics.core.metrics.qs.stats.sharpe", side_effect=Exception("sharpe broke")):
+        result = calculate_performance_metrics(returns)
+        # Sharpe should be 0.0 (fallback), others should be computed
+        assert result["sharpe_ratio"] == 0.0
+        assert "max_drawdown" in result
+        assert "win_rate" in result
+        assert result["win_rate"] > 0  # Should still work

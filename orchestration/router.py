@@ -16,11 +16,14 @@ The legacy /v1/timeseries/forecast is maintained for backwards compatibility.
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from fastapi.responses import JSONResponse
 import yaml
+
+from shared.errors import SapheneiaError, ValidationError, ComputationError
 
 from .schema import (
     InferenceRequest,
@@ -139,12 +142,20 @@ async def predict(
     """
     try:
         return await service.predict(request)
+    except SapheneiaError:
+        raise  # Already structured, let handler deal with it
     except ValueError as e:
         logger.error(f"Inference error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(
+            message=str(e),
+            details={"model": request.model, "ticker": request.ticker},
+        )
     except Exception as e:
         logger.exception(f"Inference failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
+        raise ComputationError(
+            message=f"Inference failed: {str(e)}",
+            details={"model": request.model, "ticker": request.ticker},
+        )
 
 
 @router.get(
@@ -265,6 +276,13 @@ async def get_strategy(name: str) -> Dict[str, Any]:
     Raises:
         HTTPException 404: If strategy not found.
     """
+    # Validate strategy name to prevent path traversal
+    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+        raise ValidationError(
+            message=f"Invalid strategy name: '{name}'. Must contain only alphanumeric characters, hyphens, and underscores.",
+            details={"name": name},
+        )
+
     strategy_path = STRATEGIES_DIR / f"{name}.yaml"
 
     if not strategy_path.exists():
@@ -337,9 +355,11 @@ async def legacy_forecast(
 
         return await service.forecast(legacy_request, source=source)
 
+    except SapheneiaError:
+        raise
     except ValueError as e:
         logger.error(f"Legacy forecast error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise ValidationError(message=str(e))
     except Exception as e:
         logger.exception(f"Legacy forecast failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Forecast failed: {str(e)}")
+        raise ComputationError(message=f"Forecast failed: {str(e)}")

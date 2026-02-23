@@ -19,6 +19,7 @@ Usage:
 """
 
 import logging
+import math
 from typing import Dict, Any, Optional, Union, List
 import pandas as pd
 import numpy as np
@@ -95,7 +96,7 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
         returns: Return values (can be Series, array, or list)
 
     Returns:
-        Validated pandas Series
+        Validated pandas Series with DatetimeIndex (required by quantstats)
 
     Raises:
         ValueError: If returns are invalid
@@ -114,11 +115,28 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
     if returns.isna().all():
         raise ValueError("Returns series contains only NaN values")
 
-    # Remove NaN values
+    # Check for Inf values
+    if np.isinf(returns).any():
+        inf_count = int(np.isinf(returns).sum())
+        logger.warning(f"Returns contain {inf_count} Inf values, removing them")
+        returns = returns.replace([np.inf, -np.inf], np.nan)
+
+    # Remove NaN values (including former Inf)
     returns_clean = returns.dropna()
 
     if len(returns_clean) < 2:
         raise ValueError(f"Need at least 2 valid returns, got {len(returns_clean)}")
+
+    # Ensure DatetimeIndex - quantstats requires this for some calculations
+    # If no datetime index, create a synthetic one starting from a base date
+    if not isinstance(returns_clean.index, pd.DatetimeIndex):
+        # Create synthetic daily dates starting from 2020-01-01
+        synthetic_dates = pd.date_range(
+            start='2020-01-01',
+            periods=len(returns_clean),
+            freq='D'
+        )
+        returns_clean = pd.Series(returns_clean.values, index=synthetic_dates)
 
     return returns_clean
 
@@ -153,8 +171,12 @@ def calculate_sharpe_ratio(
 
     returns = _validate_returns(returns)
 
-    sharpe = qs.stats.sharpe(returns, rf=risk_free_rate, periods=periods_per_year)
-    return float(sharpe) if not np.isnan(sharpe) else 0.0
+    try:
+        sharpe = qs.stats.sharpe(returns, rf=risk_free_rate, periods=periods_per_year)
+        return float(sharpe) if not np.isnan(sharpe) else 0.0
+    except Exception as e:
+        logger.warning(f"Error calculating sharpe ratio: {e}")
+        return 0.0
 
 
 def calculate_max_drawdown(returns: Union[pd.Series, np.ndarray, List]) -> float:
@@ -209,8 +231,12 @@ def calculate_cagr(
     """
     returns = _validate_returns(returns)
 
-    cagr = qs.stats.cagr(returns, periods=periods_per_year)
-    return float(cagr) if not np.isnan(cagr) else 0.0
+    try:
+        cagr = qs.stats.cagr(returns, periods=periods_per_year)
+        return float(cagr) if not np.isnan(cagr) else 0.0
+    except Exception as e:
+        logger.warning(f"Error calculating CAGR: {e}")
+        return 0.0
 
 
 def calculate_calmar_ratio(
@@ -238,8 +264,12 @@ def calculate_calmar_ratio(
     """
     returns = _validate_returns(returns)
 
-    calmar = qs.stats.calmar(returns, periods=periods_per_year)
-    return float(calmar) if not np.isnan(calmar) else 0.0
+    try:
+        calmar = qs.stats.calmar(returns, periods=periods_per_year)
+        return float(calmar) if not np.isnan(calmar) else 0.0
+    except Exception as e:
+        logger.warning(f"Error calculating calmar ratio: {e}")
+        return 0.0
 
 
 def calculate_win_rate(returns: Union[pd.Series, np.ndarray, List]) -> float:

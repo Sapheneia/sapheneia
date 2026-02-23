@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from metrics.core.config import settings
 from metrics.routes import endpoints
+from shared.errors import register_error_handlers
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +38,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register shared error handlers
+register_error_handlers(app)
 
 # Include routers
 app.include_router(endpoints.router, prefix="/metrics/v1")

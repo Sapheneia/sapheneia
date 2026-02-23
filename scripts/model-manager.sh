@@ -249,7 +249,9 @@ EOF
     log "${CYAN}To use a model:${NC}"
     log "  1. ${BOLD}./model-manager.sh start chronos-t5-tiny${NC}  # Start container"
     log "  2. ${BOLD}./model-manager.sh init chronos-t5-tiny${NC}   # Initialize model"
-    log "  3. ${BOLD}aleutian evaluate run --config ...${NC}         # Run backtest"
+    log "  3. Run backtest using either CLI:"
+    log "     ${BOLD}aleutian evaluate run --config ...${NC}         # Go CLI"
+    log "     ${BOLD}sapheneia evaluate --config ...${NC}            # Python CLI"
     log ""
 }
 
@@ -546,7 +548,8 @@ cmd_init() {
         log "${GREEN}✓ Model initialized and ready!${NC}"
         log ""
         log "${CYAN}You can now run backtests:${NC}"
-        log "  aleutian evaluate run --config simulations/strategies/SPY/spy_${slug//-/_}.yaml --api-version unified"
+        log "  ${BOLD}Go CLI:${NC}     aleutian evaluate run --config simulations/strategies/SPY/spy_${slug//-/_}.yaml"
+        log "  ${BOLD}Python CLI:${NC} sapheneia evaluate --config simulations/strategies/SPY/spy_${slug//-/_}.yaml"
     elif echo "$status_response" | grep -q '"status":"initializing"'; then
         log "${YELLOW}Model is still initializing (downloading weights)...${NC}"
         log "This may take a few minutes for larger models"
