@@ -43,6 +43,7 @@ RUN which uv && uv --version
 COPY pyproject.toml ./
 COPY forecast/ ./forecast/
 COPY orchestration/ ./orchestration/
+COPY shared/ ./shared/
 COPY .env .env
 
 # Install base dependencies with forecasting extras (includes uvicorn, fastapi, etc.)
