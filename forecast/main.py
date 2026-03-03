@@ -34,8 +34,23 @@ from shared.errors import SapheneiaError as SharedSapheneiaError, register_error
 from .models import get_available_models, get_all_models_info
 
 # Import routers from model modules
-from .models.timesfm20.routes import endpoints as timesfm20_endpoints
-from .models.chronos.routes import endpoints as chronos_endpoints
+try:
+    from .models.chronos.routes import endpoints as chronos_endpoints
+    CHRONOS_AVAILABLE = True
+except ImportError:
+    CHRONOS_AVAILABLE = False
+
+try:
+    from .models.timesfm20.routes import endpoints as timesfm20_endpoints
+    TIMESFM_AVAILABLE = True
+except ImportError:
+    TIMESFM_AVAILABLE = False
+
+try:
+    from .models.tirex.routes import endpoints as tirex_endpoints
+    TIREX_AVAILABLE = True
+except ImportError:
+    TIREX_AVAILABLE = False
 
 # Import new unified orchestration router (optional - may not be implemented yet)
 try:
@@ -280,42 +295,62 @@ app.include_router(
 )
 logger.info(f"✅ Included TimesFM-2.0 router at: /forecast/v1{timesfm20_endpoints.router.prefix}")
 
-# Chronos routes under /forecast/v1/chronos
-app.include_router(
-    chronos_endpoints.router,
-    prefix="/forecast/v1"
-)
-logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+if CHRONOS_AVAILABLE:
+    # Chronos routes under /forecast/v1/chronos
+    app.include_router(
+        chronos_endpoints.router,
+        prefix="/forecast/v1"
+    )
+    logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+
+if TIREX_AVAILABLE:
+    # TiRex routes under /forecast/v1/tirex
+    app.include_router(
+        tirex_endpoints.router,
+        prefix="/forecast/v1"
+    )
+    logger.info(f"✅ Included TiRex router at: /forecast/v1{tirex_endpoints.router.prefix}")
 
 # Generic inference endpoint at /forecast/v1/inference for dedicated model containers.
 # When a container runs a single model (e.g., chronos-t5-tiny), it exposes inference
 # at the generic path without the model name prefix. This allows the orchestration
 # service to call a consistent endpoint regardless of which model container is targeted.
-from fastapi import APIRouter, Body
-from .models.chronos.schemas.schema import InferenceInput, InferenceOutput
-from .models.chronos.routes.endpoints import inference_endpoint as chronos_inference_endpoint
+from fastapi import APIRouter, Body, Request, Response
 
 generic_inference_router = APIRouter(
     tags=["Generic Inference"],
     dependencies=[Depends(get_api_key)]
 )
 
-@generic_inference_router.post("/inference", response_model=InferenceOutput)
+@generic_inference_router.post("/inference")
 @limiter.limit(get_rate_limit("inference"))
 async def generic_inference_endpoint(
     request: Request,
     response: Response,
-    input_data: InferenceInput = Body()
+    input_data=Body(...)
 ):
     """
     Generic inference endpoint for dedicated model containers.
-
-    This endpoint provides a model-agnostic path for inference requests.
-    It delegates to the active model's inference implementation (currently Chronos).
-
-    Use this endpoint when calling dedicated model containers that run a single model.
+    This endpoint delegates to whichever model is available in the container.
     """
-    return await chronos_inference_endpoint(request, response, input_data)
+    if CHRONOS_AVAILABLE:
+        from .models.chronos.routes.endpoints import inference_endpoint as chronos_inference_endpoint
+        return await chronos_inference_endpoint(request, response, input_data)
+        
+    if TIMESFM_AVAILABLE:
+        from .models.timesfm20.routes.endpoints import inference_endpoint as timesfm20_inference_endpoint
+        return await timesfm20_inference_endpoint(request, response, input_data)
+        
+    if TIREX_AVAILABLE:
+        from .models.tirex.routes.endpoints import inference_endpoint as tirex_inference_endpoint
+        return await tirex_inference_endpoint(request, response, input_data)
+        
+    raise SapheneiaException(
+        error_code="NO_MODEL_AVAILABLE",
+        message="No model is available for inference on this container.",
+        suggested_status_code=500
+    )
+
 
 app.include_router(generic_inference_router, prefix="/forecast/v1")
 logger.info("✅ Included generic inference router at: /forecast/v1/inference")

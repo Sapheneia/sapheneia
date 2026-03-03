@@ -75,6 +75,8 @@ def determine_model_family(model_name: str) -> str:
         return "lagllama"
     if "yinglong" in lower_name:
         return "yinglong"
+    if "tirex" in lower_name:
+        return "tirex"
 
     raise ValueError(f"Unknown model family: {model_name}")
 
@@ -95,6 +97,7 @@ def get_model_endpoint(model_family: str) -> str:
         "moirai": "/forecast/v1/moirai/inference",
         "granite": "/forecast/v1/granite/inference",
         "moment": "/forecast/v1/moment/inference",
+        "tirex": "/forecast/v1/tirex/inference",
     }
 
     if model_family not in endpoints:
@@ -397,6 +400,90 @@ def timesfm_to_inference(
             model_version="2.0",
             device=timesfm_response.get("metadata", {}).get("device", "unknown"),
             model_family="timesfm",
+        ),
+    )
+
+
+# =============================================================================
+# TIREX ADAPTERS
+# =============================================================================
+
+def inference_to_tirex(request: InferenceRequest) -> Dict[str, Any]:
+    """
+    Transform unified InferenceRequest to TiRex inference format.
+
+    Args:
+        request: Unified inference request
+
+    Returns:
+        TiRex-compatible request dict
+    """
+    return {
+        "context": request.context.values,
+        "prediction_length": request.horizon.length
+    }
+
+
+def tirex_to_inference(
+    tirex_response: Dict[str, Any],
+    request: InferenceRequest,
+    inference_time_ms: int
+) -> InferenceResponse:
+    """
+    Transform TiRex inference response to unified InferenceResponse.
+
+    Args:
+        tirex_response: Raw response from TiRex service
+        request: Original inference request
+        inference_time_ms: Time taken for inference
+
+    Returns:
+        Unified InferenceResponse
+    """
+    prediction = tirex_response.get("prediction", tirex_response)
+    try:
+        point_forecast = prediction["point_forecast"]
+    except KeyError:
+        raise ComputationError(
+            message="TiRex response missing 'point_forecast' key",
+            details={"model_family": "tirex", "available_keys": list(prediction.keys())},
+        )
+    if not point_forecast:
+        raise ComputationError(
+            message="TiRex returned empty forecast values",
+            details={"model_family": "tirex"},
+        )
+
+    # Calculate forecast dates
+    start_date, end_date = calculate_forecast_dates(
+        request.context.end_date,
+        request.horizon.length,
+        request.horizon.period
+    )
+
+    return InferenceResponse(
+        request_id=request.request_id,
+        ticker=request.ticker,
+        model=request.model,
+        forecast=ForecastData(
+            values=point_forecast,
+            period=request.horizon.period,
+            start_date=start_date,
+            end_date=end_date,
+        ),
+        context_summary=ContextSummary(
+            length=len(request.context.values),
+            period=request.context.period,
+            source=request.context.source,
+            start_date=request.context.start_date,
+            end_date=request.context.end_date,
+            field=request.context.field,
+        ),
+        metadata=InferenceMetadata(
+            inference_time_ms=inference_time_ms,
+            model_version=prediction.get("metadata", {}).get("model_variant", "NX-AI/TiRex"),
+            device="unknown",
+            model_family="tirex",
         ),
     )
 

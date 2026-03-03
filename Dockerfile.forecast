@@ -51,14 +51,20 @@ RUN uv pip install --system --no-cache -e ".[forecasting]"
 
 # Install model-specific dependencies based on MODEL_NAME
 RUN if [ "$MODEL_NAME" = "timesfm20" ] || [ "$MODEL_NAME" = "all" ]; then \
-        echo "Installing TimesFM dependencies..." && \
-        uv pip install --system --no-cache torch; \
+    echo "Installing TimesFM dependencies..." && \
+    uv pip install --system --no-cache torch; \
     fi
 
 # Install Chronos dependencies
 RUN if [ "$MODEL_NAME" = "chronos" ] || [ "$MODEL_NAME" = "all" ]; then \
-        echo "Installing Chronos dependencies..." && \
-        uv pip install --system --no-cache torch git+https://github.com/amazon-science/chronos-forecasting.git; \
+    echo "Installing Chronos dependencies..." && \
+    uv pip install --system --no-cache torch git+https://github.com/amazon-science/chronos-forecasting.git; \
+    fi
+
+# Install TiRex dependencies
+RUN if [ "$MODEL_NAME" = "tirex" ] || [ "$MODEL_NAME" = "all" ]; then \
+    echo "Installing TiRex dependencies..." && \
+    uv pip install --system --no-cache "tirex-ts[hfdataset]"; \
     fi
 
 # Create necessary directories for all models

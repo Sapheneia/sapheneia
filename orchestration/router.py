@@ -208,6 +208,13 @@ async def list_models():
                 ],
                 "status": "available",
             },
+            {
+                "family": "tirex",
+                "variants": [
+                    "NX-AI/TiRex",
+                ],
+                "status": "available",
+            },
         ]
     }
 

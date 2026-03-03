@@ -43,6 +43,8 @@ from .adapters import (
     chronos_to_inference,
     inference_to_timesfm,
     timesfm_to_inference,
+    inference_to_tirex,
+    tirex_to_inference,
     legacy_to_inference,
     inference_to_legacy,
 )
@@ -91,6 +93,7 @@ class InferenceService:
         self.base_url = base_url
         self.chronos_url = os.getenv("CHRONOS_SERVICE_URL", base_url)
         self.timesfm_url = os.getenv("TIMESFM_SERVICE_URL", base_url)
+        self.tirex_url = os.getenv("TIREX_SERVICE_URL", base_url)
         self.api_key = api_key
 
         # Timeout priority: explicit param > env var > default
@@ -150,6 +153,8 @@ class InferenceService:
             response = await self._run_chronos_inference(request)
         elif model_family == "timesfm":
             response = await self._run_timesfm_inference(request)
+        elif model_family == "tirex":
+            response = await self._run_tirex_inference(request)
         else:
             # For other models, attempt generic chronos-style inference
             logger.warning(f"Model family {model_family} using generic handler")
@@ -340,6 +345,69 @@ class InferenceService:
 
         inference_time_ms = int((time.time() - start_time) * 1000)
         return timesfm_to_inference(timesfm_data, request, inference_time_ms)
+
+
+    async def _run_tirex_inference(self, request: InferenceRequest) -> InferenceResponse:
+        """
+        Execute TiRex model inference via HTTP.
+
+        Args:
+            request: Unified inference request
+
+        Returns:
+            Unified inference response
+        """
+        start_time = time.time()
+
+        # Transform to TiRex format
+        tirex_request = inference_to_tirex(request)
+
+        endpoint = f"{self.tirex_url}/forecast/v1/tirex/inference"
+        logger.info(f"Calling TiRex endpoint: {endpoint}")
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Request-ID": request.request_id,
+                }
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
+
+                logger.debug(f"Request ID {request.request_id} -> TiRex")
+
+                resp = await client.post(
+                    endpoint,
+                    json=tirex_request,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                tirex_data = resp.json()
+        except httpx.ConnectError as e:
+            raise ServiceUnavailableError(
+                message=f"TiRex service unreachable at {endpoint}",
+                details={"endpoint": endpoint, "error": str(e)},
+            )
+        except httpx.ReadTimeout as e:
+            raise ServiceTimeoutError(
+                message=f"TiRex inference timed out after {self.timeout}s",
+                details={"endpoint": endpoint, "timeout": self.timeout},
+            )
+        except httpx.HTTPStatusError as e:
+            if 400 <= e.response.status_code < 500:
+                raise ValidationError(
+                    message=f"TiRex rejected request: {e.response.status_code}",
+                    details={"status_code": e.response.status_code, "model": request.model},
+                )
+            raise ModelUnavailableError(
+                message=f"TiRex returned {e.response.status_code}",
+                details={"status_code": e.response.status_code, "model": request.model},
+            )
+
+        inference_time_ms = int((time.time() - start_time) * 1000)
+
+        # Transform to unified response
+        return tirex_to_inference(tirex_data, request, inference_time_ms)
 
 
 class LegacyCompatService:
