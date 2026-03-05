@@ -316,6 +316,27 @@ if TIREX_AVAILABLE:
 # at the generic path without the model name prefix. This allows the orchestration
 # service to call a consistent endpoint regardless of which model container is targeted.
 from fastapi import APIRouter, Body, Request, Response
+from typing import Union, Any
+
+inference_input_models = []
+if CHRONOS_AVAILABLE:
+    from .models.chronos.schemas.schema import InferenceInput as ChronosInput
+    inference_input_models.append(ChronosInput)
+if TIMESFM_AVAILABLE:
+    from .models.timesfm20.schemas.schema import InferenceInput as TimesfmInput
+    inference_input_models.append(TimesfmInput)
+if TIREX_AVAILABLE:
+    from .models.tirex.schemas.schema import InferenceInput as TirexInput
+    inference_input_models.append(TirexInput)
+
+if len(inference_input_models) == 3:
+    GenericInferenceInput = Union[inference_input_models[0], inference_input_models[1], inference_input_models[2]]
+elif len(inference_input_models) == 2:
+    GenericInferenceInput = Union[inference_input_models[0], inference_input_models[1]]
+elif len(inference_input_models) == 1:
+    GenericInferenceInput = inference_input_models[0]
+else:
+    GenericInferenceInput = Any
 
 generic_inference_router = APIRouter(
     tags=["Generic Inference"],
@@ -327,7 +348,7 @@ generic_inference_router = APIRouter(
 async def generic_inference_endpoint(
     request: Request,
     response: Response,
-    input_data=Body(...)
+    input_data: GenericInferenceInput = Body(...)
 ):
     """
     Generic inference endpoint for dedicated model containers.
