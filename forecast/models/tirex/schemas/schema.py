@@ -4,7 +4,7 @@ TiRex API Schemas
 Pydantic models for request/response validation.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List
 
 
@@ -18,6 +18,13 @@ class ModelInitInput(BaseModel):
         default="cpu",
         description="Device to load model on ('cpu', 'cuda', 'mps')"
     )
+
+    @field_validator("device")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        if v not in ["cpu", "cuda", "mps"]:
+            raise ValueError(f"Device '{v}' is not supported. Must be 'cpu', 'cuda', or 'mps'")
+        return v
 
     class Config:
         json_schema_extra = {
