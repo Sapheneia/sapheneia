@@ -17,6 +17,7 @@ services:
   # FastAPI Backend - Forecast API Gateway (routes to all models)
   # NOTE: Uses module-level state - MUST run with single worker (UVICORN_WORKERS=1)
   forecast:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -59,6 +60,7 @@ services:
   # ===========================================================================
 
   forecast-chronos-t5-tiny:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -92,6 +94,7 @@ services:
       start_period: 60s
 
   forecast-chronos-t5-mini:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -125,6 +128,7 @@ services:
       start_period: 60s
 
   forecast-chronos-t5-small:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -158,6 +162,7 @@ services:
       start_period: 60s
 
   forecast-chronos-t5-base:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -191,6 +196,7 @@ services:
       start_period: 60s
 
   forecast-chronos-t5-large:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -228,6 +234,7 @@ services:
   # ===========================================================================
 
   forecast-chronos-bolt-mini:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -261,6 +268,7 @@ services:
       start_period: 60s
 
   forecast-chronos-bolt-small:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -294,6 +302,7 @@ services:
       start_period: 60s
 
   forecast-chronos-bolt-base:
+    profiles: ["cpu"]
     build:
       context: .
       dockerfile: Dockerfile.forecast
@@ -366,6 +375,380 @@ services:
   # UI Service
   # ===========================================================================
 
+  forecast-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: all
+        MODEL_PORT: 8000
+    container_name: sapheneia-forecast-gpu
+    ports:
+      - "${ORCHESTRATION_PORT:-12700}:8000"
+    env_file:
+      - .env
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=all
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      # URLs for dedicated model containers (used by orchestration service)
+      - CHRONOS_SERVICE_URL=${CHRONOS_SERVICE_URL:-http://forecast-chronos-t5-tiny:8000}
+      - TIMESFM_SERVICE_URL=${TIMESFM_SERVICE_URL:-http://forecast-timesfm:8000}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./simulations:/app/simulations
+      - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-t5-tiny-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-tiny-gpu
+    ports:
+      - "${CHRONOS_T5_TINY_PORT:-12710}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-tiny
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-t5-mini-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-mini-gpu
+    ports:
+      - "${CHRONOS_T5_MINI_PORT:-12711}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-mini
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-t5-small-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-small-gpu
+    ports:
+      - "${CHRONOS_T5_SMALL_PORT:-12712}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-small
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-t5-base-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-base-gpu
+    ports:
+      - "${CHRONOS_T5_BASE_PORT:-12713}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-base
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-t5-large-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-t5-large-gpu
+    ports:
+      - "${CHRONOS_T5_LARGE_PORT:-12714}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-t5-large
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-bolt-mini-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-bolt-mini-gpu
+    ports:
+      - "${CHRONOS_BOLT_MINI_PORT:-12715}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-bolt-mini
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-bolt-small-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-bolt-small-gpu
+    ports:
+      - "${CHRONOS_BOLT_SMALL_PORT:-12716}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-bolt-small
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  forecast-chronos-bolt-base-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        MODEL_NAME: chronos
+        MODEL_PORT: 8000
+    container_name: forecast-chronos-bolt-base-gpu
+    ports:
+      - "${CHRONOS_BOLT_BASE_PORT:-12717}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MODEL_NAME=chronos
+      - MODEL_VARIANT=amazon/chronos-bolt-base
+      - HF_HOME=/models_cache
+      - DEVICE=cuda:0
+      - PYTHONPATH=/app
+      - API_SECRET_KEY=${API_SECRET_KEY}
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
+    networks:
+      - aleutian-network
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
   ui:
     build:
       context: .
@@ -385,6 +768,10 @@ services:
     depends_on:
       forecast:
         condition: service_healthy
+        required: false
+      forecast-gpu:
+        condition: service_healthy
+        required: false
     networks:
       - aleutian-network
     restart: unless-stopped
