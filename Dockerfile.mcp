@@ -1,0 +1,31 @@
+# Sapheneia MCP server (HTTP/SSE)
+FROM python:3.11-slim
+
+LABEL maintainer="Sapheneia"
+LABEL description="sapheneia-mcp — MCP server wrapping the orchestrator + leaf services"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV UV_HOME=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
+    mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+
+COPY pyproject.toml ./
+COPY shared/ ./shared/
+COPY simulations/templates/ ./simulations/templates/
+COPY sapheneia_mcp/ ./sapheneia_mcp/
+
+RUN uv pip install --system --no-cache -e ".[mcp]"
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/sse 2>/dev/null || exit 0
+
+CMD ["sapheneia-mcp", "--transport", "sse", "--host", "0.0.0.0", "--port", "8000"]

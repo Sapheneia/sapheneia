@@ -300,7 +300,30 @@ services:
     restart: unless-stopped
     healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 15s }
 
-  # --- MCP server comes online in the next commit --------------------------
+  # --- sapheneia-mcp server (HTTP/SSE) -------------------------------------
+  sapheneia-mcp:
+    build: { context: ., dockerfile: Dockerfile.mcp }
+    container_name: sapheneia-mcp
+    ports: ["${SAPHENEIA_MCP_PORT:-12703}:8000"]
+    env_file: [.env]
+    environment:
+      SAPHENEIA_MCP_HOST: 0.0.0.0
+      SAPHENEIA_MCP_PORT: 8000
+      SAPHENEIA_MCP_TOKEN: ${SAPHENEIA_MCP_TOKEN:-}
+      SAPHENEIA_MCP_ORCHESTRATOR_URL: http://orchestrator:8000
+      SAPHENEIA_MCP_DATA_URL: http://data:8000
+      SAPHENEIA_MCP_FORECAST_URL: http://forecast:8000
+      SAPHENEIA_MCP_TRADING_URL: http://trading:9000
+      SAPHENEIA_MCP_METRICS_URL: http://metrics:8000
+      SAPHENEIA_MCP_ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:-}
+      SAPHENEIA_MCP_DATA_API_KEY: ${DATA_API_KEY:-}
+      SAPHENEIA_MCP_FORECAST_API_KEY: ${API_SECRET_KEY:-}
+      SAPHENEIA_MCP_TRADING_API_KEY: ${TRADING_API_KEY:-}
+      SAPHENEIA_MCP_METRICS_API_KEY: ${METRICS_API_KEY:-}
+    depends_on:
+      orchestrator: { condition: service_healthy }
+    networks: [sapheneia-net]
+    restart: unless-stopped
 
 networks:
   sapheneia-net:
