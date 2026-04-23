@@ -263,7 +263,44 @@ services:
     restart: unless-stopped
     healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 15s }
 
-  # --- Orchestrator, MCP services come online in subsequent commits --------
+  # --- Orchestrator service -------------------------------------------------
+  orchestrator:
+    build: { context: ., dockerfile: Dockerfile.orchestrator }
+    container_name: sapheneia-orchestrator
+    ports: ["${ORCHESTRATOR_PORT:-12704}:8000"]
+    env_file: [.env]
+    environment:
+      ORCHESTRATOR_HOST: 0.0.0.0
+      ORCHESTRATOR_PORT: 8000
+      ORCHESTRATOR_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:-}
+      ORCHESTRATOR_DATA_SERVICE_URL: http://data:8000
+      ORCHESTRATOR_FORECAST_SERVICE_URL: http://forecast:8000
+      ORCHESTRATOR_TRADING_SERVICE_URL: http://trading:9000
+      ORCHESTRATOR_METRICS_SERVICE_URL: http://metrics:8000
+      ORCHESTRATOR_DATA_API_KEY: ${DATA_API_KEY:-}
+      ORCHESTRATOR_FORECAST_API_KEY: ${API_SECRET_KEY:-}
+      ORCHESTRATOR_TRADING_API_KEY: ${TRADING_API_KEY:-}
+      ORCHESTRATOR_METRICS_API_KEY: ${METRICS_API_KEY:-}
+      ORCHESTRATOR_MAX_CONCURRENT_RUNS: ${MAX_CONCURRENT_RUNS:-4}
+      ORCHESTRATOR_MAX_PER_MODEL: ${MAX_PER_MODEL:-2}
+      TIMESCALEDB_HOST: timescaledb
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_USER: ${TIMESCALEDB_USER:-sapheneia}
+      TIMESCALEDB_PASSWORD: ${TIMESCALEDB_PASSWORD:-sapheneia}
+      TIMESCALEDB_DB: ${TIMESCALEDB_DB:-sapheneia}
+    volumes:
+      - ./orchestrator:/app/orchestrator
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      data: { condition: service_healthy }
+    networks: [sapheneia-net]
+    restart: unless-stopped
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 15s }
+
+  # --- MCP server comes online in the next commit --------------------------
 
 networks:
   sapheneia-net:
