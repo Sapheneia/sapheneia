@@ -237,7 +237,33 @@ services:
     restart: unless-stopped
     healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 10s }
 
-  # --- Data, orchestrator, MCP services come online in subsequent commits ---
+  # --- Data service (Python) ------------------------------------------------
+  data:
+    build: { context: ., dockerfile: Dockerfile.data }
+    container_name: sapheneia-data
+    ports: ["${DATA_API_PORT:-12701}:8000"]
+    env_file: [.env]
+    environment:
+      DATA_HOST: 0.0.0.0
+      DATA_PORT: 8000
+      DATA_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATA_API_KEY: ${DATA_API_KEY:-}
+      TIMESCALEDB_HOST: timescaledb
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_USER: ${TIMESCALEDB_USER:-sapheneia}
+      TIMESCALEDB_PASSWORD: ${TIMESCALEDB_PASSWORD:-sapheneia}
+      TIMESCALEDB_DB: ${TIMESCALEDB_DB:-sapheneia}
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    depends_on:
+      timescaledb: { condition: service_healthy }
+    networks: [sapheneia-net]
+    restart: unless-stopped
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 15s }
+
+  # --- Orchestrator, MCP services come online in subsequent commits --------
 
 networks:
   sapheneia-net:
