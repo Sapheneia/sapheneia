@@ -229,8 +229,10 @@ app_old.py
 .DS_Store?
 
 # Local
-local/
+.local/
 .claude/
 .mcp.json
 CLAUDE.md
 aleutian
+.setup
+.agent/
