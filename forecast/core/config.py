@@ -49,12 +49,6 @@ class Settings(BaseSettings):
     MAX_REQUEST_SIZE: int = 10 * 1024 * 1024  # 10MB - Maximum request body size
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024   # 50MB - Maximum file upload size
 
-    # --- MLOps / Aleutian Placeholders ---
-    # These will be automatically populated by docker-compose in Aleutian
-    MLFLOW_TRACKING_URI: str = "http://localhost:5000"  # Local MLflow default
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"  # Local Redis default
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"  # Local Redis default
-
     # --- Model Specific Settings Defaults (can be overridden by environment vars) ---
     # TimesFM-2.0 Defaults
     TIMESFM20_DEFAULT_BACKEND: str = "cpu"

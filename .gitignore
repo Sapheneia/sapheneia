@@ -233,6 +233,8 @@ app_old.py
 .claude/
 .mcp.json
 CLAUDE.md
-aleutian
 .setup
 .agent/
+.models
+.timescaledb-data/
+experiments/
