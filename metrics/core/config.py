@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     PORT: int = Field(default=8001, description="API port")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
 
-    # Security (optional - for future API key authentication)
-    SECRET_KEY: str = Field(default="", description="API authentication key (optional)")
+    # Security: Bearer token; empty disables auth (intra-cluster default)
+    API_KEY: str = Field(default="", description="Bearer token; empty disables auth")
 
     class Config:
         env_file = ".env"

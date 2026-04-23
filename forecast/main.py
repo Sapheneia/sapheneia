@@ -37,22 +37,9 @@ from .models import get_available_models, get_all_models_info
 from .models.timesfm20.routes import endpoints as timesfm20_endpoints
 from .models.chronos.routes import endpoints as chronos_endpoints
 
-# Import new unified orchestration router (optional - may not be implemented yet)
-try:
-    from orchestration import orchestration_router
-    ORCHESTRATION_AVAILABLE = True
-except ImportError:
-    ORCHESTRATION_AVAILABLE = False
-    orchestration_router = None
-    logger.warning("Orchestration module not available. /orchestration/v1/* endpoints disabled.")
-
-# Optional: MLflow integration (to be implemented in Phase 10)
-try:
-    import mlflow
-    MLFLOW_AVAILABLE = True
-except ImportError:
-    MLFLOW_AVAILABLE = False
-    logger.warning("MLflow not available. Tracking features disabled.")
+# Forecast service is stateless beyond the singleton model state inside the
+# per-model containers. Run-state ownership lives in the orchestrator service
+# now; this process no longer hosts an orchestration HTTP surface.
 
 
 # --- FastAPI App Instance ---
@@ -106,6 +93,21 @@ logger.info(f"  - Allowed methods: {cors_methods}")
 # Compress responses larger than 1KB to reduce bandwidth usage
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 logger.info("GZip compression middleware configured (min_size=1000 bytes)")
+
+
+# --- Request-ID Middleware ---
+# Mirrors trading/main.py: every request gets an X-Request-ID (generated if
+# the caller didn't supply one) so logs can be correlated across services.
+import uuid as _uuid
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    rid = request.headers.get("X-Request-ID") or _uuid.uuid4().hex
+    request.state.request_id = rid
+    response: Response = await call_next(request)
+    response.headers["X-Request-ID"] = rid
+    return response
 
 
 # --- Request Size Limit Middleware ---
@@ -210,15 +212,16 @@ async def startup_event():
     logger.info("🚀 Application Startup")
     logger.info("=" * 80)
 
-    # Set MLflow tracking URI if available
-    if MLFLOW_AVAILABLE:
-        try:
-            mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-            logger.info(f"MLflow tracking URI set to: {settings.MLFLOW_TRACKING_URI}")
-        except Exception as e:
-            logger.error(f"Failed to set MLflow tracking URI: {e}")
-    else:
-        logger.info("MLflow tracking not available")
+    # Hard-fail if running with multiple workers — the per-family model
+    # singletons would corrupt under concurrent process workers.
+    import os as _os
+
+    workers = int(_os.getenv("UVICORN_WORKERS", "1") or "1")
+    if workers != 1:
+        raise RuntimeError(
+            f"forecast service requires UVICORN_WORKERS=1 (got {workers}); "
+            "use container-per-model sharding for parallelism"
+        )
 
     logger.info("Application startup complete")
     logger.info("=" * 80)
@@ -257,7 +260,7 @@ async def shutdown_event():
     logger.info("🔄 Application Shutdown")
     logger.info("=" * 80)
 
-    # Shutdown any loaded models
+    # Shutdown any loaded models (TimesFM and Chronos)
     try:
         from .models.timesfm20.services import model as timesfm_model_service
         status, _ = timesfm_model_service.get_status()
@@ -265,7 +268,16 @@ async def shutdown_event():
             logger.info("Shutting down TimesFM-2.0 model...")
             timesfm_model_service.shutdown_model()
     except Exception as e:
-        logger.error(f"Error during model shutdown: {e}")
+        logger.error(f"Error during TimesFM model shutdown: {e}")
+
+    try:
+        from .models.chronos.services import model as chronos_model_service
+        c_status, _ = chronos_model_service.get_status()
+        if c_status == "ready":
+            logger.info("Shutting down Chronos model...")
+            chronos_model_service.shutdown_model()
+    except Exception as e:
+        logger.error(f"Error during Chronos model shutdown: {e}")
 
     logger.info("Application shutdown complete")
     logger.info("=" * 80)
@@ -319,14 +331,6 @@ async def generic_inference_endpoint(
 
 app.include_router(generic_inference_router, prefix="/forecast/v1")
 logger.info("✅ Included generic inference router at: /forecast/v1/inference")
-
-# Unified orchestration router (NEW - preferred integration point)
-# Provides: /orchestration/v1/predict, /orchestration/v1/health, /orchestration/v1/models
-if ORCHESTRATION_AVAILABLE and orchestration_router is not None:
-    app.include_router(orchestration_router)
-    logger.info("✅ Included Orchestration router at: /orchestration/v1/*")
-else:
-    logger.warning("⚠️  Orchestration router not available - /orchestration/v1/* endpoints disabled")
 
 # Future models can be added here:
 # app.include_router(other_model_endpoints.router, prefix="/forecast/v1")
@@ -404,7 +408,6 @@ async def api_info(request: Request, response: Response):
             "openapi_json": "/openapi.json"
         },
         "features": {
-            "mlflow_tracking": MLFLOW_AVAILABLE,
             "api_authentication": True
         }
     }

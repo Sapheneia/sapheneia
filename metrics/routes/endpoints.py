@@ -4,13 +4,14 @@ Metrics API Endpoints
 REST API endpoints for financial performance metrics calculation.
 Consolidated single endpoint design for uniform interface.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 from metrics.core import metrics
+from metrics.core.security import get_api_key
 from shared.errors import ValidationError, ComputationError
 
-router = APIRouter(prefix="/compute", tags=["Metrics Computation"])
+router = APIRouter(prefix="/compute", tags=["Metrics Computation"], dependencies=[Depends(get_api_key)])
 
 
 # --- Request/Response Schemas ---
