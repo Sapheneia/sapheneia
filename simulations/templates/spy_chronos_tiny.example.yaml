@@ -1,0 +1,40 @@
+# A single rendered strategy — feed to `sapheneia simulate --strategy <this>`
+# without the agent loop. Useful for debugging the orchestrator and services.
+
+metadata:
+  id: "manual__spy__amazon_chronos-t5-tiny__threshold__h1__c252"
+  experiment_id: "manual"
+  description: "manual smoke test"
+  author: "developer"
+
+evaluation:
+  ticker: "SPY"
+  fetch_start_date: "20230101"
+  start_date: "20231101"
+  end_date: "20240101"
+
+forecast:
+  model: "amazon/chronos-t5-tiny"
+  context_size: 252
+  forecast_horizon: 20
+
+trading:
+  horizon: 1
+  initial_capital: 100000.0
+  initial_position: 0.0
+  initial_cash: 100000.0
+  strategy_type: "threshold"
+  params:
+    threshold_type: "percentage"
+    threshold_value: 1.5
+    execution_size: 10.0
+
+metrics:
+  - sharpe
+  - max_drawdown
+  - total_return
+
+cache:
+  enabled: false
+  scope: experiment
+  what: [forecasts]
