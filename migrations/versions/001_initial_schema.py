@@ -119,7 +119,8 @@ def upgrade() -> None:
             price         DOUBLE PRECISION,
             value         DOUBLE PRECISION,
             reason        TEXT,
-            PRIMARY KEY (run_id, iteration_idx)
+            -- TimescaleDB requires the partition column ('time') in any unique index/PK
+            PRIMARY KEY (run_id, iteration_idx, time)
         )
         """
     )

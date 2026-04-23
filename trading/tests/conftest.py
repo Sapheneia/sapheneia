@@ -26,11 +26,17 @@ def test_client():
     """
     FastAPI test client for testing API endpoints.
 
-    Returns:
-        TestClient instance for the trading app
+    Resets the slowapi in-memory limiter on each fixture instantiation so
+    that rate-limit-sensitive tests don't bleed counters into each other.
     """
-    # Note: Rate limiting uses memory storage which resets between test runs
-    # Individual tests shouldn't hit rate limits (10/minute for execute endpoint)
+    try:
+        from trading.core.rate_limit import limiter
+
+        # slowapi.Limiter exposes a top-level reset()
+        if hasattr(limiter, "reset"):
+            limiter.reset()
+    except Exception:  # noqa: BLE001
+        pass
     return TestClient(app)
 
 

@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from data.core.config import settings
 from data.main import app
 from data.tests.conftest import FakeRecord
+
+# Override the real lifespan (which connects to TimescaleDB) with a no-op so
+# unit tests can inject their own fakes via app.state.
+@asynccontextmanager
+async def _noop_lifespan(_app: FastAPI):
+    yield
+
+
+app.router.lifespan_context = _noop_lifespan
 
 
 @pytest.fixture
@@ -43,13 +54,21 @@ def client(fake_repo: AsyncMock):
 
 
 def test_health_returns_ok(client: TestClient) -> None:
-    fake_pool = app.state.pool
+    from unittest.mock import MagicMock
+
     fake_conn = AsyncMock()
     fake_conn.fetchval.return_value = 1
-    fake_pool.acquire.return_value.__aenter__.return_value = fake_conn
+
+    fake_acquire_ctx = MagicMock()
+    fake_acquire_ctx.__aenter__ = AsyncMock(return_value=fake_conn)
+    fake_acquire_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    fake_pool = MagicMock()
+    fake_pool.acquire = MagicMock(return_value=fake_acquire_ctx)
+    app.state.pool = fake_pool
 
     r = client.get("/health")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     body = r.json()
     assert body["status"] == "ok"
     assert body["db"] is True

@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from orchestrator.main import app
+from orchestrator.routes.endpoints import router as orch_router
+
+# Replace the real lifespan (which would try to connect to TimescaleDB) with a no-op.
+# Tests inject their own fakes into app.state directly.
+@asynccontextmanager
+async def _noop_lifespan(_app: FastAPI):
+    yield
+
+
+app.router.lifespan_context = _noop_lifespan
 
 
 @pytest.fixture

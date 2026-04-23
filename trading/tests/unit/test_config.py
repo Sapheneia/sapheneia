@@ -14,15 +14,15 @@ class TestConfigLoading:
     """Test configuration loading from environment and defaults."""
 
     def test_default_values(self):
-        """Test default configuration values."""
+        """Code defaults — isolated from .env to avoid v2 host-port overrides."""
         # Import here to avoid circular issues
         from trading.core.config import TradingSettings
 
-        # Create settings with minimal required values
+        # _env_file=None isolates from .env so we test code defaults only
         with patch.dict(
-            os.environ, {"TRADING_API_KEY": "test_key_32_chars_minimum_length_required"}
+            os.environ, {"TRADING_API_KEY": "test_key_32_chars_minimum_length_required"}, clear=False
         ):
-            settings = TradingSettings()
+            settings = TradingSettings(_env_file=None)
 
             assert settings.TRADING_API_PORT == 9000
             assert settings.TRADING_API_HOST == "0.0.0.0"

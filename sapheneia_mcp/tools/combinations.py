@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE_DIR = REPO_ROOT / "simulations" / "templates"
@@ -52,16 +52,14 @@ class CombinationsSchema(BaseModel):
     cache: _Cache = Field(default_factory=_Cache)
     parallelism: _Parallelism = Field(default_factory=_Parallelism)
 
-    @field_validator("matrix")
-    @classmethod
-    def _check_horizons(cls, m: _Matrix, info) -> _Matrix:
-        common: _Common | None = info.data.get("common")
-        if common is not None and any(h > common.forecast_horizon for h in m.trading_horizon):
+    @model_validator(mode="after")
+    def _check_horizons(self) -> "CombinationsSchema":
+        if any(h > self.common.forecast_horizon for h in self.matrix.trading_horizon):
             raise ValueError(
-                f"all trading_horizon values must be <= common.forecast_horizon"
-                f" ({common.forecast_horizon})"
+                f"all trading_horizon values must be <= common.forecast_horizon "
+                f"({self.common.forecast_horizon})"
             )
-        return m
+        return self
 
 
 # ----- public tool entrypoints -----------------------------------------------

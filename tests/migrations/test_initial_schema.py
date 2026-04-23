@@ -41,9 +41,10 @@ def timescaledb_url() -> str:
 
 def test_migrations_upgrade_and_downgrade(timescaledb_url: str) -> None:
     env = {**os.environ, "DATABASE_URL": timescaledb_url}
+    import sys as _sys
 
     up = subprocess.run(
-        ["alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
+        [_sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
         capture_output=True,
         text=True,
         env=env,
@@ -52,7 +53,7 @@ def test_migrations_upgrade_and_downgrade(timescaledb_url: str) -> None:
     assert up.returncode == 0, f"alembic upgrade failed: {up.stdout}\n{up.stderr}"
 
     down = subprocess.run(
-        ["alembic", "-c", str(ALEMBIC_INI), "downgrade", "base"],
+        [_sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "downgrade", "base"],
         capture_output=True,
         text=True,
         env=env,
