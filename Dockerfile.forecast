@@ -41,6 +41,7 @@ RUN which uv && uv --version
 
 # Copy project files
 COPY pyproject.toml ./
+COPY shared/ ./shared/
 COPY forecast/ ./forecast/
 COPY orchestration/ ./orchestration/
 COPY shared/ ./shared/

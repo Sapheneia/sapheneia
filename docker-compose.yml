@@ -828,18 +828,21 @@ services:
       - "${DATA_API_PORT:-12701}:8000"
     environment:
       - INFLUXDB_URL=http://user-influxdb:8086
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-your_super_secret_admin_token}
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-aleutian-dev-token-2026}
       - INFLUXDB_ORG=${INFLUXDB_ORG:-aleutian-finance}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-financial-data}
     networks:
       - aleutian-network
     restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 20
-      start_period: 10s
+      start_period: 15s
 
   # ===========================================================================
   # Metrics Service
@@ -866,13 +869,41 @@ services:
       retries: 3
       start_period: 10s
 
+  # ===========================================================================
+  # InfluxDB (sapheneia-managed) — replaces Aleutian's user-influxdb
+  # Container name retained as `user-influxdb` so existing INFLUXDB_URL
+  # references (http://user-influxdb:8086) keep working without code change.
+  # ===========================================================================
+  influxdb:
+    image: influxdb:2.7
+    container_name: user-influxdb
+    ports:
+      - "${INFLUXDB_PORT:-12130}:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME:-admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-adminadmin}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-aleutian-finance}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-financial-data}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-aleutian-dev-token-2026}
+    networks:
+      - aleutian-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
 networks:
   aleutian-network:
-    external: true
-    name: aleutian-shared
+    name: sapheneia-network
 
 volumes:
   forecast_models_timesfm20:
     driver: local
   ui_results:
+  influxdb_data:
     driver: local

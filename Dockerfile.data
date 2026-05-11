@@ -1,44 +1,31 @@
-# Sapheneia Finance Data Service Dockerfile
-# Go service for fetching Yahoo Finance data and writing to InfluxDB
-#
-# Examples:
-#   docker build -f Dockerfile.data -t sapheneia-data .
+# Sapheneia Finance Data Service Dockerfile (Python)
+# Fetches Yahoo Finance data and reads/writes InfluxDB.
 
-# Build stage
-FROM golang:1.25-alpine AS builder
+FROM python:3.11-slim AS runtime
 
-WORKDIR /build
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates
-
-# Copy go module files
-COPY data/go.mod data/go.sum ./
-RUN go mod download
-
-# Copy source code
-COPY data/ ./
-
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o finance-data main.go
-
-# Runtime stage
-FROM alpine:latest
-
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates curl
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy the binary from builder
-COPY --from=builder /build/finance-data .
+RUN pip install --no-cache-dir \
+    "fastapi>=0.109.0" \
+    "uvicorn[standard]>=0.27.0" \
+    "pydantic>=2.5.0" \
+    "httpx>=0.25.0" \
+    "influxdb-client>=1.40.0"
 
-# Expose port 8000
+COPY services/data_service /app/services/data_service
+
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the binary
-CMD ["./finance-data"]
+CMD ["uvicorn", "services.data_service.main:app", "--host", "0.0.0.0", "--port", "8000"]

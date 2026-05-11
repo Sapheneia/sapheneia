@@ -241,7 +241,7 @@ class InferenceOutput(BaseModel):
             "example": {
                 "prediction": {
                     "point_forecast": [100.2, 101.5, 102.3],
-                    "quantile_forecast": [[...], [...], [...]],
+                    "quantile_forecast": [[99.1, 100.0, 100.9], [100.0, 101.5, 103.0], [100.8, 102.2, 103.8]],
                     "metadata": {
                         "method": "covariates_enhanced",
                         "context_length": 64,
@@ -250,9 +250,9 @@ class InferenceOutput(BaseModel):
                     }
                 },
                 "visualization_data": {
-                    "historical_data": [...],
-                    "dates_historical": [...],
-                    "dates_future": [...]
+                    "historical_data": [98.7, 99.2, 100.0],
+                    "dates_historical": ["2026-01-01", "2026-01-02", "2026-01-03"],
+                    "dates_future": ["2026-01-04", "2026-01-05", "2026-01-06"]
                 },
                 "execution_metadata": {
                     "total_time_seconds": 2.34,

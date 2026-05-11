@@ -2,7 +2,7 @@
 # =============================================================================
 # Sapheneia + Aleutian Setup Script for NVIDIA Project DIGITS / DGX Spark
 # =============================================================================
-# This script sets up Sapheneia with AleutianFOSS integration on NVIDIA DIGITS
+# This script sets up Sapheneia with AleutianFOSS-TimeSeries integration on NVIDIA DIGITS
 # (Grace Blackwell) or DGX Spark systems.
 #
 # Hardware assumptions:
@@ -16,7 +16,7 @@
 # What this script does:
 #   1. Checks prerequisites (podman, go, gh, nvidia-smi)
 #   2. Guides through GitHub authentication
-#   3. Clones Sapheneia and AleutianFOSS repos
+#   3. Clones Sapheneia and AleutianFOSS-TimeSeries repos
 #   4. Configures environment for DIGITS hardware
 #   5. Starts all services with GPU acceleration
 #   6. Verifies the full stack is working
@@ -56,7 +56,7 @@ print_banner() {
  ___/ / /_/ / /_/ / / / /  __/ / / / /_/ / /_/ /
 /____/\__,_/ .___/_/ /_/\___/_/ /_/\__,_/\__,_/
           /_/
-    + AleutianFOSS Integration
+    + AleutianFOSS-TimeSeries Integration
     for NVIDIA DIGITS / DGX Spark
 EOF
     echo -e "${NC}"
@@ -269,15 +269,15 @@ clone_repos() {
         cd sapheneia && git checkout "$SAPHENEIA_BRANCH" && cd ..
     fi
 
-    # AleutianFOSS
-    if [ -d "AleutianFOSS" ]; then
-        print_success "AleutianFOSS already cloned"
-        cd AleutianFOSS && git fetch origin && git checkout "$ALEUTIAN_BRANCH" && git pull || true
+    # AleutianFOSS-TimeSeries
+    if [ -d "AleutianFOSS-TimeSeries" ]; then
+        print_success "AleutianFOSS-TimeSeries already cloned"
+        cd AleutianFOSS-TimeSeries && git fetch origin && git checkout "$ALEUTIAN_BRANCH" && git pull || true
         cd ..
     else
-        print_step "Cloning AleutianFOSS..."
-        gh repo clone AleutianAI/AleutianFOSS
-        cd AleutianFOSS && git checkout "$ALEUTIAN_BRANCH" && cd ..
+        print_step "Cloning AleutianFOSS-TimeSeries..."
+        gh repo clone AleutianAI/AleutianFOSS-TimeSeries
+        cd AleutianFOSS-TimeSeries && git checkout "$ALEUTIAN_BRANCH" && cd ..
     fi
 
     print_success "Repositories ready"
@@ -311,7 +311,7 @@ $MARKER
 
 # Sapheneia + Aleutian Integration
 export ORCHESTRATOR_URL=http://localhost:12700
-export SAPHENEIA_API_KEY=default_trading_api_key_please_change
+export API_SECRET_KEY=default_trading_api_key_please_change
 export SAPHENEIA_ORCHESTRATION_URL=http://localhost:12700
 
 # InfluxDB
@@ -321,7 +321,7 @@ export INFLUXDB_ORG=aleutian-finance
 
 # Project paths
 export SAPHENEIA_HOME=$PROJECTS_DIR/sapheneia
-export ALEUTIAN_HOME=$PROJECTS_DIR/AleutianFOSS
+export ALEUTIAN_HOME=$PROJECTS_DIR/AleutianFOSS-TimeSeries
 
 # DIGITS GPU settings
 export CUDA_VISIBLE_DEVICES=0
@@ -346,7 +346,7 @@ EOF
     export INFLUXDB_URL=http://localhost:12130
     export INFLUXDB_TOKEN=aleutian-dev-token-2026
     export SAPHENEIA_HOME="$PROJECTS_DIR/sapheneia"
-    export ALEUTIAN_HOME="$PROJECTS_DIR/AleutianFOSS"
+    export ALEUTIAN_HOME="$PROJECTS_DIR/AleutianFOSS-TimeSeries"
 }
 
 # =============================================================================
@@ -406,13 +406,13 @@ EOF
 }
 
 # =============================================================================
-# Setup AleutianFOSS
+# Setup AleutianFOSS-TimeSeries
 # =============================================================================
 
 setup_aleutian() {
-    print_header "Setting Up AleutianFOSS"
+    print_header "Setting Up AleutianFOSS-TimeSeries"
 
-    cd "$PROJECTS_DIR/AleutianFOSS"
+    cd "$PROJECTS_DIR/AleutianFOSS-TimeSeries"
 
     # Build CLI
     print_step "Building Aleutian CLI..."
@@ -513,7 +513,7 @@ print_summary() {
 EOF
     echo -e "${NC}"
 
-    echo "Your DIGITS system is configured for Sapheneia + AleutianFOSS!"
+    echo "Your DIGITS system is configured for Sapheneia + AleutianFOSS-TimeSeries!"
     echo ""
     echo -e "${CYAN}Quick Commands:${NC}"
     echo ""
@@ -543,7 +543,7 @@ EOF
 main() {
     print_banner
 
-    echo "This script configures Sapheneia + AleutianFOSS on NVIDIA DIGITS."
+    echo "This script configures Sapheneia + AleutianFOSS-TimeSeries on NVIDIA DIGITS."
     echo ""
     read -p "Continue? [Y/n] " -n 1 -r
     echo

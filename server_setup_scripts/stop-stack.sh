@@ -1,16 +1,25 @@
 #!/bin/bash
 # =============================================================================
-# Stop Sapheneia + Aleutian Stack
+# Stop Sapheneia + AleutianFOSS-TimeSeries Stack
+# =============================================================================
+#
+# Environment overrides (optional):
+#   ALEUTIAN_TIMESERIES_DIR   Path to AleutianFOSS-TimeSeries repo
+#                             Default: sibling directory named AleutianFOSS-TimeSeries
 # =============================================================================
 
-PROJECTS_DIR="${PROJECTS_DIR:-$HOME/projects}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SAPHENEIA_DIR="$(dirname "$SCRIPT_DIR")"
+ALEUTIAN_DIR="${ALEUTIAN_TIMESERIES_DIR:-$(dirname "$SAPHENEIA_DIR")/AleutianFOSS-TimeSeries}"
 
-echo "Stopping stack..."
+echo "Stopping AleutianFOSS-TimeSeries..."
+if [[ -f "$ALEUTIAN_DIR/podman-compose.yml" ]]; then
+    cd "$ALEUTIAN_DIR" && podman-compose down
+else
+    echo "  Warning: AleutianFOSS-TimeSeries not found at $ALEUTIAN_DIR, skipping."
+fi
 
-cd "$PROJECTS_DIR/AleutianFOSS"
-aleutian stack stop 2>/dev/null || podman-compose down
+echo "Stopping Sapheneia..."
+cd "$SAPHENEIA_DIR" && podman-compose down
 
-cd "$PROJECTS_DIR/sapheneia"
-podman-compose down
-
-echo "✅ All services stopped."
+echo "All services stopped."
