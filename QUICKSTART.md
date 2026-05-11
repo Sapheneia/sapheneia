@@ -140,10 +140,42 @@ PY
 
 curl -X POST http://localhost:12700/forecast/v1/chronos/inference \
   -H "Authorization: Bearer $API_KEY" -H 'Content-Type: application/json' \
-  --data @/tmp/infer.json | python3 -m json.tool | head -40
+  --data @/tmp/infer.json | python3 -m json.tool > /tmp/forecast.json
+head -40 /tmp/forecast.json
 ```
 
-You'll get back `prediction.median`, `prediction.mean`, `prediction.quantiles`, and `prediction.samples`. Done.
+You'll get back `prediction.median`, `prediction.mean`, `prediction.quantiles`, and `prediction.samples`. The full response is saved to `/tmp/forecast.json` for the next step.
+
+## 5. Execute a trade from the forecast
+
+The trading service uses a **different** API key than the forecast service (`TRADING_API_KEY`, baked into the container). Set it for this shell:
+
+```bash
+export TRADING_API_KEY="dev_trading_api_key_12345678901234567890"
+```
+
+Build a trade payload that compares the day-7 median forecast against the current close, then POST it to the trading service:
+
+```bash
+python3 - <<'PY' > /tmp/trade.json
+import json, urllib.request
+q = urllib.request.Request('http://localhost:12701/v1/data/query',
+    data=json.dumps({"ticker":"SPY","days":120}).encode(),
+    headers={'Content-Type':'application/json'})
+current = json.loads(urllib.request.urlopen(q).read())['data'][-1]['close']
+forecast_median = json.load(open('/tmp/forecast.json'))['prediction']['median'][-1]
+print(json.dumps({
+  "strategy_type":"threshold","forecast_price": forecast_median,"current_price": current,
+  "current_position": 0.0,"available_cash": 100000.0,"initial_capital": 100000.0,
+  "threshold_type":"absolute","threshold_value": 0.0,"execution_size": 100.0}))
+PY
+
+curl -X POST http://localhost:12132/trading/execute \
+  -H "Authorization: Bearer $TRADING_API_KEY" -H 'Content-Type: application/json' \
+  --data @/tmp/trade.json | python3 -m json.tool
+```
+
+You'll get back the strategy decision: `action` (`buy`/`sell`/`hold`), `size`, `value`, `reason`, plus post-trade `available_cash` and `position_after`. With the seeded data, expect a `buy` of 100 shares around $57k.
 
 ## Optional: API docs in a browser
 
@@ -174,6 +206,7 @@ podman-compose --profile cpu down
 ## Reference: ports & creds
 
 InfluxDB org: `aleutian-finance`, bucket: `financial-data`, token: `aleutian-dev-token-2026`
-Forecast/trading API key: `default_trading_api_key_please_change`
+Forecast API key (`:12700`): `default_trading_api_key_please_change`
+Trading API key (`:12132`): `dev_trading_api_key_12345678901234567890`
 
-Use `Authorization: Bearer <key>` (or `Authorization: Api-Key <key>`) for all `/forecast/v1/*` and `/trading/*` endpoints. The data service (`:12701`) does not require auth.
+The forecast and trading services have **independent** API keys. Use `Authorization: Bearer <key>` (or `Authorization: Api-Key <key>`) on `/forecast/v1/*` and `/trading/*` endpoints respectively. The data service (`:12701`) does not require auth.
