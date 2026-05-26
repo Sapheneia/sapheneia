@@ -1,5 +1,4 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
 *.py[cod]
 *$py.class
 
@@ -229,8 +228,12 @@ app_old.py
 .DS_Store?
 
 # Local
-local/
+.local/
+.agent/
 .claude/
+.setup/
+sapheneia.egg-info/
 .mcp.json
 CLAUDE.md
 aleutian
+CLAUDE.local.md
