@@ -51,7 +51,7 @@ fi
 # Model Registry
 # =============================================================================
 # Format: "slug|container_name|model_variant|port|model_family|status"
-# Status: supported (in Sapheneia) or planned (in AleutianFOSS but no Sapheneia impl)
+# Status: supported (in Sapheneia) or planned (in AleutianFOSS-TimeSeries but no Sapheneia impl)
 
 declare -a MODELS=(
     # === AMAZON CHRONOS T5 === (SUPPORTED)
@@ -155,7 +155,7 @@ get_container_health() {
 
 get_model_status() {
     local port="$1"
-    local api_key="${SAPHENEIA_API_KEY:-default_trading_api_key_please_change}"
+    local api_key="${API_SECRET_KEY:-default_trading_api_key_please_change}"
     local response
     response=$(curl -s "http://localhost:${port}/forecast/v1/chronos/status" \
         -H "Authorization: Bearer ${api_key}" 2>/dev/null)
@@ -229,7 +229,7 @@ EOF
     done
 
     log ""
-    log "${BOLD}${YELLOW}PLANNED MODELS${NC} (in AleutianFOSS but no Sapheneia implementation):"
+    log "${BOLD}${YELLOW}PLANNED MODELS${NC} (in AleutianFOSS-TimeSeries but no Sapheneia implementation):"
     log "─────────────────────────────────────────────────────────────────────────"
 
     for model in "${MODELS[@]}"; do
@@ -285,7 +285,7 @@ cmd_build() {
 
     if [[ "$status" != "supported" ]]; then
         log "${RED}Error: Model '$slug' is not yet supported in Sapheneia${NC}"
-        log "It's defined in AleutianFOSS but needs Sapheneia implementation"
+        log "It's defined in AleutianFOSS-TimeSeries but needs Sapheneia implementation"
         exit 1
     fi
 
@@ -511,7 +511,7 @@ cmd_init() {
     log "  Port: $port"
     log ""
 
-    local api_key="${SAPHENEIA_API_KEY:-default_trading_api_key_please_change}"
+    local api_key="${API_SECRET_KEY:-default_trading_api_key_please_change}"
 
     # Determine endpoint based on family
     local init_endpoint="/forecast/v1/chronos/initialization"
@@ -617,7 +617,7 @@ ${BOLD}SUPPORTED MODELS (Sapheneia implementation exists):${NC}
     ${GREEN}Amazon Chronos Bolt:${NC} chronos-bolt-mini, chronos-bolt-small, chronos-bolt-base
     ${GREEN}Google TimesFM:${NC} timesfm-2-0
 
-${BOLD}PLANNED MODELS (AleutianFOSS routing exists, no Sapheneia impl):${NC}
+${BOLD}PLANNED MODELS (AleutianFOSS-TimeSeries routing exists, no Sapheneia impl):${NC}
     ${YELLOW}TimesFM:${NC} timesfm-1-0, timesfm-2-5
     ${YELLOW}Moirai:${NC} moirai-1-0-small, moirai-1-1-small, moirai-1-1-base, moirai-1-1-large, moirai-2-0-small
     ${YELLOW}Granite:${NC} granite-ttm-r1, granite-ttm-r2, granite-flowstate, granite-patchtsmixer, granite-patchtst
@@ -640,7 +640,7 @@ ${BOLD}EXAMPLES:${NC}
 ${BOLD}ENVIRONMENT:${NC}
     DEVICE                  cpu, cuda, mps (default: cpu)
     MODELS_CACHE_PATH       HuggingFace cache directory
-    SAPHENEIA_API_KEY       API key for authentication
+    API_SECRET_KEY          API key for authentication
 
 EOF
 }
