@@ -3,8 +3,9 @@ Metrics API Configuration
 
 Environment-based configuration for the Metrics API service.
 """
-from pydantic_settings import BaseSettings
+
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

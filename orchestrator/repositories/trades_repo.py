@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 import asyncpg
 
@@ -23,7 +22,7 @@ class TradesRepository:
         size: float,
         price: float,
         value: float,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(

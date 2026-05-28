@@ -19,10 +19,10 @@ Usage:
 """
 
 import logging
-import math
-from typing import Dict, Any, Optional, Union, List
-import pandas as pd
+from typing import Any
+
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -31,28 +31,15 @@ import quantstats as qs
 # --- Performance Thresholds ---
 # These provide interpretation guidance for metric values
 
-SHARPE_THRESHOLDS = {
-    "excellent": 2.0,
-    "good": 1.0,
-    "acceptable": 0.5,
-    "poor": 0.0
-}
+SHARPE_THRESHOLDS = {"excellent": 2.0, "good": 1.0, "acceptable": 0.5, "poor": 0.0}
 
-CALMAR_THRESHOLDS = {
-    "exceptional": 3.0,
-    "good": 1.0,
-    "decent": 0.5,
-    "poor": 0.0
-}
+CALMAR_THRESHOLDS = {"exceptional": 3.0, "good": 1.0, "decent": 0.5, "poor": 0.0}
 
-WIN_RATE_THRESHOLDS = {
-    "high": 0.6,
-    "moderate": 0.5,
-    "low": 0.4
-}
+WIN_RATE_THRESHOLDS = {"high": 0.6, "moderate": 0.5, "low": 0.4}
 
 
 # --- Helper Functions ---
+
 
 def _interpret_sharpe(sharpe_ratio: float) -> str:
     """Interpret Sharpe ratio value."""
@@ -88,7 +75,7 @@ def _interpret_win_rate(win_rate: float) -> str:
         return "low"
 
 
-def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
+def _validate_returns(returns: pd.Series | np.ndarray | list) -> pd.Series:
     """
     Validate and convert returns to pandas Series.
 
@@ -131,11 +118,7 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
     # If no datetime index, create a synthetic one starting from a base date
     if not isinstance(returns_clean.index, pd.DatetimeIndex):
         # Create synthetic daily dates starting from 2020-01-01
-        synthetic_dates = pd.date_range(
-            start='2020-01-01',
-            periods=len(returns_clean),
-            freq='D'
-        )
+        synthetic_dates = pd.date_range(start="2020-01-01", periods=len(returns_clean), freq="D")
         returns_clean = pd.Series(returns_clean.values, index=synthetic_dates)
 
     return returns_clean
@@ -143,10 +126,9 @@ def _validate_returns(returns: Union[pd.Series, np.ndarray, list]) -> pd.Series:
 
 # --- Core Metrics Functions ---
 
+
 def calculate_sharpe_ratio(
-    returns: Union[pd.Series, np.ndarray, List],
-    risk_free_rate: float = 0.0,
-    periods_per_year: int = 252
+    returns: pd.Series | np.ndarray | list, risk_free_rate: float = 0.0, periods_per_year: int = 252
 ) -> float:
     """
     Calculate Sharpe Ratio: risk-adjusted return metric.
@@ -155,7 +137,7 @@ def calculate_sharpe_ratio(
 
     Args:
         returns: Return series (e.g., daily returns)
-        risk_free_rate: Annual risk-free rate (default: 0). 
+        risk_free_rate: Annual risk-free rate (default: 0).
             - float: Single rate (e.g., 0.04 for 4%)
         periods_per_year: Number of periods per year (252 for daily, 52 for weekly, 12 for monthly)
 
@@ -179,7 +161,7 @@ def calculate_sharpe_ratio(
         return 0.0
 
 
-def calculate_max_drawdown(returns: Union[pd.Series, np.ndarray, List]) -> float:
+def calculate_max_drawdown(returns: pd.Series | np.ndarray | list) -> float:
     """
     Calculate Maximum Drawdown: worst peak-to-trough decline.
 
@@ -208,10 +190,7 @@ def calculate_max_drawdown(returns: Union[pd.Series, np.ndarray, List]) -> float
         return 0.0
 
 
-def calculate_cagr(
-    returns: Union[pd.Series, np.ndarray, List],
-    periods_per_year: int = 252
-) -> float:
+def calculate_cagr(returns: pd.Series | np.ndarray | list, periods_per_year: int = 252) -> float:
     """
     Calculate Compound Annual Growth Rate (CAGR).
 
@@ -240,8 +219,7 @@ def calculate_cagr(
 
 
 def calculate_calmar_ratio(
-    returns: Union[pd.Series, np.ndarray, List],
-    periods_per_year: int = 252
+    returns: pd.Series | np.ndarray | list, periods_per_year: int = 252
 ) -> float:
     """
     Calculate Calmar Ratio: return per unit of maximum drawdown.
@@ -272,7 +250,7 @@ def calculate_calmar_ratio(
         return 0.0
 
 
-def calculate_win_rate(returns: Union[pd.Series, np.ndarray, List]) -> float:
+def calculate_win_rate(returns: pd.Series | np.ndarray | list) -> float:
     """
     Calculate Win Rate: percentage of profitable periods.
 
@@ -303,12 +281,13 @@ def calculate_win_rate(returns: Union[pd.Series, np.ndarray, List]) -> float:
 
 # --- Main Function ---
 
+
 def calculate_performance_metrics(
-    returns: Union[pd.Series, np.ndarray, List],
+    returns: pd.Series | np.ndarray | list,
     risk_free_rate: float = 0.0,
     periods_per_year: int = 252,
-    include_interpretation: bool = True
-) -> Dict[str, Any]:
+    include_interpretation: bool = True,
+) -> dict[str, Any]:
     """
     Calculate all key performance metrics for a return series.
 
@@ -365,8 +344,8 @@ def calculate_performance_metrics(
             "periods_per_year": periods_per_year,
             "total_periods": len(returns),
             "profitable_periods": int((returns > 0).sum()),
-            "losing_periods": int((returns < 0).sum())
-        }
+            "losing_periods": int((returns < 0).sum()),
+        },
     }
 
     # Add interpretation if requested
@@ -375,7 +354,7 @@ def calculate_performance_metrics(
             "sharpe_ratio": _interpret_sharpe(sharpe),
             "calmar_ratio": _interpret_calmar(calmar),
             "win_rate": _interpret_win_rate(win_rate),
-            "overall_assessment": _get_overall_assessment(sharpe, max_dd, calmar, win_rate)
+            "overall_assessment": _get_overall_assessment(sharpe, max_dd, calmar, win_rate),
         }
 
     logger.info(f"Metrics calculated: Sharpe={sharpe:.2f}, MDD={max_dd:.2%}, CAGR={cagr:.2%}")
@@ -383,12 +362,7 @@ def calculate_performance_metrics(
     return result
 
 
-def _get_overall_assessment(
-    sharpe: float,
-    max_dd: float,
-    calmar: float,
-    win_rate: float
-) -> str:
+def _get_overall_assessment(sharpe: float, max_dd: float, calmar: float, win_rate: float) -> str:
     """
     Provide overall assessment based on all metrics.
 

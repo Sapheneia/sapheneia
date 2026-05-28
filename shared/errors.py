@@ -19,13 +19,14 @@ Usage:
 
 import logging
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class ErrorCode(str, Enum):
     """Machine-readable error codes for structured error responses."""
+
     VALIDATION_ERROR = "VALIDATION_ERROR"
     INVALID_MODEL = "INVALID_MODEL"
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
@@ -50,7 +51,7 @@ class SapheneiaError(Exception):
         self,
         message: str,
         error_code: str = "SAPHENEIA_ERROR",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
         suggested_status_code: int = 500,
     ):
         self.message = message
@@ -59,7 +60,7 @@ class SapheneiaError(Exception):
         self.suggested_status_code = suggested_status_code
         super().__init__(message)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary format for JSON responses."""
         return {
             "error": self.error_code,
@@ -74,7 +75,7 @@ class ValidationError(SapheneiaError):
     def __init__(
         self,
         message: str = "Validation error",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(
             message=message,
@@ -90,7 +91,7 @@ class ModelUnavailableError(SapheneiaError):
     def __init__(
         self,
         message: str = "Model unavailable",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(
             message=message,
@@ -106,7 +107,7 @@ class ServiceUnavailableError(SapheneiaError):
     def __init__(
         self,
         message: str = "Service unavailable",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(
             message=message,
@@ -122,7 +123,7 @@ class ServiceTimeoutError(SapheneiaError):
     def __init__(
         self,
         message: str = "Service timeout",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(
             message=message,
@@ -138,7 +139,7 @@ class InsufficientDataError(SapheneiaError):
     def __init__(
         self,
         message: str = "Insufficient data",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(
             message=message,
@@ -154,7 +155,7 @@ class ComputationError(SapheneiaError):
     def __init__(
         self,
         message: str = "Computation error",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(
             message=message,

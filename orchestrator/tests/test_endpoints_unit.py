@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from orchestrator.main import app
-from orchestrator.routes.endpoints import router as orch_router
+
 
 # Replace the real lifespan (which would try to connect to TimescaleDB) with a no-op.
 # Tests inject their own fakes into app.state directly.
@@ -104,7 +104,9 @@ def test_submit_run(wired_app, sample_strategy):
 
 def test_submit_batch(wired_app, sample_strategy):
     with TestClient(wired_app) as client:
-        r = client.post("/v1/orchestration/runs/batch", json={"strategies": [sample_strategy, sample_strategy]})
+        r = client.post(
+            "/v1/orchestration/runs/batch", json={"strategies": [sample_strategy, sample_strategy]}
+        )
     assert r.status_code == 200, r.text
     assert len(r.json()) == 2
 

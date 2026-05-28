@@ -5,10 +5,10 @@ Central registry for all forecasting models available in the API.
 Each model is a separate module under forecast/models/ with its own routes and services.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 # Model registry - maps model name to module information
-MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
+MODEL_REGISTRY: dict[str, dict[str, Any]] = {
     "timesfm20": {
         "name": "TimesFM 2.0",
         "version": "2.0.500m",
@@ -17,7 +17,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "router_path": "forecast.models.timesfm20.routes.endpoints",
         "service_path": "forecast.models.timesfm20.services.model",
         "default_port": 8001,
-        "status": "active"
+        "status": "active",
     },
     # Amazon Chronos Models
     "chronos-t5-tiny": {
@@ -29,7 +29,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8100,
         "huggingface_id": "amazon/chronos-t5-tiny",
-        "status": "active"
+        "status": "active",
     },
     "chronos-t5-mini": {
         "name": "Chronos T5 Mini",
@@ -40,7 +40,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8101,
         "huggingface_id": "amazon/chronos-t5-mini",
-        "status": "active"
+        "status": "active",
     },
     "chronos-t5-small": {
         "name": "Chronos T5 Small",
@@ -51,7 +51,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8102,
         "huggingface_id": "amazon/chronos-t5-small",
-        "status": "active"
+        "status": "active",
     },
     "chronos-t5-base": {
         "name": "Chronos T5 Base",
@@ -62,7 +62,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8103,
         "huggingface_id": "amazon/chronos-t5-base",
-        "status": "active"
+        "status": "active",
     },
     "chronos-t5-large": {
         "name": "Chronos T5 Large",
@@ -73,7 +73,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8104,
         "huggingface_id": "amazon/chronos-t5-large",
-        "status": "active"
+        "status": "active",
     },
     "chronos-bolt-mini": {
         "name": "Chronos Bolt Mini",
@@ -84,7 +84,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8105,
         "huggingface_id": "amazon/chronos-bolt-mini",
-        "status": "active"
+        "status": "active",
     },
     "chronos-bolt-small": {
         "name": "Chronos Bolt Small",
@@ -95,7 +95,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8106,
         "huggingface_id": "amazon/chronos-bolt-small",
-        "status": "active"
+        "status": "active",
     },
     "chronos-bolt-base": {
         "name": "Chronos Bolt Base",
@@ -106,12 +106,12 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "service_path": "forecast.models.chronos.services.model",
         "default_port": 8107,
         "huggingface_id": "amazon/chronos-bolt-base",
-        "status": "active"
+        "status": "active",
     },
 }
 
 
-def get_available_models() -> List[str]:
+def get_available_models() -> list[str]:
     """
     Get list of available model names.
 
@@ -119,12 +119,11 @@ def get_available_models() -> List[str]:
         List of model identifiers
     """
     return [
-        model_id for model_id, config in MODEL_REGISTRY.items()
-        if config.get("status") == "active"
+        model_id for model_id, config in MODEL_REGISTRY.items() if config.get("status") == "active"
     ]
 
 
-def get_model_info(model_id: str) -> Dict[str, Any]:
+def get_model_info(model_id: str) -> dict[str, Any]:
     """
     Get information about a specific model.
 
@@ -143,7 +142,7 @@ def get_model_info(model_id: str) -> Dict[str, Any]:
     return MODEL_REGISTRY[model_id]
 
 
-def get_all_models_info() -> Dict[str, Dict[str, Any]]:
+def get_all_models_info() -> dict[str, dict[str, Any]]:
     """
     Get information about all registered models.
 

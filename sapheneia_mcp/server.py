@@ -9,7 +9,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Any, Optional
+from typing import Any
 
 # Path bootstrap when run as a script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -73,12 +73,14 @@ def build_server():
 
     @server.tool()
     async def query_results(
-        experiment_id: Optional[str] = None,
-        status: Optional[str] = None,
+        experiment_id: str | None = None,
+        status: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """List runs filtered by experiment_id / status / limit."""
-        return await run_tools.query_results(experiment_id=experiment_id, status=status, limit=limit)
+        return await run_tools.query_results(
+            experiment_id=experiment_id, status=status, limit=limit
+        )
 
     @server.tool()
     async def delete_run(run_id: str) -> dict:
@@ -87,8 +89,8 @@ def build_server():
 
     @server.tool()
     async def delete_cache(
-        experiment_id: Optional[str] = None,
-        older_than_seconds: Optional[int] = None,
+        experiment_id: str | None = None,
+        older_than_seconds: int | None = None,
     ) -> dict:
         """Bulk cache cleanup by experiment_id or TTL."""
         return await cache_tools.delete_cache(
@@ -102,7 +104,7 @@ def build_server():
         ticker: str,
         start: str,
         end: str,
-        end_date: Optional[str] = None,
+        end_date: str | None = None,
         interval: str = "1d",
     ) -> dict:
         """Direct price query against the data service."""
@@ -119,7 +121,10 @@ def build_server():
     ) -> dict:
         """Direct forecast call."""
         return await pt_tools.forecast(
-            model_id=model_id, context=context, prediction_length=prediction_length, num_samples=num_samples
+            model_id=model_id,
+            context=context,
+            prediction_length=prediction_length,
+            num_samples=num_samples,
         )
 
     @server.tool()
@@ -130,7 +135,7 @@ def build_server():
         current_position: float,
         available_cash: float,
         initial_capital: float,
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> dict:
         """Direct trading.execute call."""
         return await pt_tools.execute_trade(
@@ -158,7 +163,9 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=settings.PORT)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
     server = build_server()
     if args.transport == "stdio":
         logger.info("Starting sapheneia-mcp on stdio")

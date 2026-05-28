@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
@@ -58,10 +58,10 @@ async def submit_batch(request: Request, body: BatchSubmitRequest) -> list[RunCr
 @router.get("/runs", response_model=list[RunSummary])
 async def list_runs(
     request: Request,
-    experiment_id: Optional[str] = Query(default=None),
-    status: Optional[str] = Query(default=None),
-    ticker: Optional[str] = Query(default=None),
-    model_id: Optional[str] = Query(default=None),
+    experiment_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    ticker: str | None = Query(default=None),
+    model_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> list[RunSummary]:
     rows = await _runs_repo(request).list(
@@ -90,7 +90,9 @@ async def get_run(request: Request, run_id: str) -> RunDetail:
         **summary,
         config=_load_json(row.get("config")),
         cache_enabled=bool(row.get("cache_enabled")),
-        metrics=metrics if any(getattr(metrics, k) is not None for k in metrics.model_fields) else None,
+        metrics=metrics
+        if any(getattr(metrics, k) is not None for k in metrics.model_fields)
+        else None,
     )
 
 
@@ -107,8 +109,8 @@ async def delete_run(request: Request, run_id: str) -> dict:
 @router.delete("/cache", response_model=CleanupResult)
 async def delete_cache(
     request: Request,
-    experiment_id: Optional[str] = Query(default=None),
-    older_than_seconds: Optional[int] = Query(default=None, ge=1),
+    experiment_id: str | None = Query(default=None),
+    older_than_seconds: int | None = Query(default=None, ge=1),
 ) -> CleanupResult:
     if not experiment_id and not older_than_seconds:
         raise HTTPException(400, "supply experiment_id or older_than_seconds")

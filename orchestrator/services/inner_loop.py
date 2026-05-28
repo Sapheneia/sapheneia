@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import date, datetime
-from typing import Optional
 
 from ..clients.data_client import DataClient
 from ..clients.forecast_client import ForecastClient
@@ -58,9 +57,7 @@ class InnerLoop:
             eval_start = cfg.evaluation.parse_date("start_date")
             eval_end = cfg.evaluation.parse_date("end_date")
             eval_dates = [
-                p["time"]
-                for p in prices
-                if eval_start <= _to_date(p["time"]) <= eval_end
+                p["time"] for p in prices if eval_start <= _to_date(p["time"]) <= eval_end
             ]
             if not eval_dates:
                 raise RuntimeError("no prices in evaluation window")
@@ -157,7 +154,12 @@ class InnerLoop:
             self.forecasts, cfg=cfg, experiment_id=experiment_id, time=as_of
         )
         if hit:
-            return {"median": hit["median"], "q10": hit.get("q10"), "q90": hit.get("q90"), "_cache_hit": True}
+            return {
+                "median": hit["median"],
+                "q10": hit.get("q10"),
+                "q90": hit.get("q90"),
+                "_cache_hit": True,
+            }
 
         sem = self.per_model_semaphores.setdefault(cfg.forecast.model, asyncio.Semaphore(2))
         async with sem:
@@ -167,7 +169,9 @@ class InnerLoop:
                 horizon=cfg.forecast.forecast_horizon,
                 request_id=run_id,
             )
-        await cache_service.write(self.forecasts, cfg=cfg, run_id=run_id, time=as_of, forecast=forecast)
+        await cache_service.write(
+            self.forecasts, cfg=cfg, run_id=run_id, time=as_of, forecast=forecast
+        )
         return forecast
 
     def _context_window(self, prices: list[dict], as_of: datetime, size: int) -> list[float]:
@@ -186,7 +190,7 @@ class InnerLoop:
         if median is None:
             median = (forecast.get("forecast") or {}).get("values")
         if median is None:
-            median = ((forecast.get("prediction") or {}).get("median"))
+            median = (forecast.get("prediction") or {}).get("median")
         if not median:
             return 0.0
         if isinstance(median[0], list):
@@ -226,7 +230,25 @@ def _normalise_metrics(metrics_response: dict) -> dict:
         "win_rate": m.get("win_rate"),
         "total_return": m.get("total_return"),
     }
-    extras = {k: v for k, v in m.items() if k not in {"sharpe_ratio", "sharpe", "sortino_ratio", "sortino", "cagr", "calmar_ratio", "calmar", "max_drawdown", "win_rate", "total_return", "interpretation", "metadata"}}
+    extras = {
+        k: v
+        for k, v in m.items()
+        if k
+        not in {
+            "sharpe_ratio",
+            "sharpe",
+            "sortino_ratio",
+            "sortino",
+            "cagr",
+            "calmar_ratio",
+            "calmar",
+            "max_drawdown",
+            "win_rate",
+            "total_return",
+            "interpretation",
+            "metadata",
+        }
+    }
     if extras:
         out["extra"] = extras
     return out

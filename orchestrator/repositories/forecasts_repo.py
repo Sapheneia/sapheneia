@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 import asyncpg
 
@@ -20,8 +19,8 @@ class ForecastsRepository:
         time: datetime,
         context_size: int,
         horizon_size: int,
-        experiment_id: Optional[str] = None,
-    ) -> Optional[dict]:
+        experiment_id: str | None = None,
+    ) -> dict | None:
         """Find a usable cache row. Scope-aware via experiment_id JOIN."""
         if experiment_id is not None:
             sql = """
@@ -57,8 +56,8 @@ class ForecastsRepository:
         context_size: int,
         horizon_size: int,
         median: list[float],
-        q10: Optional[list[float]] = None,
-        q90: Optional[list[float]] = None,
+        q10: list[float] | None = None,
+        q90: list[float] | None = None,
     ) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(

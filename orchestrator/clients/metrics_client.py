@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import httpx
 
 
@@ -18,7 +16,7 @@ class MetricsClient:
         *,
         returns: list[float],
         metric: str = "performance",
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> dict:
         headers = dict(self._headers)
         if request_id:

@@ -124,7 +124,6 @@ addopts = [
     "--cov=sapheneia_mcp",
     "--cov=shared",
     "--cov-report=term",
-    "--cov-fail-under=35",
 ]
 markers = [
     "unit: fast in-process tests (default)",
@@ -147,6 +146,7 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 35
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -168,5 +168,30 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM"]
+select = ["E", "F", "I", "B", "UP", "SIM", "C901"]
 ignore = ["E501"]
+
+[tool.ruff.lint.mccabe]
+# Ratchet threshold — current max in codebase is 24; tighten to 15 then 10 over time.
+# Track in code-review-followups.md.
+max-complexity = 25
+
+[tool.mypy]
+python_version = "3.11"
+# Ratchet: start with the most type-friendly subset; widen over time.
+# Track widening in code-review-followups.md.
+files = ["shared", "orchestrator/core"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+disable_error_code = ["type-arg", "no-untyped-def", "no-untyped-call", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pandas-stubs>=3.0.0.260204",
+    "pytest-archon>=0.0.7",
+]

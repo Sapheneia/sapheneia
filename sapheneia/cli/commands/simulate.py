@@ -75,9 +75,7 @@ async def _run(
 ) -> None:
     base_url = base_url.rstrip("/")
     async with httpx.AsyncClient(timeout=60.0) as client:
-        r = await client.post(
-            f"{base_url}/v1/orchestration/runs", json=payload, headers=headers
-        )
+        r = await client.post(f"{base_url}/v1/orchestration/runs", json=payload, headers=headers)
         r.raise_for_status()
         body = r.json()
         run_id = body["run_id"]
@@ -90,9 +88,7 @@ async def _run(
             if time.monotonic() > deadline:
                 click.echo(f"Timeout after {timeout:.0f}s — run still in progress.", err=True)
                 sys.exit(2)
-            r = await client.get(
-                f"{base_url}/v1/orchestration/runs/{run_id}", headers=headers
-            )
+            r = await client.get(f"{base_url}/v1/orchestration/runs/{run_id}", headers=headers)
             r.raise_for_status()
             data = r.json()
             status = data.get("status", "unknown")

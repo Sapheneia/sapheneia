@@ -5,11 +5,11 @@ Uses Pydantic Settings to manage configuration from environment variables
 and .env files. Supports both local development and production deployments.
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
-import os
 import logging
-from typing import Optional
+import os
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     # Configuration to load .env file (useful locally, ignored in Docker if not present)
     # Assumes .env is in the project root ('sapheneia/') relative to where script runs
     model_config = SettingsConfigDict(
-        env_file=os.path.join(os.path.dirname(__file__), '..', '..', '.env'),
-        env_file_encoding='utf-8',
-        extra='ignore'  # Ignore extra variables not defined in the model
+        env_file=os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra variables not defined in the model
     )
 
     # --- Core API Settings ---
@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"  # Can be: development, staging, production
 
     # --- CORS Settings ---
-    CORS_ALLOWED_ORIGINS: str = "http://localhost:8080,http://localhost:3000"  # Comma-separated list
+    CORS_ALLOWED_ORIGINS: str = (
+        "http://localhost:8080,http://localhost:3000"  # Comma-separated list
+    )
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: str = "GET,POST,PUT,DELETE,OPTIONS"
     CORS_ALLOW_HEADERS: str = "*"
@@ -47,19 +49,21 @@ class Settings(BaseSettings):
 
     # --- Request Size Limits (Phase 5) ---
     MAX_REQUEST_SIZE: int = 10 * 1024 * 1024  # 10MB - Maximum request body size
-    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024   # 50MB - Maximum file upload size
+    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024  # 50MB - Maximum file upload size
 
     # --- Model Specific Settings Defaults (can be overridden by environment vars) ---
     # TimesFM-2.0 Defaults
     TIMESFM20_DEFAULT_BACKEND: str = "cpu"
     TIMESFM20_DEFAULT_CONTEXT_LEN: int = 64  # Changed from 100 to 64 as requested
     TIMESFM20_DEFAULT_HORIZON_LEN: int = 24
-    TIMESFM20_DEFAULT_CHECKPOINT: Optional[str] = "google/timesfm-2.0-500m-pytorch"  # HF checkpoint
-    TIMESFM20_DEFAULT_LOCAL_PATH: Optional[str] = None  # Relative path in forecast/models/timesfm20/local/
-    TIMESFM20_DEFAULT_MLFLOW_NAME: Optional[str] = "timesfm20-production"  # Example MLflow model name
+    TIMESFM20_DEFAULT_CHECKPOINT: str | None = "google/timesfm-2.0-500m-pytorch"  # HF checkpoint
+    TIMESFM20_DEFAULT_LOCAL_PATH: str | None = (
+        None  # Relative path in forecast/models/timesfm20/local/
+    )
+    TIMESFM20_DEFAULT_MLFLOW_NAME: str | None = "timesfm20-production"  # Example MLflow model name
     TIMESFM20_DEFAULT_MLFLOW_STAGE: str = "Production"
 
-    @field_validator('API_SECRET_KEY')
+    @field_validator("API_SECRET_KEY")
     @classmethod
     def validate_api_key(cls, v: str, info) -> str:
         """
@@ -68,7 +72,7 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If default key is used in production environment
         """
-        environment = info.data.get('ENVIRONMENT', 'development')
+        environment = info.data.get("ENVIRONMENT", "development")
 
         if v == "default_secret_key_please_change":
             if environment == "production":
@@ -79,8 +83,11 @@ class Settings(BaseSettings):
             else:
                 # Log warning but allow in development/staging
                 import logging
+
                 logger = logging.getLogger(__name__)
-                logger.warning("⚠️  WARNING: Using default API_SECRET_KEY! This is NOT secure for production.")
+                logger.warning(
+                    "⚠️  WARNING: Using default API_SECRET_KEY! This is NOT secure for production."
+                )
 
         # Validate minimum length
         if len(v) < 32:
@@ -90,18 +97,21 @@ class Settings(BaseSettings):
                 )
             else:
                 import logging
+
                 logger = logging.getLogger(__name__)
-                logger.warning(f"⚠️  WARNING: API_SECRET_KEY is only {len(v)} characters. Recommended: 32+ characters.")
+                logger.warning(
+                    f"⚠️  WARNING: API_SECRET_KEY is only {len(v)} characters. Recommended: 32+ characters."
+                )
 
         return v
 
     def get_cors_origins(self) -> list[str]:
         """Convert comma-separated CORS origins string to list."""
-        return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(',') if origin.strip()]
+        return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
 
     def get_cors_methods(self) -> list[str]:
         """Convert comma-separated CORS methods string to list."""
-        return [method.strip() for method in self.CORS_ALLOW_METHODS.split(',') if method.strip()]
+        return [method.strip() for method in self.CORS_ALLOW_METHODS.split(",") if method.strip()]
 
 
 # Instantiate settings early to make them available for import
@@ -112,15 +122,17 @@ settings = Settings()
 log_level_numeric = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 logging.basicConfig(
     level=log_level_numeric,
-    format='%(asctime)s | %(levelname)-8s | %(name)-35s | %(message)s',  # Wider name field
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s | %(levelname)-8s | %(name)-35s | %(message)s",  # Wider name field
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 # Optional: Adjust log levels for noisy libraries
 logging.getLogger("uvicorn.access").setLevel(max(log_level_numeric, logging.WARNING))
 logging.getLogger("urllib3").setLevel(max(log_level_numeric, logging.INFO))
 logging.getLogger("huggingface_hub").setLevel(max(log_level_numeric, logging.INFO))
-logging.getLogger("mlflow.tracking").setLevel(max(log_level_numeric, logging.WARNING))  # MLflow can be verbose
+logging.getLogger("mlflow.tracking").setLevel(
+    max(log_level_numeric, logging.WARNING)
+)  # MLflow can be verbose
 
 logger = logging.getLogger(__name__)  # Logger for this config module
 logger.info("=" * 80)

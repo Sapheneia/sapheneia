@@ -4,10 +4,8 @@ Unit tests for configuration management.
 Tests TradingSettings class, environment variable loading, and validation.
 """
 
-import pytest
 import os
 from unittest.mock import patch
-from pydantic import ValidationError
 
 
 class TestConfigLoading:
@@ -20,7 +18,9 @@ class TestConfigLoading:
 
         # _env_file=None isolates from .env so we test code defaults only
         with patch.dict(
-            os.environ, {"TRADING_API_KEY": "test_key_32_chars_minimum_length_required"}, clear=False
+            os.environ,
+            {"TRADING_API_KEY": "test_key_32_chars_minimum_length_required"},
+            clear=False,
         ):
             settings = TradingSettings(_env_file=None)
 
@@ -58,10 +58,7 @@ class TestConfigLoading:
             settings = TradingSettings()
             # CORS_ALLOWED_ORIGINS is stored as a comma-separated string
             assert isinstance(settings.CORS_ALLOWED_ORIGINS, str)
-            assert (
-                "," in settings.CORS_ALLOWED_ORIGINS
-                or len(settings.CORS_ALLOWED_ORIGINS) > 0
-            )
+            assert "," in settings.CORS_ALLOWED_ORIGINS or len(settings.CORS_ALLOWED_ORIGINS) > 0
 
     def test_cors_methods_string(self):
         """Test CORS methods stored as comma-separated string."""

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock
 
@@ -49,10 +48,7 @@ def _make_inner(prices, forecast_response, trade_response, metrics_response):
 
 @pytest.fixture
 def synthetic_prices() -> list[dict]:
-    return [
-        {"time": datetime(2024, 1, 1 + i), "close": 100.0 + i * 0.5}
-        for i in range(0, 30)
-    ]
+    return [{"time": datetime(2024, 1, 1 + i), "close": 100.0 + i * 0.5} for i in range(0, 30)]
 
 
 async def test_inner_loop_happy_path(sample_strategy, synthetic_prices) -> None:

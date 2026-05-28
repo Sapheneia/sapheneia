@@ -1,5 +1,4 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
 *.py[cod]
 *$py.class
 
@@ -209,6 +208,7 @@ api/timesfm20/local/.mlflow_cache/
 
 # Logs
 logs/*.log
+logs/
 
 # MLflow
 mlruns/
@@ -230,11 +230,10 @@ app_old.py
 
 # Local
 .local/
-.claude/
-.mcp.json
-CLAUDE.md
-.setup
 .agent/
-.models
-.timescaledb-data/
-experiments/
+.claude/
+.config/
+.setup/
+sapheneia.egg-info/
+.mcp.json
+CLAUDE.local.md

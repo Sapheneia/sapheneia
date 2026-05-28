@@ -14,6 +14,7 @@ from data.core.config import settings
 from data.main import app
 from data.tests.conftest import FakeRecord
 
+
 # Override the real lifespan (which connects to TimescaleDB) with a no-op so
 # unit tests can inject their own fakes via app.state.
 @asynccontextmanager

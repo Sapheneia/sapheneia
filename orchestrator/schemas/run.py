@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -21,32 +21,32 @@ class RunSummary(BaseModel):
     strategy_type: str
     status: str
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
+    completed_at: datetime | None = None
+    error: str | None = None
 
 
 class MetricsRow(BaseModel):
-    sharpe: Optional[float] = None
-    sortino: Optional[float] = None
-    cagr: Optional[float] = None
-    calmar: Optional[float] = None
-    max_drawdown: Optional[float] = None
-    win_rate: Optional[float] = None
-    total_return: Optional[float] = None
-    extra: Optional[dict[str, Any]] = None
+    sharpe: float | None = None
+    sortino: float | None = None
+    cagr: float | None = None
+    calmar: float | None = None
+    max_drawdown: float | None = None
+    win_rate: float | None = None
+    total_return: float | None = None
+    extra: dict[str, Any] | None = None
 
 
 class RunDetail(RunSummary):
     config: dict[str, Any]
     cache_enabled: bool
-    metrics: Optional[MetricsRow] = None
+    metrics: MetricsRow | None = None
 
 
 class CacheLookupResult(BaseModel):
     hit: bool
-    median: Optional[list[float]] = None
-    q10: Optional[list[float]] = None
-    q90: Optional[list[float]] = None
+    median: list[float] | None = None
+    q10: list[float] | None = None
+    q90: list[float] | None = None
 
 
 class CleanupResult(BaseModel):

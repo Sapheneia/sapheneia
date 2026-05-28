@@ -6,9 +6,9 @@ for quantile strategy with various quantile signal configurations.
 """
 
 import pytest
-import numpy as np
-from trading.services.trading import TradingStrategy
+
 from trading.core.exceptions import InvalidParametersError
+from trading.services.trading import TradingStrategy
 
 
 class TestQuantileStrategy:
@@ -251,9 +251,7 @@ class TestQuantileStrategy:
         # Should match range [95, 100] and generate buy signal
         assert result["action"] in ["buy", "hold"]
 
-    def test_multiple_quantile_signals_first_match_wins(
-        self, base_params, sample_ohlc_data
-    ):
+    def test_multiple_quantile_signals_first_match_wins(self, base_params, sample_ohlc_data):
         """Test that first matching quantile signal is used."""
         params = base_params.copy()
         params.update(

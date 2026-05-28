@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import httpx
 
 from ..config import settings
@@ -29,8 +27,8 @@ async def delete_run(run_id: str) -> dict:
 
 
 async def delete_cache(
-    experiment_id: Optional[str] = None,
-    older_than_seconds: Optional[int] = None,
+    experiment_id: str | None = None,
+    older_than_seconds: int | None = None,
 ) -> dict:
     params = {}
     if experiment_id:

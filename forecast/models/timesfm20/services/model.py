@@ -5,17 +5,19 @@ Handles model initialization, state management, and inference execution.
 Uses core modules for clean architecture.
 """
 
-import os
 import logging
-import time
+import os
 import threading
+import time
+from typing import Any
+
 import numpy as np
-from typing import Tuple, Optional, Any, List, Dict, Union
+
+from ....core.config import settings
+from ....core.forecasting import Forecaster, process_quantile_bands, run_forecast
 
 # Import core modules (proper Python imports - no sys.path hacks)
 from ....core.model_wrapper import TimesFMModel
-from ....core.forecasting import Forecaster, run_forecast, process_quantile_bands
-from ....core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +27,17 @@ logger = logging.getLogger(__name__)
 
 # Import from centralized exceptions module
 try:
-    from ...core.exceptions import ModelNotInitializedError, ModelInitializationError
+    from ...core.exceptions import ModelInitializationError, ModelNotInitializedError
 except ImportError:
     # Fallback if exceptions module not available
     class ModelNotInitializedError(Exception):
         """Raised when inference is attempted on uninitialized model."""
+
         pass
 
     class ModelInitializationError(Exception):
         """Raised when model initialization fails."""
+
         pass
 
 
@@ -41,12 +45,12 @@ except ImportError:
 # For single-worker deployment, we store the model state at module level
 # Thread lock ensures safe concurrent access to module-level state
 
-_forecaster_instance: Optional[Forecaster] = None
-_model_wrapper: Optional[TimesFMModel] = None
+_forecaster_instance: Forecaster | None = None
+_model_wrapper: TimesFMModel | None = None
 _model_status: str = "uninitialized"  # "uninitialized", "initializing", "ready", "error"
-_error_message: Optional[str] = None
-_model_source_info: Optional[str] = None
-_model_config: Optional[Dict[str, Any]] = None
+_error_message: str | None = None
+_model_source_info: str | None = None
+_model_config: dict[str, Any] | None = None
 
 # Thread lock for state access (prevents race conditions)
 _model_lock = threading.Lock()
@@ -55,24 +59,23 @@ _model_lock = threading.Lock()
 # --- File Path Handling ---
 
 # Define base directory for local model artifacts relative to this file's location
-BASE_LOCAL_MODEL_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', 'local')
-)
+BASE_LOCAL_MODEL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "local"))
 logger.info(f"Base directory for TimesFM local models: {BASE_LOCAL_MODEL_DIR}")
 os.makedirs(BASE_LOCAL_MODEL_DIR, exist_ok=True)
 
 
 # --- Initialization Functions ---
 
+
 def initialize_model(
     source_type: str = "hf",  # 'hf', 'local', 'mlflow'
     backend: str = None,
     context_len: int = None,
     horizon_len: int = None,
-    checkpoint: Optional[str] = None,
-    local_model_path: Optional[str] = None,
-    mlflow_model_name: Optional[str] = None,
-    mlflow_model_stage: str = "Production"
+    checkpoint: str | None = None,
+    local_model_path: str | None = None,
+    mlflow_model_name: str | None = None,
+    mlflow_model_stage: str = "Production",
 ) -> None:
     """
     Initialize TimesFM model from specified source.
@@ -135,14 +138,12 @@ def initialize_model(
             if not mlflow_model_name:
                 raise ValueError("'mlflow_model_name' required for source_type 'mlflow'")
             _initialize_from_mlflow(
-                mlflow_model_name, mlflow_model_stage,
-                backend, context_len, horizon_len
+                mlflow_model_name, mlflow_model_stage, backend, context_len, horizon_len
             )
 
         else:
             raise ValueError(
-                f"Unknown source_type: {source_type}. "
-                f"Choose 'hf', 'local', or 'mlflow'"
+                f"Unknown source_type: {source_type}. Choose 'hf', 'local', or 'mlflow'"
             )
 
         # Store configuration and update status (thread-safe)
@@ -153,14 +154,14 @@ def initialize_model(
                 "context_len": context_len,
                 "horizon_len": horizon_len,
                 "checkpoint": checkpoint,
-                "local_model_path": local_model_path
+                "local_model_path": local_model_path,
             }
             _model_status = "ready"
 
         elapsed = time.time() - start_time
 
         logger.info("=" * 80)
-        logger.info(f"✅ TimesFM-2.0 initialization complete!")
+        logger.info("✅ TimesFM-2.0 initialization complete!")
         logger.info(f"   Time: {elapsed:.2f}s")
         logger.info(f"   Source: {_model_source_info}")
         logger.info("=" * 80)
@@ -181,10 +182,7 @@ def initialize_model(
 
 
 def _initialize_from_hf(
-    backend: str,
-    context_len: int,
-    horizon_len: int,
-    checkpoint: Optional[str]
+    backend: str, context_len: int, horizon_len: int, checkpoint: str | None
 ) -> None:
     """Initialize model from HuggingFace checkpoint."""
     global _forecaster_instance, _model_wrapper, _model_source_info
@@ -202,7 +200,7 @@ def _initialize_from_hf(
         context_len=context_len,
         horizon_len=horizon_len,
         checkpoint=checkpoint,
-        local_model_path=None
+        local_model_path=None,
     )
 
     # Load the model
@@ -216,10 +214,7 @@ def _initialize_from_hf(
 
 
 def _initialize_from_local(
-    backend: str,
-    context_len: int,
-    horizon_len: int,
-    local_model_path: Optional[str]
+    backend: str, context_len: int, horizon_len: int, local_model_path: str | None
 ) -> None:
     """Initialize model from local checkpoint file."""
     global _forecaster_instance, _model_wrapper, _model_source_info
@@ -228,9 +223,7 @@ def _initialize_from_local(
         raise ValueError("Local model path must be specified")
 
     # Construct absolute path safely
-    full_local_path = os.path.abspath(
-        os.path.join(BASE_LOCAL_MODEL_DIR, local_model_path)
-    )
+    full_local_path = os.path.abspath(os.path.join(BASE_LOCAL_MODEL_DIR, local_model_path))
 
     # Security check: ensure path is within allowed directory
     if not full_local_path.startswith(BASE_LOCAL_MODEL_DIR):
@@ -250,7 +243,7 @@ def _initialize_from_local(
         context_len=context_len,
         horizon_len=horizon_len,
         checkpoint=None,
-        local_model_path=full_local_path
+        local_model_path=full_local_path,
     )
 
     # Load the model
@@ -268,7 +261,7 @@ def _initialize_from_mlflow(
     mlflow_model_stage: str,
     backend: str,
     context_len: int,
-    horizon_len: int
+    horizon_len: int,
 ) -> None:
     """Initialize model from MLflow Model Registry."""
     global _forecaster_instance, _model_wrapper, _model_source_info
@@ -283,7 +276,8 @@ def _initialize_from_mlflow(
 
 # --- Status Functions ---
 
-def get_status() -> Tuple[str, Optional[str]]:
+
+def get_status() -> tuple[str, str | None]:
     """
     Get current model status and error message (thread-safe).
 
@@ -294,7 +288,7 @@ def get_status() -> Tuple[str, Optional[str]]:
         return _model_status, _error_message
 
 
-def get_model_source_info() -> Optional[str]:
+def get_model_source_info() -> str | None:
     """
     Get information about model source (thread-safe).
 
@@ -305,7 +299,7 @@ def get_model_source_info() -> Optional[str]:
         return _model_source_info
 
 
-def get_model_config() -> Optional[Dict[str, Any]]:
+def get_model_config() -> dict[str, Any] | None:
     """
     Get current model configuration (thread-safe).
 
@@ -320,11 +314,10 @@ def get_model_config() -> Optional[Dict[str, Any]]:
 
 # --- Inference Functions ---
 
+
 def run_inference(
-    target_inputs: List[List[float]],
-    covariates: Optional[Dict[str, Any]],
-    parameters: Dict[str, Any]
-) -> Dict[str, Any]:
+    target_inputs: list[list[float]], covariates: dict[str, Any] | None, parameters: dict[str, Any]
+) -> dict[str, Any]:
     """
     Run TimesFM inference on provided data.
 
@@ -354,15 +347,17 @@ def run_inference(
 
     logger.info("=" * 80)
     logger.info("🚀 Starting TimesFM inference")
-    logger.info(f"   Target inputs shape: {[len(x) for x in target_inputs] if target_inputs else 'None'}")
+    logger.info(
+        f"   Target inputs shape: {[len(x) for x in target_inputs] if target_inputs else 'None'}"
+    )
     logger.info(f"   Covariates provided: {bool(covariates and any(covariates.values()))}")
     logger.info(f"   Parameters: {parameters}")
     logger.info("=" * 80)
 
     try:
         # Extract parameters
-        use_covariates = parameters.get('use_covariates', False)
-        freq = parameters.get('freq', 0)
+        use_covariates = parameters.get("use_covariates", False)
+        freq = parameters.get("freq", 0)
 
         # Run forecast using existing function
         results = run_forecast(
@@ -370,24 +365,25 @@ def run_inference(
             target_inputs=target_inputs,
             covariates=covariates if use_covariates else None,
             use_covariates=use_covariates and bool(covariates and any(covariates.values())),
-            freq=freq
+            freq=freq,
         )
 
         # Process quantile bands if requested
-        quantile_indices = parameters.get('quantile_indices', [1, 3, 5, 7, 9])
-        if 'quantile_forecast' in results and quantile_indices is not None:
+        quantile_indices = parameters.get("quantile_indices", [1, 3, 5, 7, 9])
+        if "quantile_forecast" in results and quantile_indices is not None:
             logger.info(f"Processing quantile bands with indices: {quantile_indices}")
             quantile_bands = process_quantile_bands(
-                quantile_forecast=results['quantile_forecast'],
-                selected_indices=quantile_indices
+                quantile_forecast=results["quantile_forecast"], selected_indices=quantile_indices
             )
-            results['quantile_bands'] = quantile_bands
+            results["quantile_bands"] = quantile_bands
 
         logger.info("=" * 80)
         logger.info("✅ TimesFM inference completed successfully")
         logger.info(f"   Method: {results.get('method', 'unknown')}")
         logger.info(f"   Point forecast shape: {np.array(results.get('point_forecast', [])).shape}")
-        logger.info(f"   Quantile forecast shape: {np.array(results.get('quantile_forecast', [])).shape}")
+        logger.info(
+            f"   Quantile forecast shape: {np.array(results.get('quantile_forecast', [])).shape}"
+        )
         logger.info("=" * 80)
 
         return results
@@ -400,6 +396,7 @@ def run_inference(
 
 
 # --- Shutdown Functions ---
+
 
 def shutdown_model() -> bool:
     """
@@ -418,7 +415,7 @@ def shutdown_model() -> bool:
             return False
 
         logger.info("=" * 80)
-        logger.info(f"🔄 Shutting down TimesFM model")
+        logger.info("🔄 Shutting down TimesFM model")
         logger.info(f"   Source: {_model_source_info}")
         logger.info("=" * 80)
 

@@ -7,9 +7,12 @@ Calmar ratio, and win rate calculations.
 
 Built on top of quantstats library for robust, industry-standard metrics.
 """
+
 import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from metrics.core.config import settings
 from metrics.routes import endpoints
 from shared.errors import register_error_handlers
@@ -17,7 +20,7 @@ from shared.errors import register_error_handlers
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ app = FastAPI(
     description="Financial performance metrics calculation service for trading strategies",
     version="2.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # CORS middleware
@@ -58,19 +61,15 @@ async def root():
             "docs": "/docs",
             "redoc": "/redoc",
             "health": "/health",
-            "compute": "/metrics/v1/compute"
-        }
+            "compute": "/metrics/v1/compute",
+        },
     }
 
 
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "metrics",
-        "version": "2.0.0"
-    }
+    return {"status": "healthy", "service": "metrics", "version": "2.0.0"}
 
 
 @app.on_event("startup")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -23,7 +23,7 @@ class TradingClient:
         current_position: float,
         available_cash: float,
         initial_capital: float,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> dict:
         body = {
             "strategy_type": strategy_type,

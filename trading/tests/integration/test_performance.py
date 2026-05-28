@@ -5,10 +5,12 @@ Tests response times to ensure they meet the <100ms requirement for typical requ
 """
 
 import time
+
 import pytest
 from fastapi.testclient import TestClient
-from trading.main import app
+
 from trading.core.config import settings
+from trading.main import app
 
 test_client = TestClient(app)
 
@@ -36,9 +38,7 @@ class TestPerformance:
         }
 
         start_time = time.time()
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
         elapsed_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
         assert response.status_code == 200
@@ -65,9 +65,7 @@ class TestPerformance:
         }
 
         start_time = time.time()
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
         elapsed_time = (time.time() - start_time) * 1000
 
         assert response.status_code == 200
@@ -105,9 +103,7 @@ class TestPerformance:
         }
 
         start_time = time.time()
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
         elapsed_time = (time.time() - start_time) * 1000
 
         assert response.status_code == 200
@@ -154,9 +150,7 @@ class TestPerformance:
         # Should be a float string with up to 3 decimal places
         process_time = float(process_time_str)
         assert process_time >= 0, "Process time should be non-negative"
-        assert (
-            "." in process_time_str or process_time == 0
-        ), "Should have decimal format"
+        assert "." in process_time_str or process_time == 0, "Should have decimal format"
 
     def test_process_time_header_present_in_all_responses(self, auth_headers):
         """Test that X-Process-Time header is present in all endpoint responses."""
@@ -174,9 +168,7 @@ class TestPerformance:
                 response = test_client.post(path, headers=auth_headers)
 
             assert response.status_code in [200, 429], f"Failed for {method} {path}"
-            assert (
-                "X-Process-Time" in response.headers
-            ), f"Missing X-Process-Time for {path}"
+            assert "X-Process-Time" in response.headers, f"Missing X-Process-Time for {path}"
 
             # Verify it's a valid float
             process_time = float(response.headers["X-Process-Time"])

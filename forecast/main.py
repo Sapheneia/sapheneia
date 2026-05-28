@@ -5,37 +5,36 @@ Main application entry point for the Sapheneia time series forecasting API.
 Provides REST API endpoints for multiple forecasting models.
 """
 
-from fastapi import FastAPI, Request, Response, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from fastapi.responses import JSONResponse
-import logging
-import uvicorn
 from datetime import datetime
 
+import uvicorn
+from fastapi import Depends, FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+
+# Import shared error handlers for orchestration code running in this process
+from shared.errors import register_error_handlers
+
 # Import core settings (this also configures logging)
-from .core.config import settings, logger
-
-# Import rate limiting
-from .core.rate_limit import limiter, rate_limit_exceeded_handler, get_rate_limit
-
-# Import authentication
-from .core.security import get_api_key
+from .core.config import logger, settings
 
 # Import custom exceptions (Phase 7: Error Handling)
 from .core.exceptions import SapheneiaException
 
-# Import shared error handlers for orchestration code running in this process
-from shared.errors import SapheneiaError as SharedSapheneiaError, register_error_handlers
+# Import rate limiting
+from .core.rate_limit import get_rate_limit, limiter, rate_limit_exceeded_handler
+
+# Import authentication
+from .core.security import get_api_key
 
 # Import model registry
-from .models import get_available_models, get_all_models_info
+from .models import get_all_models_info, get_available_models
+from .models.chronos.routes import endpoints as chronos_endpoints
 
 # Import routers from model modules
 from .models.timesfm20.routes import endpoints as timesfm20_endpoints
-from .models.chronos.routes import endpoints as chronos_endpoints
 
 # Forecast service is stateless beyond the singleton model state inside the
 # per-model containers. Run-state ownership lives in the orchestrator service
@@ -53,7 +52,7 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
 )
 
 # Add rate limiter state to app
@@ -80,10 +79,12 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=cors_methods,
-    allow_headers=["*"] if settings.CORS_ALLOW_HEADERS == "*" else settings.CORS_ALLOW_HEADERS.split(","),
+    allow_headers=["*"]
+    if settings.CORS_ALLOW_HEADERS == "*"
+    else settings.CORS_ALLOW_HEADERS.split(","),
 )
 
-logger.info(f"CORS middleware configured:")
+logger.info("CORS middleware configured:")
 logger.info(f"  - Allowed origins: {cors_origins}")
 logger.info(f"  - Allow credentials: {settings.CORS_ALLOW_CREDENTIALS}")
 logger.info(f"  - Allowed methods: {cors_methods}")
@@ -112,22 +113,24 @@ async def request_id_middleware(request: Request, call_next):
 
 # --- Request Size Limit Middleware ---
 
+
 @app.middleware("http")
 async def request_size_limit_middleware(request: Request, call_next):
     """
     Enforce request size limits to prevent oversized requests.
-    
+
     This middleware checks Content-Length header and rejects requests
     exceeding MAX_REQUEST_SIZE to protect the API from resource exhaustion.
     """
     if request.method in ["POST", "PUT", "PATCH"]:
         content_length = request.headers.get("content-length")
-        
+
         if content_length:
             try:
                 content_length = int(content_length)
                 if content_length > settings.MAX_REQUEST_SIZE:
                     from fastapi.responses import JSONResponse
+
                     logger.warning(
                         f"Request rejected: size {content_length} bytes exceeds maximum "
                         f"{settings.MAX_REQUEST_SIZE} bytes"
@@ -137,60 +140,57 @@ async def request_size_limit_middleware(request: Request, call_next):
                         content={
                             "error": "REQUEST_TOO_LARGE",
                             "message": f"Request size {content_length} bytes exceeds maximum {settings.MAX_REQUEST_SIZE} bytes",
-                            "max_size": settings.MAX_REQUEST_SIZE
-                        }
+                            "max_size": settings.MAX_REQUEST_SIZE,
+                        },
                     )
             except ValueError:
                 # Invalid content-length header
-                logger.warning(f"Invalid content-length header: {request.headers.get('content-length')}")
-    
+                logger.warning(
+                    f"Invalid content-length header: {request.headers.get('content-length')}"
+                )
+
     response = await call_next(request)
     return response
 
-logger.info(f"Request size limit middleware configured:")
+
+logger.info("Request size limit middleware configured:")
 logger.info(f"  - Max request size: {settings.MAX_REQUEST_SIZE / 1024 / 1024:.1f}MB")
 logger.info(f"  - Max upload size: {settings.MAX_UPLOAD_SIZE / 1024 / 1024:.1f}MB")
 
 
 # --- Exception Handlers (Phase 7: Error Handling) ---
 
+
 @app.exception_handler(SapheneiaException)
 async def sapheneia_exception_handler(request: Request, exc: SapheneiaException):
     """
     Handle Sapheneia custom exceptions with structured responses.
-    
+
     Provides consistent error format across all API endpoints.
     """
-    logger.error(
-        f"❌ SapheneiaException: {exc.error_code} - {exc.message}"
-    )
+    logger.error(f"❌ SapheneiaException: {exc.error_code} - {exc.message}")
     if exc.details:
         logger.error(f"   Details: {exc.details}")
-    
-    return JSONResponse(
-        status_code=exc.suggested_status_code,
-        content=exc.to_dict()
-    )
+
+    return JSONResponse(status_code=exc.suggested_status_code, content=exc.to_dict())
 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """
     Handle unexpected exceptions not caught by specific handlers.
-    
+
     Logs full traceback for debugging while returning safe error message to user.
     """
     logger.exception("Unexpected error occurred")
-    
+
     return JSONResponse(
         status_code=500,
         content={
             "error": "INTERNAL_ERROR",
             "message": "An unexpected error occurred. Please contact support.",
-            "details": {
-                "error_type": type(exc).__name__
-            }
-        }
+            "details": {"error_type": type(exc).__name__},
+        },
     )
 
 
@@ -200,6 +200,7 @@ logger.info("Custom exception handlers configured")
 
 
 # --- Startup Event ---
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -249,6 +250,7 @@ async def startup_event():
 
 # --- Shutdown Event ---
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """
@@ -263,6 +265,7 @@ async def shutdown_event():
     # Shutdown any loaded models (TimesFM and Chronos)
     try:
         from .models.timesfm20.services import model as timesfm_model_service
+
         status, _ = timesfm_model_service.get_status()
         if status == "ready":
             logger.info("Shutting down TimesFM-2.0 model...")
@@ -272,6 +275,7 @@ async def shutdown_event():
 
     try:
         from .models.chronos.services import model as chronos_model_service
+
         c_status, _ = chronos_model_service.get_status()
         if c_status == "ready":
             logger.info("Shutting down Chronos model...")
@@ -286,17 +290,11 @@ async def shutdown_event():
 # --- Include Model Routers ---
 
 # TimesFM-2.0 routes under /forecast/v1/timesfm20
-app.include_router(
-    timesfm20_endpoints.router,
-    prefix="/forecast/v1"
-)
+app.include_router(timesfm20_endpoints.router, prefix="/forecast/v1")
 logger.info(f"✅ Included TimesFM-2.0 router at: /forecast/v1{timesfm20_endpoints.router.prefix}")
 
 # Chronos routes under /forecast/v1/chronos
-app.include_router(
-    chronos_endpoints.router,
-    prefix="/forecast/v1"
-)
+app.include_router(chronos_endpoints.router, prefix="/forecast/v1")
 logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
 
 # Generic inference endpoint at /forecast/v1/inference for dedicated model containers.
@@ -304,20 +302,19 @@ logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.rou
 # at the generic path without the model name prefix. This allows the orchestration
 # service to call a consistent endpoint regardless of which model container is targeted.
 from fastapi import APIRouter, Body
-from .models.chronos.schemas.schema import InferenceInput, InferenceOutput
+
 from .models.chronos.routes.endpoints import inference_endpoint as chronos_inference_endpoint
+from .models.chronos.schemas.schema import InferenceInput, InferenceOutput
 
 generic_inference_router = APIRouter(
-    tags=["Generic Inference"],
-    dependencies=[Depends(get_api_key)]
+    tags=["Generic Inference"], dependencies=[Depends(get_api_key)]
 )
+
 
 @generic_inference_router.post("/inference", response_model=InferenceOutput)
 @limiter.limit(get_rate_limit("inference"))
 async def generic_inference_endpoint(
-    request: Request,
-    response: Response,
-    input_data: InferenceInput = Body()
+    request: Request, response: Response, input_data: InferenceInput = Body()
 ):
     """
     Generic inference endpoint for dedicated model containers.
@@ -329,6 +326,7 @@ async def generic_inference_endpoint(
     """
     return await chronos_inference_endpoint(request, response, input_data)
 
+
 app.include_router(generic_inference_router, prefix="/forecast/v1")
 logger.info("✅ Included generic inference router at: /forecast/v1/inference")
 
@@ -337,6 +335,7 @@ logger.info("✅ Included generic inference router at: /forecast/v1/inference")
 
 
 # --- Root Endpoints ---
+
 
 @app.get("/", tags=["Health"])
 @limiter.limit(get_rate_limit("health"))
@@ -348,11 +347,7 @@ async def root(request: Request, response: Response):
         Simple status message confirming API is running
     """
     logger.debug("Root endpoint '/' called")
-    return {
-        "status": "Sapheneia API is running",
-        "version": app.version,
-        "docs": "/docs"
-    }
+    return {"status": "Sapheneia API is running", "version": app.version, "docs": "/docs"}
 
 
 @app.get("/health", tags=["Health"])
@@ -368,18 +363,14 @@ async def health_check(request: Request, response: Response):
 
     # Check TimesFM model status
     from .models.timesfm20.services import model as timesfm_model_service
+
     timesfm_status, timesfm_error = timesfm_model_service.get_status()
 
     health_data = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "api_version": app.version,
-        "models": {
-            "timesfm20": {
-                "status": timesfm_status,
-                "error": timesfm_error
-            }
-        }
+        "models": {"timesfm20": {"status": timesfm_status, "error": timesfm_error}},
     }
 
     logger.debug(f"Health check: {health_data}")
@@ -402,14 +393,8 @@ async def api_info(request: Request, response: Response):
         "api_host": settings.API_HOST,
         "api_port": settings.API_PORT,
         "available_models": get_available_models(),
-        "documentation": {
-            "swagger": "/docs",
-            "redoc": "/redoc",
-            "openapi_json": "/openapi.json"
-        },
-        "features": {
-            "api_authentication": True
-        }
+        "documentation": {"swagger": "/docs", "redoc": "/redoc", "openapi_json": "/openapi.json"},
+        "features": {"api_authentication": True},
     }
 
     return info
@@ -424,10 +409,7 @@ async def list_models(request: Request, response: Response):
     Returns:
         Dictionary of all registered models with their metadata
     """
-    return {
-        "models": get_all_models_info(),
-        "count": len(get_available_models())
-    }
+    return {"models": get_all_models_info(), "count": len(get_available_models())}
 
 
 # --- Direct Run Configuration (for development) ---
@@ -444,5 +426,5 @@ if __name__ == "__main__":
         port=settings.API_PORT,
         log_level=settings.LOG_LEVEL.lower(),
         reload=True,  # Enable auto-reload for development
-        reload_dirs=["forecast"]  # Watch forecast directory
+        reload_dirs=["forecast"],  # Watch forecast directory
     )

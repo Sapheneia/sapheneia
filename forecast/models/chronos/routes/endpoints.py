@@ -4,46 +4,44 @@ Chronos API Endpoints
 REST API for Chronos model operations.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request, Response, Body
 import logging
 import time
-from typing import Optional, Dict, Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+
+from ....core.exceptions import (
+    ModelInitializationError,
+    ModelNotInitializedError,
+    SapheneiaException,
+)
+from ....core.rate_limit import get_rate_limit, limiter
+
+# Import core utilities
+from ....core.security import get_api_key
 
 # Import schemas
 from ..schemas.schema import (
-    ModelInitInput, ModelInitOutput,
-    InferenceInput, InferenceOutput,
-    ShutdownOutput, StatusOutput
+    InferenceInput,
+    InferenceOutput,
+    ModelInitInput,
+    ModelInitOutput,
+    ShutdownOutput,
+    StatusOutput,
 )
 
 # Import services
 from ..services import model as chronos_model_service
 
-# Import core utilities
-from ....core.security import get_api_key
-from ....core.rate_limit import limiter, get_rate_limit
-from ....core.exceptions import (
-    SapheneiaException,
-    ModelNotInitializedError,
-    ModelInitializationError,
-)
-
 logger = logging.getLogger(__name__)
 
 # Create router with prefix and dependencies
-router = APIRouter(
-    prefix="/chronos",
-    tags=["Chronos"],
-    dependencies=[Depends(get_api_key)]
-)
+router = APIRouter(prefix="/chronos", tags=["Chronos"], dependencies=[Depends(get_api_key)])
 
 
 @router.post("/initialization", response_model=ModelInitOutput)
 @limiter.limit(get_rate_limit("initialization"))
 async def initialize_model_endpoint(
-    request: Request,
-    response: Response,
-    init_input: ModelInitInput = Body()
+    request: Request, response: Response, init_input: ModelInitInput = Body()
 ):
     """
     Initialize the Chronos model.
@@ -68,20 +66,16 @@ async def initialize_model_endpoint(
         return ModelInitOutput(
             message="Model already initialized",
             model_status="ready",
-            model_info=chronos_model_service.get_model_info()
+            model_info=chronos_model_service.get_model_info(),
         )
 
     if status == "initializing":
         logger.warning("Initialization already in progress")
-        raise HTTPException(
-            status_code=409,
-            detail="Model initialization already in progress"
-        )
+        raise HTTPException(status_code=409, detail="Model initialization already in progress")
 
     try:
         chronos_model_service.initialize_model(
-            model_variant=init_input.model_variant,
-            device=init_input.device
+            model_variant=init_input.model_variant, device=init_input.device
         )
 
         model_info = chronos_model_service.get_model_info()
@@ -89,9 +83,7 @@ async def initialize_model_endpoint(
         logger.info(f"✅ Initialization successful: {model_info}")
 
         return ModelInitOutput(
-            message=f"Model initialized successfully",
-            model_status="ready",
-            model_info=model_info
+            message="Model initialized successfully", model_status="ready", model_info=model_info
         )
 
     except (ModelInitializationError, chronos_model_service.ModelInitializationError) as e:
@@ -101,9 +93,10 @@ async def initialize_model_endpoint(
     except ValueError as e:
         logger.error(f"❌ Configuration error: {e}")
         from ....core.exceptions import ConfigurationError
+
         raise ConfigurationError(str(e), setting="model_variant")
 
-    except Exception as e:
+    except Exception:
         logger.exception("❌ Unexpected error during initialization")
         raise
 
@@ -127,18 +120,13 @@ async def get_model_status(request: Request, response: Response):
     if error_msg:
         details = f"{details}. Error: {error_msg}" if details else f"Error: {error_msg}"
 
-    return StatusOutput(
-        model_status=status,
-        details=details
-    )
+    return StatusOutput(model_status=status, details=details)
 
 
 @router.post("/inference", response_model=InferenceOutput)
 @limiter.limit(get_rate_limit("inference"))
 async def inference_endpoint(
-    request: Request,
-    response: Response,
-    input_data: InferenceInput = Body()
+    request: Request, response: Response, input_data: InferenceInput = Body()
 ):
     """
     Run Chronos inference on provided context.
@@ -156,7 +144,7 @@ async def inference_endpoint(
     - Execution metadata
     """
     logger.info("=" * 80)
-    logger.info(f"📥 Received inference request")
+    logger.info("📥 Received inference request")
     logger.info(f"   Context length: {len(input_data.context)}")
     logger.info(f"   Prediction length: {input_data.prediction_length}")
     logger.info("=" * 80)
@@ -167,8 +155,7 @@ async def inference_endpoint(
         logger.error(f"❌ Inference called but model not ready. Status: {status}")
         raise HTTPException(
             status_code=409,
-            detail=f"Model not initialized. Status: {status}. "
-                   f"Please call /initialization first."
+            detail=f"Model not initialized. Status: {status}. Please call /initialization first.",
         )
 
     start_time = time.time()
@@ -180,7 +167,7 @@ async def inference_endpoint(
             num_samples=input_data.num_samples,
             temperature=input_data.temperature,
             top_k=input_data.top_k,
-            top_p=input_data.top_p
+            top_p=input_data.top_p,
         )
 
         total_time = time.time() - start_time
@@ -195,8 +182,8 @@ async def inference_endpoint(
             execution_metadata={
                 "total_time_seconds": round(total_time, 3),
                 "model_version": chronos_model_service._model_variant,
-                "api_version": "1.0.0"
-            }
+                "api_version": "1.0.0",
+            },
         )
 
     except (ModelNotInitializedError, chronos_model_service.ModelNotInitializedError) as e:
@@ -206,8 +193,8 @@ async def inference_endpoint(
     except SapheneiaException:
         raise
 
-    except Exception as e:
-        logger.exception(f"❌ Inference failed")
+    except Exception:
+        logger.exception("❌ Inference failed")
         raise
 
 

@@ -7,8 +7,9 @@ Tests API key validation and authentication mechanisms.
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from trading.core.security import get_api_key, security_scheme
+
 from trading.core.config import settings
+from trading.core.security import get_api_key
 
 
 class TestAPIKeyAuthentication:
@@ -29,9 +30,7 @@ class TestAPIKeyAuthentication:
     @pytest.mark.asyncio
     async def test_invalid_api_key(self):
         """Test invalid API key is rejected."""
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer", credentials="invalid_key"
-        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid_key")
 
         with pytest.raises(HTTPException) as exc_info:
             await get_api_key(credentials)

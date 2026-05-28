@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import asyncpg
 
@@ -70,7 +69,7 @@ class RunsRepository:
         run_id: str,
         status: str,
         *,
-        error: Optional[str] = None,
+        error: str | None = None,
         completed: bool = False,
     ) -> None:
         async with self._pool.acquire() as conn:
@@ -93,7 +92,7 @@ class RunsRepository:
         async with self._pool.acquire() as conn:
             await conn.execute("UPDATE runs SET heartbeat_at = now() WHERE run_id = $1", run_id)
 
-    async def get(self, run_id: str) -> Optional[dict[str, Any]]:
+    async def get(self, run_id: str) -> dict[str, Any] | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
@@ -109,10 +108,10 @@ class RunsRepository:
     async def list(
         self,
         *,
-        experiment_id: Optional[str] = None,
-        status: Optional[str] = None,
-        ticker: Optional[str] = None,
-        model_id: Optional[str] = None,
+        experiment_id: str | None = None,
+        status: str | None = None,
+        ticker: str | None = None,
+        model_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         clauses = []

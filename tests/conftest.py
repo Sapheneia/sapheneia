@@ -2,9 +2,10 @@
 Pytest configuration and fixtures for Sapheneia tests.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add forecast package to Python path
 forecast_path = Path(__file__).parent.parent / "forecast"
@@ -22,10 +23,7 @@ def mock_data_service_response():
     """Fixture providing a mock data service response."""
     return {
         "ticker": "SPY",
-        "data": [
-            {"time": f"2023-01-{i:02d}", "close": 450.0 + i * 0.1}
-            for i in range(1, 91)
-        ]
+        "data": [{"time": f"2023-01-{i:02d}", "close": 450.0 + i * 0.1} for i in range(1, 91)],
     }
 
 
@@ -37,7 +35,7 @@ def sample_data_file(tmp_path):
     # Create sample data
     data = {
         "date": [f"2023-01-{i:02d}" for i in range(1, 31)],
-        "value": [100.0 + i * 0.5 for i in range(30)]
+        "value": [100.0 + i * 0.5 for i in range(30)],
     }
     df = pd.DataFrame(data)
 

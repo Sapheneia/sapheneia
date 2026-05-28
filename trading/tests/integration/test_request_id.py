@@ -4,11 +4,13 @@ Integration tests for request ID tracking.
 Tests that request IDs are generated, included in headers, logs, and error responses.
 """
 
-import pytest
 import uuid
+
+import pytest
 from fastapi.testclient import TestClient
-from trading.main import app
+
 from trading.core.config import settings
+from trading.main import app
 
 test_client = TestClient(app)
 
@@ -61,9 +63,7 @@ class TestRequestID:
             "initial_capital": 100000.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should get a validation error (422)
         assert response.status_code == 422
@@ -97,9 +97,7 @@ class TestRequestID:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should get an error response
         assert response.status_code in [400, 422]
@@ -129,9 +127,7 @@ class TestRequestID:
                 response = test_client.post(path, headers=auth_headers)
 
             assert response.status_code in [200, 429], f"Failed for {method} {path}"
-            assert (
-                "X-Request-ID" in response.headers
-            ), f"Missing X-Request-ID for {path}"
+            assert "X-Request-ID" in response.headers, f"Missing X-Request-ID for {path}"
 
             # Verify it's a valid UUID
             request_id = response.headers["X-Request-ID"]

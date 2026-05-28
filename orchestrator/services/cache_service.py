@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from ..repositories.forecasts_repo import ForecastsRepository
 from ..schemas.strategy import StrategyConfig
@@ -15,7 +14,7 @@ async def lookup(
     cfg: StrategyConfig,
     experiment_id: str,
     time: datetime,
-) -> Optional[dict]:
+) -> dict | None:
     if not cfg.cache.enabled or "forecasts" not in cfg.cache.what:
         return None
     scope_eid = experiment_id if cfg.cache.scope == "experiment" else None
@@ -57,7 +56,7 @@ async def write(
     )
 
 
-def _flatten(values) -> Optional[list[float]]:
+def _flatten(values) -> list[float] | None:
     if values is None:
         return None
     if values and isinstance(values[0], list):
@@ -65,7 +64,7 @@ def _flatten(values) -> Optional[list[float]]:
     return [float(v) for v in values]
 
 
-def _quantile(forecast: dict, q: float) -> Optional[list[float]]:
+def _quantile(forecast: dict, q: float) -> list[float] | None:
     quantiles = forecast.get("quantiles") or []
     for entry in quantiles:
         if abs(float(entry.get("quantile", -1)) - q) < 1e-6:

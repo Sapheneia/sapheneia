@@ -7,16 +7,17 @@ Supports three strategy types: threshold, return, and quantile-based strategies.
 All state (position, capital) comes from orchestrator via parameters.
 """
 
-import numpy as np
-from typing import Dict, Any, Optional, List, Union
-from enum import Enum
 import logging
+from enum import Enum
+from typing import Any
 
-from ..core.exceptions import (
-    InvalidStrategyError,
-    InvalidParametersError,
-)
+import numpy as np
+
 from ..core.config import settings
+from ..core.exceptions import (
+    InvalidParametersError,
+    InvalidStrategyError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class TradingStrategy:
     """
 
     @staticmethod
-    def execute_trading_signal(params: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_trading_signal(params: dict[str, Any]) -> dict[str, Any]:
         """
         Execute trading signal with capital management.
 
@@ -157,7 +158,7 @@ class TradingStrategy:
         # against floating-point precision issues or theoretical race conditions
         if current_price <= 0:
             raise InvalidParametersError(
-                message="current_price must be positive (got {})".format(current_price),
+                message=f"current_price must be positive (got {current_price})",
                 details={"parameter": "current_price", "value": current_price},
             )
 
@@ -178,7 +179,7 @@ class TradingStrategy:
         signal = TradingStrategy.generate_trading_signal(params)
 
         # Initialize result
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "action": signal["action"],
             "size": 0,
             "value": 0,
@@ -216,9 +217,7 @@ class TradingStrategy:
             actual_size = min(desired_size, current_position)
 
             if actual_size <= 0:
-                logger.warning(
-                    f"No position to sell. Current position: {current_position:.2f}"
-                )
+                logger.warning(f"No position to sell. Current position: {current_position:.2f}")
                 result["action"] = "hold"
                 result["reason"] = "No position to sell"
                 return result
@@ -252,7 +251,7 @@ class TradingStrategy:
         return result
 
     @staticmethod
-    def generate_trading_signal(params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_trading_signal(params: dict[str, Any]) -> dict[str, Any]:
         """
         Generate trading signal based on strategy type.
 
@@ -297,7 +296,7 @@ class TradingStrategy:
             raise InvalidStrategyError(message=error_msg, strategy_type=strategy_type)
 
     @staticmethod
-    def calculate_threshold_signal(params: Dict[str, Any]) -> Dict[str, Any]:
+    def calculate_threshold_signal(params: dict[str, Any]) -> dict[str, Any]:
         """
         Calculate threshold-based trading signal.
 
@@ -342,9 +341,7 @@ class TradingStrategy:
         threshold_type = params.get("threshold_type", "absolute")
         threshold_value = params.get("threshold_value", 0.0)
         execution_size = params.get("execution_size", settings.DEFAULT_EXECUTION_SIZE)
-        min_history_length = params.get(
-            "min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH
-        )
+        min_history_length = params.get("min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH)
 
         # Validate threshold parameters
         if threshold_value < 0:
@@ -435,7 +432,7 @@ class TradingStrategy:
             }
 
     @staticmethod
-    def calculate_return_signal(params: Dict[str, Any]) -> Dict[str, Any]:
+    def calculate_return_signal(params: dict[str, Any]) -> dict[str, Any]:
         """
         Calculate return-based trading signal with position sizing.
 
@@ -477,11 +474,9 @@ class TradingStrategy:
         position_sizing = params.get("position_sizing", "fixed")
         threshold_value = params.get("threshold_value", 0.0)
         execution_size = params.get("execution_size", settings.DEFAULT_EXECUTION_SIZE)
-        max_position_size = params.get("max_position_size", None)
-        min_position_size = params.get("min_position_size", None)
-        min_history_length = params.get(
-            "min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH
-        )
+        max_position_size = params.get("max_position_size")
+        min_position_size = params.get("min_position_size")
+        min_history_length = params.get("min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH)
 
         # Validate parameters
         if threshold_value < 0:
@@ -582,7 +577,7 @@ class TradingStrategy:
         }
 
     @staticmethod
-    def calculate_quantile_signal(params: Dict[str, Any]) -> Dict[str, Any]:
+    def calculate_quantile_signal(params: dict[str, Any]) -> dict[str, Any]:
         """
         Calculate quantile-based trading signal using empirical quantiles.
 
@@ -636,11 +631,9 @@ class TradingStrategy:
         quantile_signals = params.get("quantile_signals")
         position_sizing = params.get("position_sizing", "fixed")
         execution_size = params.get("execution_size", settings.DEFAULT_EXECUTION_SIZE)
-        max_position_size = params.get("max_position_size", None)
-        min_position_size = params.get("min_position_size", None)
-        min_history_length = params.get(
-            "min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH
-        )
+        max_position_size = params.get("max_position_size")
+        min_position_size = params.get("min_position_size")
+        min_history_length = params.get("min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH)
 
         # Validate required parameters
         if window_history is None or window_history <= 0:
@@ -671,10 +664,7 @@ class TradingStrategy:
                     )
 
             # Validate range
-            if (
-                not isinstance(signal_config["range"], list)
-                or len(signal_config["range"]) != 2
-            ):
+            if not isinstance(signal_config["range"], list) or len(signal_config["range"]) != 2:
                 raise InvalidParametersError(
                     message=f"quantile_signals[{key}]['range'] must be a list of 2 elements",
                     parameter="quantile_signals",
@@ -696,11 +686,7 @@ class TradingStrategy:
 
             # Validate multiplier
             multiplier = signal_config["multiplier"]
-            if (
-                not isinstance(multiplier, (int, float))
-                or multiplier < 0
-                or multiplier > 1
-            ):
+            if not isinstance(multiplier, (int, float)) or multiplier < 0 or multiplier > 1:
                 raise InvalidParametersError(
                     message=f"quantile_signals[{key}]['multiplier'] must be between 0 and 1",
                     parameter="quantile_signals",
@@ -815,13 +801,13 @@ class TradingStrategy:
         return {
             "action": signal_action,
             "size": position_size,
-            "reason": f'Forecast percentile {percentile:.1f} in range {matched_signal["range"]}, signal: {signal_action}, multiplier: {multiplier}',
+            "reason": f"Forecast percentile {percentile:.1f} in range {matched_signal['range']}, signal: {signal_action}, multiplier: {multiplier}",
         }
 
     # ========== HELPER METHODS ==========
 
     @staticmethod
-    def _validate_common_params(params: Dict[str, Any]) -> None:
+    def _validate_common_params(params: dict[str, Any]) -> None:
         """
         Validate common parameters required by all strategies.
 
@@ -892,8 +878,8 @@ class TradingStrategy:
 
     @staticmethod
     def _convert_to_array(
-        data: Optional[Union[List[float], np.ndarray]],
-    ) -> Optional[np.ndarray]:
+        data: list[float] | np.ndarray | None,
+    ) -> np.ndarray | None:
         """
         Convert list to numpy array if needed.
 
@@ -912,9 +898,7 @@ class TradingStrategy:
         return None
 
     @staticmethod
-    def _get_history_array(
-        params: Dict[str, Any], which_history: str
-    ) -> Optional[np.ndarray]:
+    def _get_history_array(params: dict[str, Any], which_history: str) -> np.ndarray | None:
         """
         Get the appropriate history array based on which_history parameter.
 
@@ -942,10 +926,10 @@ class TradingStrategy:
     def _calculate_threshold(
         threshold_type: str,
         threshold_value: float,
-        open_history: Optional[np.ndarray],
-        high_history: Optional[np.ndarray],
-        low_history: Optional[np.ndarray],
-        close_history: Optional[np.ndarray],
+        open_history: np.ndarray | None,
+        high_history: np.ndarray | None,
+        low_history: np.ndarray | None,
+        close_history: np.ndarray | None,
         which_history: str,
         window_history: int,
         min_history_length: int,
@@ -969,21 +953,13 @@ class TradingStrategy:
         Returns:
             Calculated threshold value
         """
-        if (
-            threshold_type == ThresholdType.ABSOLUTE.value
-            or threshold_type == "absolute"
-        ):
+        if threshold_type == ThresholdType.ABSOLUTE.value or threshold_type == "absolute":
             return threshold_value
 
-        elif (
-            threshold_type == ThresholdType.PERCENTAGE.value
-            or threshold_type == "percentage"
-        ):
+        elif threshold_type == ThresholdType.PERCENTAGE.value or threshold_type == "percentage":
             return current_price * (threshold_value / 100.0)
 
-        elif (
-            threshold_type == ThresholdType.STD_DEV.value or threshold_type == "std_dev"
-        ):
+        elif threshold_type == ThresholdType.STD_DEV.value or threshold_type == "std_dev":
             # Get the appropriate history array
             history_dict = {
                 "open_history": open_history,
@@ -992,9 +968,7 @@ class TradingStrategy:
                 "close_history": close_history,
                 "which_history": which_history,
             }
-            history_array = TradingStrategy._get_history_array(
-                history_dict, which_history
-            )
+            history_array = TradingStrategy._get_history_array(history_dict, which_history)
 
             if history_array is None or len(history_array) < min_history_length:
                 # Fallback to absolute
@@ -1015,9 +989,7 @@ class TradingStrategy:
                 or close_history is None
             ):
                 # Fallback to absolute
-                logger.warning(
-                    "Missing OHLC data for ATR threshold, falling back to absolute"
-                )
+                logger.warning("Missing OHLC data for ATR threshold, falling back to absolute")
                 return threshold_value
 
             atr = TradingStrategy._calculate_atr(

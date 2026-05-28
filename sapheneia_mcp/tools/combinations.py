@@ -53,7 +53,7 @@ class CombinationsSchema(BaseModel):
     parallelism: _Parallelism = Field(default_factory=_Parallelism)
 
     @model_validator(mode="after")
-    def _check_horizons(self) -> "CombinationsSchema":
+    def _check_horizons(self) -> CombinationsSchema:
         if any(h > self.common.forecast_horizon for h in self.matrix.trading_horizon):
             raise ValueError(
                 f"all trading_horizon values must be <= common.forecast_horizon "

@@ -5,9 +5,11 @@ Implements API key authentication using the Authorization header.
 Supports Bearer token authorization scheme.
 """
 
-from fastapi import Security, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
+
+from fastapi import HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from .config import settings
 
 logger = logging.getLogger(__name__)

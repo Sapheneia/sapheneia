@@ -4,17 +4,17 @@ Pytest configuration and shared fixtures for Trading Strategies tests.
 Provides common test fixtures and utilities for all test modules.
 """
 
-import pytest
-import numpy as np
 import os
-from fastapi.testclient import TestClient
-from unittest.mock import patch
 
-# Import the FastAPI app
-from trading.main import app
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
 
 # Import settings (will be mocked in tests)
 from trading.core.config import settings
+
+# Import the FastAPI app
+from trading.main import app
 
 # Note: Rate limiting is enabled for tests to verify it works correctly
 # Some tests may hit rate limits (429) which is expected behavior

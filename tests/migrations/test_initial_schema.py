@@ -3,6 +3,7 @@
 Marked as ``integration`` because it requires Docker to spin up a TimescaleDB
 container via testcontainers. Skipped in pure-unit runs.
 """
+
 from __future__ import annotations
 
 import os
@@ -33,7 +34,9 @@ def timescaledb_url() -> str:
     )
     container.start()
     try:
-        url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
+        url = container.get_connection_url().replace(
+            "postgresql+psycopg2://", "postgresql+psycopg://"
+        )
         yield url
     finally:
         container.stop()

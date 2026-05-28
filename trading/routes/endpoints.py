@@ -7,32 +7,34 @@ Implements the REST API for trading strategy execution:
 - GET /status: Service status check
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request, Response, Body
 import logging
-from typing import Dict, Any
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+
+from ..core.exceptions import (
+    InsufficientCapitalError,
+    InvalidParametersError,
+    InvalidStrategyError,
+    StrategyStoppedError,
+    TradingException,
+)
+from ..core.rate_limit import get_rate_limit, limiter
+
+# Import core utilities
+from ..core.security import get_api_key
 
 # Import schemas
 from ..schemas.schema import (
+    StrategyInfo,
+    StrategyListResponse,
     StrategyRequest,
     StrategyResponse,
-    StrategyListResponse,
-    StrategyInfo,
     StrategyTypeEnum,
 )
 
 # Import services
 from ..services.trading import TradingStrategy
-
-# Import core utilities
-from ..core.security import get_api_key
-from ..core.rate_limit import limiter, get_rate_limit
-from ..core.exceptions import (
-    TradingException,
-    InvalidStrategyError,
-    InsufficientCapitalError,
-    InvalidParametersError,
-    StrategyStoppedError,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -158,9 +160,7 @@ async def execute_strategy(
     ) as e:
         # These are expected exceptions, already logged in TradingStrategy
         request_id = getattr(request.state, "request_id", "unknown")
-        logger.warning(
-            f"[{request_id}] Strategy execution failed: {e.error_code} - {e.message}"
-        )
+        logger.warning(f"[{request_id}] Strategy execution failed: {e.error_code} - {e.message}")
         raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict())
 
     except TradingException as e:
@@ -316,7 +316,7 @@ async def list_strategies(request: Request, response: Response) -> StrategyListR
 
 @router.get("/status")
 @limiter.limit(get_rate_limit("health"))
-async def get_status(request: Request, response: Response) -> Dict[str, Any]:
+async def get_status(request: Request, response: Response) -> dict[str, Any]:
     """
     Get trading strategies service status.
 

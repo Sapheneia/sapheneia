@@ -9,7 +9,6 @@ from sapheneia_mcp.config import settings
 from sapheneia_mcp.tools import cache as cache_tools
 from sapheneia_mcp.tools import runs as run_tools
 
-
 SAMPLE_STRATEGY_YAML = """\
 metadata:
   id: spy-test

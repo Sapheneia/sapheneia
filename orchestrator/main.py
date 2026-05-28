@@ -6,8 +6,8 @@ import asyncio
 import logging
 import os
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 
@@ -47,10 +47,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     equity_repo = EquityRepository(pool)
     metrics_repo = MetricsRepository(pool)
 
-    data_client = DataClient(settings.DATA_SERVICE_URL, api_key=settings.DATA_API_KEY, timeout=settings.DATA_TIMEOUT)
-    forecast_client = ForecastClient(settings.FORECAST_SERVICE_URL, api_key=settings.FORECAST_API_KEY, timeout=settings.FORECAST_TIMEOUT)
-    trading_client = TradingClient(settings.TRADING_SERVICE_URL, api_key=settings.TRADING_API_KEY, timeout=settings.TRADING_TIMEOUT)
-    metrics_client = MetricsClient(settings.METRICS_SERVICE_URL, api_key=settings.METRICS_API_KEY, timeout=settings.METRICS_TIMEOUT)
+    data_client = DataClient(
+        settings.DATA_SERVICE_URL, api_key=settings.DATA_API_KEY, timeout=settings.DATA_TIMEOUT
+    )
+    forecast_client = ForecastClient(
+        settings.FORECAST_SERVICE_URL,
+        api_key=settings.FORECAST_API_KEY,
+        timeout=settings.FORECAST_TIMEOUT,
+    )
+    trading_client = TradingClient(
+        settings.TRADING_SERVICE_URL,
+        api_key=settings.TRADING_API_KEY,
+        timeout=settings.TRADING_TIMEOUT,
+    )
+    metrics_client = MetricsClient(
+        settings.METRICS_SERVICE_URL,
+        api_key=settings.METRICS_API_KEY,
+        timeout=settings.METRICS_TIMEOUT,
+    )
 
     per_model_semaphores: dict[str, asyncio.Semaphore] = {}
     inner = InnerLoop(
@@ -77,7 +91,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.runs_service = runs_service
 
     reconciler_task = asyncio.create_task(
-        heartbeat_reconciler_loop(runs_repo, settings.HEARTBEAT_INTERVAL, settings.HEARTBEAT_STALE_AFTER)
+        heartbeat_reconciler_loop(
+            runs_repo, settings.HEARTBEAT_INTERVAL, settings.HEARTBEAT_STALE_AFTER
+        )
     )
 
     try:

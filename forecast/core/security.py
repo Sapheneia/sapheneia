@@ -5,9 +5,11 @@ Implements API key authentication using the Authorization header.
 Supports both "Bearer" and "Api-Key" authorization schemes.
 """
 
-from fastapi import Security, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
+
+from fastapi import HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,9 +18,7 @@ logger = logging.getLogger(__name__)
 security_scheme = HTTPBearer()
 
 
-async def get_api_key(
-    credentials: HTTPAuthorizationCredentials = Security(security_scheme)
-) -> str:
+async def get_api_key(credentials: HTTPAuthorizationCredentials = Security(security_scheme)) -> str:
     """
     Dependency function to validate API key from Authorization header.
 
@@ -38,17 +38,23 @@ async def get_api_key(
     provided_key = credentials.credentials
 
     # Enhanced logging for debugging authentication issues
-    logger.info(f"🔐 Authentication attempt:")
+    logger.info("🔐 Authentication attempt:")
     logger.info(f"   Scheme: {credentials.scheme}")
-    logger.info(f"   Provided key (first 8 chars): {provided_key[:8] if provided_key else 'NONE'}...")
+    logger.info(
+        f"   Provided key (first 8 chars): {provided_key[:8] if provided_key else 'NONE'}..."
+    )
     logger.info(f"   Expected key (first 8 chars): {settings.API_SECRET_KEY[:8]}...")
     logger.info(f"   Keys match: {provided_key == settings.API_SECRET_KEY}")
 
     # Validate against configured API key
     if provided_key != settings.API_SECRET_KEY:
-        logger.error(f"❌ Authentication FAILED:")
-        logger.error(f"   Provided: {provided_key[:min(20, len(provided_key))] if provided_key else 'NONE'}...")
-        logger.error(f"   Expected: {settings.API_SECRET_KEY[:min(20, len(settings.API_SECRET_KEY))]}...")
+        logger.error("❌ Authentication FAILED:")
+        logger.error(
+            f"   Provided: {provided_key[: min(20, len(provided_key))] if provided_key else 'NONE'}..."
+        )
+        logger.error(
+            f"   Expected: {settings.API_SECRET_KEY[: min(20, len(settings.API_SECRET_KEY))]}..."
+        )
         logger.error(f"   Provided length: {len(provided_key) if provided_key else 0}")
         logger.error(f"   Expected length: {len(settings.API_SECRET_KEY)}")
         raise HTTPException(

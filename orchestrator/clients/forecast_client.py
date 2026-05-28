@@ -7,8 +7,6 @@ Routes by model family to the right endpoint:
 
 from __future__ import annotations
 
-from typing import Optional
-
 import httpx
 
 
@@ -33,7 +31,7 @@ class ForecastClient:
         context: list[float],
         horizon: int,
         num_samples: int = 20,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> dict:
         family = _family(model_id)
         path = f"/forecast/v1/{family}/inference"

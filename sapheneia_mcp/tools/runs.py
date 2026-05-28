@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import yaml
@@ -64,8 +64,8 @@ async def get_run_status(run_ids: list[str]) -> list[dict]:
 
 
 async def query_results(
-    experiment_id: Optional[str] = None,
-    status: Optional[str] = None,
+    experiment_id: str | None = None,
+    status: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
     params: dict[str, Any] = {"limit": limit}

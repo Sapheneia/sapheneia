@@ -4,36 +4,43 @@ Metrics API Endpoints
 REST API endpoints for financial performance metrics calculation.
 Consolidated single endpoint design for uniform interface.
 """
+
+from typing import Any, Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any, Literal
+
 from metrics.core import metrics
 from metrics.core.security import get_api_key
-from shared.errors import ValidationError, ComputationError
+from shared.errors import ComputationError, ValidationError
 
-router = APIRouter(prefix="/compute", tags=["Metrics Computation"], dependencies=[Depends(get_api_key)])
+router = APIRouter(
+    prefix="/compute", tags=["Metrics Computation"], dependencies=[Depends(get_api_key)]
+)
 
 
 # --- Request/Response Schemas ---
 
+
 class ComputeRequest(BaseModel):
     """Unified request model for metrics computation."""
-    returns: List[float] = Field(..., description="Return series (e.g., daily returns)")
-    metric: Literal["performance", "all", "sharpe", "max_drawdown", "cagr", "calmar", "win_rate"] = Field(
+
+    returns: list[float] = Field(..., description="Return series (e.g., daily returns)")
+    metric: Literal[
+        "performance", "all", "sharpe", "max_drawdown", "cagr", "calmar", "win_rate"
+    ] = Field(
         default="performance",
-        description="Metric to compute: 'performance' (all with interpretation), 'all' (all clean), or individual metrics"
+        description="Metric to compute: 'performance' (all with interpretation), 'all' (all clean), or individual metrics",
     )
     risk_free_rate: float = Field(
-        default=0.0,
-        description="Annual risk-free rate (e.g., 0.04 for 4%) - used for Sharpe ratio"
+        default=0.0, description="Annual risk-free rate (e.g., 0.04 for 4%) - used for Sharpe ratio"
     )
     periods_per_year: int = Field(
-        default=252,
-        description="Trading periods per year (252=daily, 52=weekly, 12=monthly)"
+        default=252, description="Trading periods per year (252=daily, 52=weekly, 12=monthly)"
     )
     include_interpretation: bool = Field(
         default=True,
-        description="Include human-readable interpretation (only for 'performance' metric)"
+        description="Include human-readable interpretation (only for 'performance' metric)",
     )
 
     model_config = {
@@ -44,19 +51,19 @@ class ComputeRequest(BaseModel):
                     "metric": "performance",
                     "risk_free_rate": 0.0,
                     "periods_per_year": 252,
-                    "include_interpretation": True
+                    "include_interpretation": True,
                 },
                 {
                     "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
                     "metric": "all",
-                    "periods_per_year": 252
+                    "periods_per_year": 252,
                 },
                 {
                     "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
                     "metric": "sharpe",
                     "risk_free_rate": 0.04,
-                    "periods_per_year": 252
-                }
+                    "periods_per_year": 252,
+                },
             ]
         }
     }
@@ -64,8 +71,9 @@ class ComputeRequest(BaseModel):
 
 # --- Unified Compute Endpoint ---
 
+
 @router.post("/", response_model_exclude_none=True)
-async def compute_metrics(request: ComputeRequest) -> Dict[str, Any]:
+async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
     """
     **Unified Metrics Computation Endpoint**
 
@@ -132,7 +140,7 @@ async def compute_metrics(request: ComputeRequest) -> Dict[str, Any]:
                 returns=request.returns,
                 risk_free_rate=request.risk_free_rate,
                 periods_per_year=request.periods_per_year,
-                include_interpretation=request.include_interpretation
+                include_interpretation=request.include_interpretation,
             )
             return result
 
@@ -141,7 +149,7 @@ async def compute_metrics(request: ComputeRequest) -> Dict[str, Any]:
             sharpe = metrics.calculate_sharpe_ratio(
                 request.returns,
                 risk_free_rate=request.risk_free_rate,
-                periods_per_year=request.periods_per_year
+                periods_per_year=request.periods_per_year,
             )
             max_dd = metrics.calculate_max_drawdown(request.returns)
             cagr = metrics.calculate_cagr(request.returns, request.periods_per_year)
@@ -153,14 +161,14 @@ async def compute_metrics(request: ComputeRequest) -> Dict[str, Any]:
                 "max_drawdown": max_dd,
                 "cagr": cagr,
                 "calmar_ratio": calmar,
-                "win_rate": win_rate
+                "win_rate": win_rate,
             }
 
         elif request.metric == "sharpe":
             sharpe = metrics.calculate_sharpe_ratio(
                 request.returns,
                 risk_free_rate=request.risk_free_rate,
-                periods_per_year=request.periods_per_year
+                periods_per_year=request.periods_per_year,
             )
             return {"sharpe_ratio": sharpe}
 
@@ -183,7 +191,7 @@ async def compute_metrics(request: ComputeRequest) -> Dict[str, Any]:
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid metric: {request.metric}. Must be one of: performance, all, sharpe, max_drawdown, cagr, calmar, win_rate"
+                detail=f"Invalid metric: {request.metric}. Must be one of: performance, all, sharpe, max_drawdown, cagr, calmar, win_rate",
             )
 
     except ValueError as e:

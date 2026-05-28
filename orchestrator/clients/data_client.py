@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 import httpx
 
@@ -20,8 +19,8 @@ class DataClient:
         start: date,
         end: date,
         interval: str = "1d",
-        end_date: Optional[date] = None,
-        request_id: Optional[str] = None,
+        end_date: date | None = None,
+        request_id: str | None = None,
     ) -> list[dict]:
         params = {
             "ticker": ticker,

@@ -8,13 +8,12 @@ Updated to use centralized path handling utilities for consistent behavior
 across venv and Docker environments.
 """
 
-import os
 import logging
-import requests
-import pandas as pd
 from pathlib import Path
-from typing import Union, Dict, Any
-from urllib.parse import urlparse
+from typing import Any
+
+import pandas as pd
+import requests
 
 from .paths import normalize_data_path
 
@@ -25,20 +24,21 @@ logger = logging.getLogger(__name__)
 # It will be moved to exceptions.py in Phase 7 but kept here for now
 class DataFetchError(Exception):
     """Raised when data fetching fails."""
+
     pass
 
 
 def fetch_data_source(
     source_url_or_path: str,
-    allowed_local_base_dir: str = None  # Deprecated, kept for backward compatibility
-) -> Union[pd.DataFrame, Dict[str, Any]]:
+    allowed_local_base_dir: str = None,  # Deprecated, kept for backward compatibility
+) -> pd.DataFrame | dict[str, Any]:
     """
     Fetches data from a specified source URL or local path.
 
     This function supports multiple data source types:
     - Local files: "local://path/to/file.csv", "file.csv", "/absolute/path"
     - HTTP/HTTPS URLs: "http://example.com/data.csv"
-    
+
     Path normalization automatically handles differences between Docker and venv environments.
     All paths are validated for security (prevents path traversal attacks).
 
@@ -63,8 +63,7 @@ def fetch_data_source(
     elif source_url_or_path.startswith(("s3://", "gs://")):
         # Cloud storage (placeholder for future implementation)
         raise NotImplementedError(
-            "S3/GCS support not yet implemented. "
-            "Please use local files or HTTP URLs."
+            "S3/GCS support not yet implemented. Please use local files or HTTP URLs."
         )
 
     else:
@@ -77,7 +76,7 @@ def fetch_data_source(
 def _fetch_local_file(file_path: Path) -> pd.DataFrame:
     """
     Fetch data from a local file (path already normalized and validated).
-    
+
     Security validation is performed by normalize_data_path() before this function
     is called, so we don't need to repeat the checks here.
 
@@ -96,8 +95,7 @@ def _fetch_local_file(file_path: Path) -> pd.DataFrame:
     # Check if file exists
     if not file_path.exists():
         raise FileNotFoundError(
-            f"File not found: {file_path}\n"
-            f"Make sure the file is in the data/uploads directory."
+            f"File not found: {file_path}\nMake sure the file is in the data/uploads directory."
         )
 
     # Determine file type and load
@@ -121,8 +119,7 @@ def _fetch_local_file(file_path: Path) -> pd.DataFrame:
 
         else:
             raise DataFetchError(
-                f"Unsupported file format: {file_extension}\n"
-                f"Supported: .csv, .json, .xlsx, .xls"
+                f"Unsupported file format: {file_extension}\nSupported: .csv, .json, .xlsx, .xls"
             )
 
     except Exception as e:
@@ -162,6 +159,7 @@ def _fetch_http_url(url: str, timeout: int = 30) -> pd.DataFrame:
 
         elif "csv" in content_type or url.endswith(".csv"):
             from io import StringIO
+
             data = pd.read_csv(StringIO(response.text))
             logger.info(f"Loaded CSV from URL with shape: {data.shape}")
             return data
@@ -169,6 +167,7 @@ def _fetch_http_url(url: str, timeout: int = 30) -> pd.DataFrame:
         else:
             # Default to CSV
             from io import StringIO
+
             data = pd.read_csv(StringIO(response.text))
             logger.info(f"Loaded data from URL (default CSV) with shape: {data.shape}")
             return data

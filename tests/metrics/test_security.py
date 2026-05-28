@@ -13,9 +13,11 @@ def client_with_auth(monkeypatch):
     monkeypatch.setenv("METRICS_API_KEY", "test-token")
     # Reload so Settings picks up the env var
     from metrics.core import config, security
+
     importlib.reload(config)
     importlib.reload(security)
     from metrics import main
+
     importlib.reload(main)
     return TestClient(main.app), "test-token"
 
@@ -24,9 +26,11 @@ def client_with_auth(monkeypatch):
 def client_no_auth(monkeypatch):
     monkeypatch.delenv("METRICS_API_KEY", raising=False)
     from metrics.core import config, security
+
     importlib.reload(config)
     importlib.reload(security)
     from metrics import main
+
     importlib.reload(main)
     return TestClient(main.app)
 

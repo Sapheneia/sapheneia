@@ -4,28 +4,27 @@ Tests for Financial Performance Metrics Module
 Tests the metrics_api/core/metrics.py module functions and calculations.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+import pytest
+
 from metrics.core.metrics import (
-    calculate_sharpe_ratio,
-    calculate_max_drawdown,
-    calculate_cagr,
-    calculate_calmar_ratio,
-    calculate_win_rate,
-    calculate_performance_metrics,
-    _interpret_sharpe,
     _interpret_calmar,
+    _interpret_sharpe,
     _interpret_win_rate,
     _validate_returns,
-    SHARPE_THRESHOLDS,
-    CALMAR_THRESHOLDS,
-    WIN_RATE_THRESHOLDS
+    calculate_cagr,
+    calculate_calmar_ratio,
+    calculate_max_drawdown,
+    calculate_performance_metrics,
+    calculate_sharpe_ratio,
+    calculate_win_rate,
 )
 
-
 # --- Fixtures ---
+
 
 @pytest.fixture
 def positive_returns():
@@ -61,6 +60,7 @@ def realistic_daily_returns():
 
 
 # --- Validation Tests ---
+
 
 def test_validate_returns_series():
     """Test validation of pandas Series."""
@@ -114,6 +114,7 @@ def test_validate_returns_insufficient_data():
 
 # --- Sharpe Ratio Tests ---
 
+
 def test_sharpe_ratio_positive_returns(positive_returns):
     """Test Sharpe ratio with positive returns."""
     sharpe = calculate_sharpe_ratio(positive_returns)
@@ -152,6 +153,7 @@ def test_sharpe_ratio_with_int_risk_free_rate(mixed_returns):
 
 # --- Maximum Drawdown Tests ---
 
+
 def test_max_drawdown_positive_returns(positive_returns):
     """Test max drawdown with all positive returns."""
     mdd = calculate_max_drawdown(positive_returns)
@@ -177,6 +179,7 @@ def test_max_drawdown_severe_loss():
 
 # --- CAGR Tests ---
 
+
 def test_cagr_positive_returns(positive_returns):
     """Test CAGR with positive returns."""
     cagr = calculate_cagr(positive_returns)
@@ -198,6 +201,7 @@ def test_cagr_realistic_range(realistic_daily_returns):
 
 
 # --- Calmar Ratio Tests ---
+
 
 def test_calmar_ratio_positive_returns():
     """Test Calmar ratio with mostly positive returns (but with some drawdown)."""
@@ -230,6 +234,7 @@ def test_calmar_ratio_relationship():
 
 # --- Win Rate Tests ---
 
+
 def test_win_rate_all_positive(positive_returns):
     """Test win rate with all positive returns."""
     win_rate = calculate_win_rate(positive_returns)
@@ -260,6 +265,7 @@ def test_win_rate_fifty_fifty():
 
 # --- Interpretation Tests ---
 
+
 def test_interpret_sharpe():
     """Test Sharpe ratio interpretation."""
     assert _interpret_sharpe(2.5) == "excellent"
@@ -285,6 +291,7 @@ def test_interpret_win_rate():
 
 
 # --- Integrated Metrics Tests ---
+
 
 def test_calculate_performance_metrics_basic(mixed_returns):
     """Test basic performance metrics calculation."""
@@ -312,9 +319,7 @@ def test_calculate_performance_metrics_basic(mixed_returns):
 def test_calculate_performance_metrics_metadata(mixed_returns):
     """Test metadata in performance metrics."""
     metrics = calculate_performance_metrics(
-        mixed_returns,
-        risk_free_rate=0.03,
-        periods_per_year=252
+        mixed_returns, risk_free_rate=0.03, periods_per_year=252
     )
 
     metadata = metrics["metadata"]
@@ -327,10 +332,7 @@ def test_calculate_performance_metrics_metadata(mixed_returns):
 
 def test_calculate_performance_metrics_no_interpretation(mixed_returns):
     """Test metrics calculation without interpretation."""
-    metrics = calculate_performance_metrics(
-        mixed_returns,
-        include_interpretation=False
-    )
+    metrics = calculate_performance_metrics(mixed_returns, include_interpretation=False)
 
     assert "interpretation" not in metrics
 
@@ -340,7 +342,7 @@ def test_calculate_performance_metrics_with_int_risk_free_rate(mixed_returns):
     metrics = calculate_performance_metrics(
         mixed_returns,
         risk_free_rate=0,  # Integer input
-        periods_per_year=252
+        periods_per_year=252,
     )
 
     # Should be converted to float
@@ -353,7 +355,7 @@ def test_calculate_performance_metrics_with_float_risk_free_rate(mixed_returns):
     metrics = calculate_performance_metrics(
         mixed_returns,
         risk_free_rate=0.04,  # Float
-        periods_per_year=252
+        periods_per_year=252,
     )
 
     assert isinstance(metrics["metadata"]["risk_free_rate"], float)
@@ -365,13 +367,14 @@ def test_calculate_performance_metrics_realistic_data(realistic_daily_returns):
     metrics = calculate_performance_metrics(
         realistic_daily_returns,
         risk_free_rate=0.02,  # 2% risk-free rate
-        periods_per_year=252
+        periods_per_year=252,
     )
 
     # All metrics should be calculated
-    assert all(key in metrics for key in [
-        "sharpe_ratio", "max_drawdown", "cagr", "calmar_ratio", "win_rate"
-    ])
+    assert all(
+        key in metrics
+        for key in ["sharpe_ratio", "max_drawdown", "cagr", "calmar_ratio", "win_rate"]
+    )
 
     # Sharpe should be in reasonable range for realistic data
     assert -5.0 < metrics["sharpe_ratio"] < 5.0
@@ -392,16 +395,10 @@ def test_calculate_performance_metrics_different_periods():
     returns = pd.Series([0.01, -0.005, 0.01, -0.005] * 13)  # 52 periods with drawdowns
 
     # Calculate with weekly periods
-    metrics_weekly = calculate_performance_metrics(
-        returns,
-        periods_per_year=52
-    )
+    metrics_weekly = calculate_performance_metrics(returns, periods_per_year=52)
 
     # Calculate with daily periods (wrong, but testing flexibility)
-    metrics_daily = calculate_performance_metrics(
-        returns,
-        periods_per_year=252
-    )
+    metrics_daily = calculate_performance_metrics(returns, periods_per_year=252)
 
     # CAGR should differ due to annualization
     assert metrics_weekly["cagr"] != metrics_daily["cagr"]
@@ -420,6 +417,7 @@ def test_calculate_performance_metrics_overall_assessment():
 
 
 # --- Edge Cases ---
+
 
 def test_metrics_with_zero_returns():
     """Test metrics with mostly zero returns (edge case)."""
@@ -468,6 +466,7 @@ def test_metrics_with_list_input():
 
 # --- Performance Tests ---
 
+
 @pytest.mark.slow
 def test_metrics_performance_large_dataset():
     """Test performance with large dataset."""
@@ -488,6 +487,7 @@ def test_metrics_performance_large_dataset():
 
 # --- Error Handling Tests ---
 
+
 def test_metrics_invalid_input_type():
     """Test that invalid input types raise ValueError."""
     with pytest.raises(ValueError):
@@ -504,6 +504,7 @@ def test_metrics_with_inf_values():
 
 
 # --- GAP-15 Edge Case Tests ---
+
 
 def test_validate_returns_with_inf_removed():
     """_validate_returns should remove Inf values and continue."""

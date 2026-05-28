@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime
-from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,11 @@ def _fetch_sync(ticker: str, start: date, end: date, interval: str) -> list[dict
 
     rows: list[dict] = []
     for idx, row in df.iterrows():
-        ts = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else datetime.fromisoformat(str(idx))
+        ts = (
+            idx.to_pydatetime()
+            if hasattr(idx, "to_pydatetime")
+            else datetime.fromisoformat(str(idx))
+        )
         rows.append(
             {
                 "time": ts,
@@ -79,9 +83,7 @@ def _safe_int(row, key: str) -> int | None:
     return None if f is None else int(f)
 
 
-async def fetch(
-    ticker: str, start: date, end: date, interval: str = "1d"
-) -> list[dict]:
+async def fetch(ticker: str, start: date, end: date, interval: str = "1d") -> list[dict]:
     """Async-safe ticker fetch."""
     return await asyncio.to_thread(_fetch_sync, ticker, start, end, interval)
 

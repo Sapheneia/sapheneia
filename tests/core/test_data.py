@@ -4,12 +4,11 @@ Tests for data fetching utilities.
 Tests the fetch_data_source function and related utilities from forecast.core.data.
 """
 
-import pytest
-from pathlib import Path
 import pandas as pd
-from unittest.mock import patch, MagicMock
-from forecast.core.data import fetch_data_source, DataFetchError, _fetch_local_file
-from forecast.core.paths import normalize_data_path, DATA_DIR
+import pytest
+
+from forecast.core.data import DataFetchError, _fetch_local_file, fetch_data_source
+from forecast.core.paths import DATA_DIR, normalize_data_path
 
 
 class TestDataFetching:
@@ -28,8 +27,8 @@ class TestDataFetching:
 
         assert isinstance(result, pd.DataFrame)
         assert not result.empty
-        assert 'date' in result.columns
-        assert 'value' in result.columns
+        assert "date" in result.columns
+        assert "value" in result.columns
 
     def test_fetch_file_with_bare_filename(self, sample_data_file_in_uploads):
         """Test fetching with just a filename."""
@@ -69,7 +68,7 @@ class TestDataValidation:
         df = fetch_data_source(str(sample_data_file_in_uploads))
 
         # Should have required columns
-        assert 'date' in df.columns
+        assert "date" in df.columns
         assert len(df) > 0
 
         # Should be a proper DataFrame
@@ -114,7 +113,7 @@ def sample_data_file_in_uploads():
     # Create sample data
     data = {
         "date": [f"2023-01-{i:02d}" for i in range(1, 31)],
-        "value": [100.0 + i * 0.5 for i in range(30)]
+        "value": [100.0 + i * 0.5 for i in range(30)],
     }
     df = pd.DataFrame(data)
 

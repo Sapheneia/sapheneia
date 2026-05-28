@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -34,12 +33,12 @@ class FetchRequest(BaseModel):
 class PriceBar(BaseModel):
     time: datetime
     ticker: str
-    open: Optional[float] = None
-    high: Optional[float] = None
-    low: Optional[float] = None
-    close: Optional[float] = None
-    adj_close: Optional[float] = None
-    volume: Optional[int] = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    adj_close: float | None = None
+    volume: int | None = None
 
 
 class FetchResponse(BaseModel):

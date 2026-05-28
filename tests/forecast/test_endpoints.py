@@ -10,13 +10,14 @@ Tests the REST API endpoints including:
 """
 
 import pytest
-from pathlib import Path
 
 # Try to import the app - tests will be skipped if import fails
 try:
     from fastapi.testclient import TestClient
-    from forecast.main import app
+
     from forecast.core.config import settings
+    from forecast.main import app
+
     APP_AVAILABLE = True
 except ImportError as e:
     APP_AVAILABLE = False
@@ -25,8 +26,7 @@ except ImportError as e:
 
 # Skip all tests in this module if the app can't be imported
 pytestmark = pytest.mark.skipif(
-    not APP_AVAILABLE,
-    reason=f"forecast.main app cannot be imported (likely missing dependencies)"
+    not APP_AVAILABLE, reason="forecast.main app cannot be imported (likely missing dependencies)"
 )
 
 
@@ -50,7 +50,7 @@ def sample_data_file(tmp_path):
     # Create sample data
     data = {
         "date": [f"2023-01-{i:02d}" for i in range(1, 31)],
-        "value": [100.0 + i * 0.5 for i in range(30)]
+        "value": [100.0 + i * 0.5 for i in range(30)],
     }
     df = pd.DataFrame(data)
 
@@ -121,15 +121,8 @@ class TestAuthentication:
 
     def test_initialization_requires_auth(self, client):
         """Test that initialization endpoint requires authentication."""
-        payload = {
-            "backend": "cpu",
-            "context_len": 64,
-            "horizon_len": 24
-        }
-        response = client.post(
-            "/forecast/v1/timesfm20/initialization",
-            json=payload
-        )
+        payload = {"backend": "cpu", "context_len": 64, "horizon_len": 24}
+        response = client.post("/forecast/v1/timesfm20/initialization", json=payload)
 
         # Should return 403/401 without auth
         assert response.status_code in [403, 401]
@@ -139,12 +132,9 @@ class TestAuthentication:
         payload = {
             "data_source_url_or_path": "test.csv",
             "data_definition": {"value": "target"},
-            "parameters": {}
+            "parameters": {},
         }
-        response = client.post(
-            "/forecast/v1/timesfm20/inference",
-            json=payload
-        )
+        response = client.post("/forecast/v1/timesfm20/inference", json=payload)
 
         # Should return 403/401 without auth
         assert response.status_code in [403, 401]
@@ -181,13 +171,11 @@ class TestInputValidation:
         payload = {
             "data_source_url_or_path": "test.csv",
             "data_definition": {"price": "invalid_type"},  # No target!
-            "parameters": {}
+            "parameters": {},
         }
 
         response = client.post(
-            "/forecast/v1/timesfm20/inference",
-            headers=auth_headers,
-            json=payload
+            "/forecast/v1/timesfm20/inference", headers=auth_headers, json=payload
         )
 
         # Should return validation error
@@ -195,15 +183,10 @@ class TestInputValidation:
 
     def test_inference_with_missing_data_definition(self, client, auth_headers):
         """Test inference with missing data definition."""
-        payload = {
-            "data_source_url_or_path": "test.csv",
-            "parameters": {}
-        }
+        payload = {"data_source_url_or_path": "test.csv", "parameters": {}}
 
         response = client.post(
-            "/forecast/v1/timesfm20/inference",
-            headers=auth_headers,
-            json=payload
+            "/forecast/v1/timesfm20/inference", headers=auth_headers, json=payload
         )
 
         # Should return validation error
@@ -216,13 +199,11 @@ class TestInputValidation:
             "data_definition": {"price": "target"},
             "parameters": {
                 "context_len": -1  # Invalid: must be positive
-            }
+            },
         }
 
         response = client.post(
-            "/forecast/v1/timesfm20/inference",
-            headers=auth_headers,
-            json=payload
+            "/forecast/v1/timesfm20/inference", headers=auth_headers, json=payload
         )
 
         # Should return validation error
@@ -237,13 +218,11 @@ class TestErrorHandling:
         payload = {
             "data_source_url_or_path": "nonexistent.csv",
             "data_definition": {"value": "target"},
-            "parameters": {}
+            "parameters": {},
         }
 
         response = client.post(
-            "/forecast/v1/timesfm20/inference",
-            headers=auth_headers,
-            json=payload
+            "/forecast/v1/timesfm20/inference", headers=auth_headers, json=payload
         )
 
         # Should return 400 or 409 (depending on model status)
@@ -251,16 +230,10 @@ class TestErrorHandling:
 
     def test_model_initialization_with_invalid_backend(self, client, auth_headers):
         """Test initialization with invalid backend."""
-        payload = {
-            "backend": "invalid_backend",
-            "context_len": 64,
-            "horizon_len": 24
-        }
+        payload = {"backend": "invalid_backend", "context_len": 64, "horizon_len": 24}
 
         response = client.post(
-            "/forecast/v1/timesfm20/initialization",
-            headers=auth_headers,
-            json=payload
+            "/forecast/v1/timesfm20/initialization", headers=auth_headers, json=payload
         )
 
         # Should return validation error
@@ -271,13 +244,11 @@ class TestErrorHandling:
         payload = {
             "backend": "cpu",
             "context_len": 10,  # Too small (< 32)
-            "horizon_len": 24
+            "horizon_len": 24,
         }
 
         response = client.post(
-            "/forecast/v1/timesfm20/initialization",
-            headers=auth_headers,
-            json=payload
+            "/forecast/v1/timesfm20/initialization", headers=auth_headers, json=payload
         )
 
         # Should return validation error

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -36,7 +36,7 @@ class TradingConfig(BaseModel):
     horizon: int = Field(default=1, ge=1, le=1000)
     initial_capital: float = Field(gt=0)
     initial_position: float = 0.0
-    initial_cash: Optional[float] = None
+    initial_cash: float | None = None
     strategy_type: Literal["threshold", "return", "quantile"]
     params: dict[str, Any] = Field(default_factory=dict)
 

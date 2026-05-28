@@ -5,25 +5,25 @@ Tests the shared error hierarchy, error codes, and FastAPI error handler registr
 """
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shared.errors import (
-    SapheneiaError,
-    ValidationError,
-    ModelUnavailableError,
-    ServiceUnavailableError,
-    ServiceTimeoutError,
-    InsufficientDataError,
     ComputationError,
     ErrorCode,
+    InsufficientDataError,
+    ModelUnavailableError,
+    SapheneiaError,
+    ServiceTimeoutError,
+    ServiceUnavailableError,
+    ValidationError,
     register_error_handlers,
 )
-
 
 # =============================================================================
 # ErrorCode Enum
 # =============================================================================
+
 
 class TestErrorCode:
     """Tests for ErrorCode enum values."""
@@ -51,6 +51,7 @@ class TestErrorCode:
 # =============================================================================
 # SapheneiaError Base Class
 # =============================================================================
+
 
 class TestSapheneiaError:
     """Tests for SapheneiaError base class."""
@@ -96,6 +97,7 @@ class TestSapheneiaError:
 # =============================================================================
 # Error Subclasses
 # =============================================================================
+
 
 class TestValidationError:
     """Tests for ValidationError."""
@@ -160,6 +162,7 @@ class TestComputationError:
 # =============================================================================
 # register_error_handlers
 # =============================================================================
+
 
 @pytest.fixture
 def error_app():

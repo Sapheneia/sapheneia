@@ -7,7 +7,6 @@ DSN construction, pool sizing, and lifecycle are consistent.
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import asyncpg
 
@@ -31,7 +30,7 @@ def dsn_from_env() -> str:
 
 
 async def create_pool(
-    dsn: Optional[str] = None,
+    dsn: str | None = None,
     min_size: int = 2,
     max_size: int = 10,
 ) -> asyncpg.Pool:

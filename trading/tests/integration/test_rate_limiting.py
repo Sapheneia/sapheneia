@@ -4,9 +4,6 @@ Integration tests for rate limiting.
 Tests rate limit enforcement on different endpoints.
 """
 
-import pytest
-import time
-
 
 class TestRateLimiting:
     """Test rate limiting on API endpoints."""
@@ -25,9 +22,7 @@ class TestRateLimiting:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Rate limit headers may or may not be present depending on slowapi version
         # Just check that request succeeds
@@ -51,9 +46,7 @@ class TestRateLimiting:
         # Make several requests quickly
         responses = []
         for _ in range(5):
-            response = test_client.post(
-                "/trading/execute", json=payload, headers=auth_headers
-            )
+            response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
             responses.append(response.status_code)
 
         # Most should succeed (unless we hit the limit)

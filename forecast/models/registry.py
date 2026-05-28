@@ -27,19 +27,19 @@ from dataclasses import asdict, dataclass
 
 @dataclass(frozen=True)
 class ModelInfo:
-    model_id: str       # HuggingFace ID, e.g. "amazon/chronos-t5-tiny"
-    family: str         # "chronos" | "timesfm"
-    container: str      # docker-compose service name
-    port: int           # host port (mapped to 8000 inside the container)
+    model_id: str  # HuggingFace ID, e.g. "amazon/chronos-t5-tiny"
+    family: str  # "chronos" | "timesfm"
+    container: str  # docker-compose service name
+    port: int  # host port (mapped to 8000 inside the container)
     status: str = "working"
     notes: str = ""
 
 
 WORKING_MODELS: list[ModelInfo] = [
-    ModelInfo("amazon/chronos-t5-tiny",  "chronos", "forecast-chronos-t5-tiny",  12710),
-    ModelInfo("amazon/chronos-t5-mini",  "chronos", "forecast-chronos-t5-mini",  12711),
+    ModelInfo("amazon/chronos-t5-tiny", "chronos", "forecast-chronos-t5-tiny", 12710),
+    ModelInfo("amazon/chronos-t5-mini", "chronos", "forecast-chronos-t5-mini", 12711),
     ModelInfo("amazon/chronos-t5-small", "chronos", "forecast-chronos-t5-small", 12712),
-    ModelInfo("amazon/chronos-t5-base",  "chronos", "forecast-chronos-t5-base",  12713),
+    ModelInfo("amazon/chronos-t5-base", "chronos", "forecast-chronos-t5-base", 12713),
     ModelInfo("amazon/chronos-t5-large", "chronos", "forecast-chronos-t5-large", 12714),
     ModelInfo("google/timesfm-2.0-500m-pytorch", "timesfm", "forecast-timesfm-2-0", 12721),
 ]

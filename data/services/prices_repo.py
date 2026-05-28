@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime, timedelta
-from typing import Iterable, Sequence
 
 import asyncpg
 

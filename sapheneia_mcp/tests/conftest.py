@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 COMBINATIONS_YAML = """\
 metadata:
   experiment_id: "exp-test"

@@ -6,7 +6,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from ..repositories.runs_repo import RunsRepository
 from ..schemas.strategy import StrategyConfig
@@ -24,7 +24,7 @@ def _family_from_model_id(model_id: str) -> str:
     return "unknown"
 
 
-def make_run_id(experiment_id: str, ticker: str, model_id: str, suffix: Optional[str] = None) -> str:
+def make_run_id(experiment_id: str, ticker: str, model_id: str, suffix: str | None = None) -> str:
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_model = model_id.replace("/", "_")
     suf = suffix or uuid.uuid4().hex[:6]
@@ -48,7 +48,9 @@ class RunsService:
         cfg = StrategyConfig.model_validate(strategy_data)
         run_id = make_run_id(cfg.metadata.experiment_id, cfg.evaluation.ticker, cfg.forecast.model)
         await self.runs_repo.ensure_ticker(cfg.evaluation.ticker)
-        await self.runs_repo.ensure_model(cfg.forecast.model, _family_from_model_id(cfg.forecast.model))
+        await self.runs_repo.ensure_model(
+            cfg.forecast.model, _family_from_model_id(cfg.forecast.model)
+        )
         await self.runs_repo.create(
             run_id=run_id,
             experiment_id=cfg.metadata.experiment_id,
@@ -59,7 +61,9 @@ class RunsService:
             cache_enabled=cfg.cache.enabled,
             cache_scope=cfg.cache.scope,
         )
-        task = asyncio.create_task(self._run_with_semaphore(run_id, cfg, cfg.metadata.experiment_id))
+        task = asyncio.create_task(
+            self._run_with_semaphore(run_id, cfg, cfg.metadata.experiment_id)
+        )
         self._active_tasks[run_id] = task
         task.add_done_callback(lambda _t, rid=run_id: self._active_tasks.pop(rid, None))
         return run_id, "pending"
@@ -83,9 +87,13 @@ class RunsService:
             await task
         except (asyncio.CancelledError, Exception):  # noqa: BLE001
             pass
-        await self.runs_repo.update_status(run_id, "cancelled", error="cancelled by request", completed=True)
+        await self.runs_repo.update_status(
+            run_id, "cancelled", error="cancelled by request", completed=True
+        )
         return True
 
-    async def _run_with_semaphore(self, run_id: str, cfg: StrategyConfig, experiment_id: str) -> None:
+    async def _run_with_semaphore(
+        self, run_id: str, cfg: StrategyConfig, experiment_id: str
+    ) -> None:
         async with self._semaphore:
             await self.inner.run(run_id, cfg, experiment_id)

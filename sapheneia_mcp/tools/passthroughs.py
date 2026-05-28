@@ -6,8 +6,7 @@ composite tools (run_simulation, etc.) for normal workflows.
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -18,7 +17,7 @@ async def fetch_prices(
     ticker: str,
     start: str,
     end: str,
-    end_date: Optional[str] = None,
+    end_date: str | None = None,
     interval: str = "1d",
 ) -> dict:
     params = {"ticker": ticker, "start": start, "end": end, "interval": interval}
@@ -47,7 +46,11 @@ async def forecast(
         body["model_variant"] = model_id
     else:
         body["checkpoint"] = model_id
-    headers = {"Authorization": f"Bearer {settings.FORECAST_API_KEY}"} if settings.FORECAST_API_KEY else {}
+    headers = (
+        {"Authorization": f"Bearer {settings.FORECAST_API_KEY}"}
+        if settings.FORECAST_API_KEY
+        else {}
+    )
     async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
         r = await client.post(
             f"{settings.FORECAST_URL}/forecast/v1/{family}/inference",
@@ -65,7 +68,7 @@ async def execute_trade(
     current_position: float,
     available_cash: float,
     initial_capital: float,
-    params: Optional[dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
 ) -> dict:
     body = {
         "strategy_type": strategy_type,
@@ -76,7 +79,9 @@ async def execute_trade(
         "initial_capital": initial_capital,
         **(params or {}),
     }
-    headers = {"Authorization": f"Bearer {settings.TRADING_API_KEY}"} if settings.TRADING_API_KEY else {}
+    headers = (
+        {"Authorization": f"Bearer {settings.TRADING_API_KEY}"} if settings.TRADING_API_KEY else {}
+    )
     async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
         r = await client.post(f"{settings.TRADING_URL}/trading/execute", json=body, headers=headers)
         r.raise_for_status()
@@ -84,7 +89,9 @@ async def execute_trade(
 
 
 async def compute_metrics(returns: list[float], metric: str = "performance") -> dict:
-    headers = {"Authorization": f"Bearer {settings.METRICS_API_KEY}"} if settings.METRICS_API_KEY else {}
+    headers = (
+        {"Authorization": f"Bearer {settings.METRICS_API_KEY}"} if settings.METRICS_API_KEY else {}
+    )
     async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
         r = await client.post(
             f"{settings.METRICS_URL}/metrics/v1/compute",

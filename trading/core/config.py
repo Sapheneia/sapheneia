@@ -5,11 +5,11 @@ Uses Pydantic Settings to manage configuration from environment variables
 and .env files. Supports both local development and production deployments.
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
-import os
 import logging
-from typing import List
+import os
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TradingSettings(BaseSettings):
@@ -31,9 +31,7 @@ class TradingSettings(BaseSettings):
         "default_trading_api_key_please_change"  # MUST be set in .env or environment
     )
     LOG_LEVEL: str = "INFO"
-    TRADING_API_PORT: int = (
-        9000  # Default port for Trading API (separate from api/ on 8000+)
-    )
+    TRADING_API_PORT: int = 9000  # Default port for Trading API (separate from api/ on 8000+)
     TRADING_API_HOST: str = "0.0.0.0"  # Listen on all interfaces, crucial for Docker
     ENVIRONMENT: str = "development"  # Can be: development, staging, production
 
@@ -49,18 +47,14 @@ class TradingSettings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 60  # Default: 60 requests per minute
     RATE_LIMIT_EXECUTE_PER_MINUTE: int = 10  # Stricter limit for execute endpoint
-    RATE_LIMIT_STORAGE_URI: str = (
-        "memory://"  # Can be "redis://localhost:6379" for distributed
-    )
+    RATE_LIMIT_STORAGE_URI: str = "memory://"  # Can be "redis://localhost:6379" for distributed
 
     # --- Trading Strategy Defaults ---
     DEFAULT_MIN_HISTORY_LENGTH: int = 2  # Minimum history length required
     DEFAULT_EXECUTION_SIZE: float = 1.0  # Default execution size
 
     # --- Performance Monitoring Settings ---
-    SLOW_REQUEST_THRESHOLD_MS: int = (
-        100  # Threshold for slow request logging (milliseconds)
-    )
+    SLOW_REQUEST_THRESHOLD_MS: int = 100  # Threshold for slow request logging (milliseconds)
 
     # --- Trading Strategy Constants ---
     MAX_HISTORY_WINDOW: int = 10000  # Maximum window size for history calculations
@@ -116,31 +110,23 @@ class TradingSettings(BaseSettings):
 
         return v
 
-    def get_cors_origins(self) -> List[str]:
+    def get_cors_origins(self) -> list[str]:
         """
         Convert comma-separated CORS origins string to list.
 
         Returns:
             List of allowed CORS origins
         """
-        return [
-            origin.strip()
-            for origin in self.CORS_ALLOWED_ORIGINS.split(",")
-            if origin.strip()
-        ]
+        return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
 
-    def get_cors_methods(self) -> List[str]:
+    def get_cors_methods(self) -> list[str]:
         """
         Convert comma-separated CORS methods string to list.
 
         Returns:
             List of allowed CORS methods
         """
-        return [
-            method.strip()
-            for method in self.CORS_ALLOW_METHODS.split(",")
-            if method.strip()
-        ]
+        return [method.strip() for method in self.CORS_ALLOW_METHODS.split(",") if method.strip()]
 
 
 # Instantiate settings early to make them available for import
@@ -166,8 +152,6 @@ logger.info("=" * 80)
 logger.info(f"Log Level: {settings.LOG_LEVEL}")
 logger.info(f"API Host:Port: {settings.TRADING_API_HOST}:{settings.TRADING_API_PORT}")
 logger.info(f"Environment: {settings.ENVIRONMENT}")
-logger.info(
-    f"Rate Limiting: {'enabled' if settings.RATE_LIMIT_ENABLED else 'disabled'}"
-)
+logger.info(f"Rate Limiting: {'enabled' if settings.RATE_LIMIT_ENABLED else 'disabled'}")
 logger.info(f"Execute Endpoint Limit: {settings.RATE_LIMIT_EXECUTE_PER_MINUTE}/minute")
 logger.info("=" * 80)
