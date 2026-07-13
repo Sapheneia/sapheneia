@@ -30,7 +30,7 @@ class TradesRepository:
                 INSERT INTO trades
                   (time, run_id, iteration_idx, ticker, action, size, price, value, reason)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                ON CONFLICT (run_id, iteration_idx) DO NOTHING
+                ON CONFLICT (run_id, iteration_idx, time) DO NOTHING
                 """,
                 time,
                 run_id,
