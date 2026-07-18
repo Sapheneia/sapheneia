@@ -39,6 +39,7 @@ RUN which uv && uv --version
 
 # Copy project files
 COPY pyproject.toml ./
+COPY shared/ ./shared/
 COPY metrics/ ./metrics/
 COPY .env .env
 

@@ -152,11 +152,34 @@ async def inference_endpoint(
     # Check model status
     status, error_msg = chronos_model_service.get_status()
     if status != "ready":
-        logger.error(f"❌ Inference called but model not ready. Status: {status}")
-        raise HTTPException(
-            status_code=409,
-            detail=f"Model not initialized. Status: {status}. Please call /initialization first.",
-        )
+        if status == "uninitialized":
+            import os
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            model_variant = body.get("model_variant") or os.getenv("MODEL_VARIANT")
+            if not model_variant:
+                raise HTTPException(
+                    status_code=400,
+                    detail="model_variant not provided in request body and MODEL_VARIANT env var not set"
+                )
+            device = os.getenv("DEVICE", "cpu")
+            logger.info(f"Lazy initializing Chronos model variant: {model_variant} on {device}")
+            try:
+                chronos_model_service.initialize_model(model_variant=model_variant, device=device)
+            except Exception as e:
+                logger.error(f"Failed to lazy initialize Chronos model: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to lazy initialize Chronos model: {e}"
+                )
+        else:
+            logger.error(f"❌ Inference called but model not ready. Status: {status}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Model not initialized. Status: {status}. Please call /initialization first.",
+            )
 
     start_time = time.time()
 

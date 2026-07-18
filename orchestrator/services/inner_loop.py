@@ -69,7 +69,13 @@ class InnerLoop:
             )
             equity_curve: list[tuple[datetime, float]] = []
 
-            for iter_idx, as_of in enumerate(eval_dates):
+            for iter_idx, as_of_raw in enumerate(eval_dates):
+                if isinstance(as_of_raw, datetime):
+                    as_of = as_of_raw
+                elif isinstance(as_of_raw, date):
+                    as_of = datetime(as_of_raw.year, as_of_raw.month, as_of_raw.day)
+                else:
+                    as_of = datetime.fromisoformat(str(as_of_raw).replace("Z", "+00:00"))
                 context = self._context_window(prices, as_of, cfg.forecast.context_size)
                 if len(context) < 2:
                     continue

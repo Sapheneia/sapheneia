@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sapheneia"
 version = "2.0.0"
@@ -29,7 +33,7 @@ sapheneia-mcp = "sapheneia_mcp.server:main"
 # Forecast service
 forecasting = [
     "torch>=2.0.0",
-    "timesfm>=1.3.0",
+    "timesfm==1.3.0",
     "scikit-learn>=1.3.0",
     "matplotlib>=3.10.5",
     "seaborn>=0.13.2",

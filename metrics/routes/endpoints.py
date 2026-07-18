@@ -72,7 +72,7 @@ class ComputeRequest(BaseModel):
 # --- Unified Compute Endpoint ---
 
 
-@router.post("/", response_model_exclude_none=True)
+@router.post("", response_model_exclude_none=True)
 async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
     """
     **Unified Metrics Computation Endpoint**
