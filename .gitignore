@@ -236,4 +236,6 @@ app_old.py
 .setup/
 sapheneia.egg-info/
 .mcp.json
+CLAUDE.md
+aleutian
 CLAUDE.local.md
