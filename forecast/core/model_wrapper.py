@@ -216,9 +216,7 @@ class TimesFMModel:
             # Test quantile forecasting if available
             if hasattr(self.model, "experimental_quantile_forecast"):
                 logger.info("Testing quantile forecasting capability...")
-                self.model.experimental_quantile_forecast(
-                    inputs=test_inputs, freq=test_freq
-                )
+                self.model.experimental_quantile_forecast(inputs=test_inputs, freq=test_freq)
                 logger.info("✅ Quantile forecasting available")
             else:
                 logger.warning("⚠️ Quantile forecasting not available")
