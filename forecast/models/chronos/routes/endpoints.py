@@ -83,10 +83,15 @@ async def initialize_model_endpoint(
         logger.info(f"✅ Initialization successful: {model_info}")
 
         return ModelInitOutput(
-            message="Model initialized successfully", model_status="ready", model_info=model_info
+            message="Model initialized successfully",
+            model_status="ready",
+            model_info=model_info,
         )
 
-    except (ModelInitializationError, chronos_model_service.ModelInitializationError) as e:
+    except (
+        ModelInitializationError,
+        chronos_model_service.ModelInitializationError,
+    ) as e:
         logger.error(f"❌ Initialization error: {e}")
         raise ModelInitializationError(str(e))
 
@@ -154,6 +159,7 @@ async def inference_endpoint(
     if status != "ready":
         if status == "uninitialized":
             import os
+
             try:
                 body = await request.json()
             except Exception:
@@ -162,7 +168,7 @@ async def inference_endpoint(
             if not model_variant:
                 raise HTTPException(
                     status_code=400,
-                    detail="model_variant not provided in request body and MODEL_VARIANT env var not set"
+                    detail="model_variant not provided in request body and MODEL_VARIANT env var not set",
                 )
             device = os.getenv("DEVICE", "cpu")
             logger.info(f"Lazy initializing Chronos model variant: {model_variant} on {device}")
@@ -172,7 +178,7 @@ async def inference_endpoint(
                 logger.error(f"Failed to lazy initialize Chronos model: {e}")
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Failed to lazy initialize Chronos model: {e}"
+                    detail=f"Failed to lazy initialize Chronos model: {e}",
                 )
         else:
             logger.error(f"❌ Inference called but model not ready. Status: {status}")
@@ -209,7 +215,10 @@ async def inference_endpoint(
             },
         )
 
-    except (ModelNotInitializedError, chronos_model_service.ModelNotInitializedError) as e:
+    except (
+        ModelNotInitializedError,
+        chronos_model_service.ModelNotInitializedError,
+    ) as e:
         logger.error(f"❌ Model not initialized: {e}")
         raise ModelNotInitializedError(str(e))
 

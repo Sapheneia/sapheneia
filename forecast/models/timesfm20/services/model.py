@@ -316,7 +316,9 @@ def get_model_config() -> dict[str, Any] | None:
 
 
 def run_inference(
-    target_inputs: list[list[float]], covariates: dict[str, Any] | None, parameters: dict[str, Any]
+    target_inputs: list[list[float]],
+    covariates: dict[str, Any] | None,
+    parameters: dict[str, Any],
 ) -> dict[str, Any]:
     """
     Run TimesFM inference on provided data.
@@ -373,7 +375,8 @@ def run_inference(
         if "quantile_forecast" in results and quantile_indices is not None:
             logger.info(f"Processing quantile bands with indices: {quantile_indices}")
             quantile_bands = process_quantile_bands(
-                quantile_forecast=results["quantile_forecast"], selected_indices=quantile_indices
+                quantile_forecast=results["quantile_forecast"],
+                selected_indices=quantile_indices,
             )
             results["quantile_bands"] = quantile_bands
 

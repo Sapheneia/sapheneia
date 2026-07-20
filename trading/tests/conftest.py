@@ -62,8 +62,6 @@ def sample_ohlc_data():
     """
     np.random.seed(42)  # For reproducible tests
     n_periods = 30
-
-    base_price = 100.0
     open_history = np.random.uniform(95, 105, n_periods).tolist()
     high_history = np.random.uniform(100, 110, n_periods).tolist()
     low_history = np.random.uniform(90, 100, n_periods).tolist()

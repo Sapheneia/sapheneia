@@ -54,7 +54,12 @@ def synthetic_prices() -> list[dict]:
 async def test_inner_loop_happy_path(sample_strategy, synthetic_prices) -> None:
     cfg = StrategyConfig.model_validate(sample_strategy)
     forecast_response = {"median": [110.0, 111.0, 112.0, 113.0, 114.0]}
-    trade_response = {"action": "BUY", "size": 1.0, "value": 110.0, "reason": "fcst>price"}
+    trade_response = {
+        "action": "BUY",
+        "size": 1.0,
+        "value": 110.0,
+        "reason": "fcst>price",
+    }
     metrics_response = {
         "sharpe_ratio": 1.5,
         "max_drawdown": -0.05,

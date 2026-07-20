@@ -26,7 +26,8 @@ except ImportError as e:
 
 # Skip all tests in this module if the app can't be imported
 pytestmark = pytest.mark.skipif(
-    not APP_AVAILABLE, reason="forecast.main app cannot be imported (likely missing dependencies)"
+    not APP_AVAILABLE,
+    reason="forecast.main app cannot be imported (likely missing dependencies)",
 )
 
 
@@ -197,9 +198,7 @@ class TestInputValidation:
         payload = {
             "data_source_url_or_path": "test.csv",
             "data_definition": {"price": "target"},
-            "parameters": {
-                "context_len": -1  # Invalid: must be positive
-            },
+            "parameters": {"context_len": -1},  # Invalid: must be positive
         }
 
         response = client.post(

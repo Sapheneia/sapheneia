@@ -27,7 +27,10 @@ app.router.lifespan_context = _noop_lifespan
 def wired_app(sample_strategy: dict):
     runs_service = AsyncMock()
     runs_service.submit.return_value = ("run-xyz", "pending")
-    runs_service.submit_batch.return_value = [("run-1", "pending"), ("run-2", "pending")]
+    runs_service.submit_batch.return_value = [
+        ("run-1", "pending"),
+        ("run-2", "pending"),
+    ]
     runs_service.cancel.return_value = True
 
     runs_repo = AsyncMock()
@@ -105,7 +108,8 @@ def test_submit_run(wired_app, sample_strategy):
 def test_submit_batch(wired_app, sample_strategy):
     with TestClient(wired_app) as client:
         r = client.post(
-            "/v1/orchestration/runs/batch", json={"strategies": [sample_strategy, sample_strategy]}
+            "/v1/orchestration/runs/batch",
+            json={"strategies": [sample_strategy, sample_strategy]},
         )
     assert r.status_code == 200, r.text
     assert len(r.json()) == 2

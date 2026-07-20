@@ -145,7 +145,11 @@ def get_model_info() -> dict[str, Any] | None:
         if _pipeline is None:
             return None
 
-        return {"model_variant": _model_variant, "device": _device, "status": _model_status}
+        return {
+            "model_variant": _model_variant,
+            "device": _device,
+            "status": _model_status,
+        }
 
 
 def run_inference(

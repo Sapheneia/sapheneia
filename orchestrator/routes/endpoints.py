@@ -65,7 +65,11 @@ async def list_runs(
     limit: int = Query(default=100, ge=1, le=1000),
 ) -> list[RunSummary]:
     rows = await _runs_repo(request).list(
-        experiment_id=experiment_id, status=status, ticker=ticker, model_id=model_id, limit=limit
+        experiment_id=experiment_id,
+        status=status,
+        ticker=ticker,
+        model_id=model_id,
+        limit=limit,
     )
     return [RunSummary(**_row_to_summary(r)) for r in rows]
 
@@ -90,9 +94,9 @@ async def get_run(request: Request, run_id: str) -> RunDetail:
         **summary,
         config=_load_json(row.get("config")),
         cache_enabled=bool(row.get("cache_enabled")),
-        metrics=metrics
-        if any(getattr(metrics, k) is not None for k in metrics.model_fields)
-        else None,
+        metrics=(
+            metrics if any(getattr(metrics, k) is not None for k in metrics.model_fields) else None
+        ),
     )
 
 

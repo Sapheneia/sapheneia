@@ -4,7 +4,6 @@ Tests for Metrics API Endpoints
 Tests the unified /metrics/v1/compute/ endpoint with different metric parameters.
 """
 
-
 # --- Basic Endpoints Tests ---
 
 
@@ -288,7 +287,9 @@ def test_compute_insufficient_data(client):
 def test_compute_invalid_json(client):
     """Test error handling with invalid JSON."""
     response = client.post(
-        "/metrics/v1/compute/", data="not valid json", headers={"Content-Type": "application/json"}
+        "/metrics/v1/compute/",
+        data="not valid json",
+        headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 422
 

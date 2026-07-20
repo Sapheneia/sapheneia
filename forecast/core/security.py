@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 security_scheme = HTTPBearer()
 
 
-async def get_api_key(credentials: HTTPAuthorizationCredentials = Security(security_scheme)) -> str:
+async def get_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(security_scheme),
+) -> str:
     """
     Dependency function to validate API key from Authorization header.
 

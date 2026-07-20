@@ -33,10 +33,12 @@ class ComputeRequest(BaseModel):
         description="Metric to compute: 'performance' (all with interpretation), 'all' (all clean), or individual metrics",
     )
     risk_free_rate: float = Field(
-        default=0.0, description="Annual risk-free rate (e.g., 0.04 for 4%) - used for Sharpe ratio"
+        default=0.0,
+        description="Annual risk-free rate (e.g., 0.04 for 4%) - used for Sharpe ratio",
     )
     periods_per_year: int = Field(
-        default=252, description="Trading periods per year (252=daily, 52=weekly, 12=monthly)"
+        default=252,
+        description="Trading periods per year (252=daily, 52=weekly, 12=monthly)",
     )
     include_interpretation: bool = Field(
         default=True,

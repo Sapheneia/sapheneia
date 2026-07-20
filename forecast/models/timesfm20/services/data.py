@@ -20,12 +20,13 @@ logger = logging.getLogger(__name__)
 
 # Use centralized exception hierarchy (Phase 7: Error Handling)
 try:
-    from ...core.exceptions import DataError, DataProcessingError, DataValidationError
+    from ...core.exceptions import DataProcessingError
 
     class TimesFMDataError(DataProcessingError):
         """Raised when TimesFM-specific data processing fails."""
 
         pass
+
 except ImportError:
     # Fallback if exceptions module not available
     class TimesFMDataError(Exception):
@@ -177,7 +178,10 @@ def prepare_timesfm_visualization_data(
 
 
 def validate_timesfm_data_structure(
-    target_inputs: list[float], covariates: dict[str, Any], context_len: int, horizon_len: int
+    target_inputs: list[float],
+    covariates: dict[str, Any],
+    context_len: int,
+    horizon_len: int,
 ) -> bool:
     """
     Validate data structure is compatible with TimesFM requirements.
@@ -211,7 +215,10 @@ def validate_timesfm_data_structure(
         total_len = context_len + horizon_len
 
         for cov_type, cov_dict in covariates.items():
-            if cov_type in ["dynamic_numerical_covariates", "dynamic_categorical_covariates"]:
+            if cov_type in [
+                "dynamic_numerical_covariates",
+                "dynamic_categorical_covariates",
+            ]:
                 for name, values_list in cov_dict.items():
                     if len(values_list) != 1:
                         raise TimesFMDataError(
@@ -225,7 +232,10 @@ def validate_timesfm_data_structure(
                             f"got {len(values_list[0])}"
                         )
 
-            elif cov_type in ["static_numerical_covariates", "static_categorical_covariates"]:
+            elif cov_type in [
+                "static_numerical_covariates",
+                "static_categorical_covariates",
+            ]:
                 for name, values_list in cov_dict.items():
                     if len(values_list) != 1:
                         raise TimesFMDataError(

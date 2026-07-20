@@ -48,7 +48,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     metrics_repo = MetricsRepository(pool)
 
     data_client = DataClient(
-        settings.DATA_SERVICE_URL, api_key=settings.DATA_API_KEY, timeout=settings.DATA_TIMEOUT
+        settings.DATA_SERVICE_URL,
+        api_key=settings.DATA_API_KEY,
+        timeout=settings.DATA_TIMEOUT,
     )
     forecast_client = ForecastClient(
         settings.FORECAST_SERVICE_URL,

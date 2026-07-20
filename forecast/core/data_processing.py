@@ -365,9 +365,9 @@ class DataProcessor:
                 column_stats[column] = {
                     "type": data_type,
                     "dtype": str(col_data.dtype),
-                    "min": float(col_data.min()) if not col_data.isnull().all() else None,
-                    "max": float(col_data.max()) if not col_data.isnull().all() else None,
-                    "mean": float(col_data.mean()) if not col_data.isnull().all() else None,
+                    "min": (float(col_data.min()) if not col_data.isnull().all() else None),
+                    "max": (float(col_data.max()) if not col_data.isnull().all() else None),
+                    "mean": (float(col_data.mean()) if not col_data.isnull().all() else None),
                     "null_count": int(col_data.isnull().sum()),
                 }
             else:
@@ -383,7 +383,11 @@ class DataProcessor:
         return summary
 
     def validate_forecast_inputs(
-        self, inputs: list[float], covariates: dict[str, Any], context_len: int, horizon_len: int
+        self,
+        inputs: list[float],
+        covariates: dict[str, Any],
+        context_len: int,
+        horizon_len: int,
     ) -> bool:
         """
         Validate that forecast inputs are properly formatted for TimesFM.
@@ -414,7 +418,10 @@ class DataProcessor:
         total_len = context_len + horizon_len
 
         for cov_type, cov_dict in covariates.items():
-            if cov_type in ["dynamic_numerical_covariates", "dynamic_categorical_covariates"]:
+            if cov_type in [
+                "dynamic_numerical_covariates",
+                "dynamic_categorical_covariates",
+            ]:
                 for name, values_list in cov_dict.items():
                     if len(values_list) != 1:
                         raise ValueError(
@@ -425,7 +432,10 @@ class DataProcessor:
                             f"Dynamic covariate '{name}' must have {total_len} values, got {len(values_list[0])}"
                         )
 
-            elif cov_type in ["static_numerical_covariates", "static_categorical_covariates"]:
+            elif cov_type in [
+                "static_numerical_covariates",
+                "static_categorical_covariates",
+            ]:
                 for name, values_list in cov_dict.items():
                     if len(values_list) != 1:
                         raise ValueError(f"Static covariate '{name}' must have exactly 1 value")
@@ -511,7 +521,6 @@ def prepare_visualization_data(
 
     # Respect the actual context length used
     context_len_effective = len(target_inputs_flat) or context_len
-    available_len = len(df)
 
     # Use target_inputs as historical data to ensure exact alignment with forecasting
     # This guarantees that the historical data in visualization matches what was used for forecasting

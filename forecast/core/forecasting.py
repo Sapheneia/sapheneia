@@ -217,7 +217,7 @@ class Forecaster:
         # Check that all covariates have the same number of series as inputs
         num_series = len(inputs)
 
-        for cov_type, cov_data in [
+        for _cov_type, cov_data in [
             ("dynamic_numerical", dynamic_numerical),
             ("dynamic_categorical", dynamic_categorical),
             ("static_numerical", static_numerical),

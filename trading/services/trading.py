@@ -337,7 +337,6 @@ class TradingStrategy:
         # Validate and extract parameters
         forecast_price = params["forecast_price"]
         current_price = params["current_price"]
-        current_position = params["current_position"]
         threshold_type = params.get("threshold_type", "absolute")
         threshold_value = params.get("threshold_value", 0.0)
         execution_size = params.get("execution_size", settings.DEFAULT_EXECUTION_SIZE)
@@ -470,7 +469,6 @@ class TradingStrategy:
         # Extract parameters
         forecast_price = params["forecast_price"]
         current_price = params["current_price"]
-        current_position = params["current_position"]
         position_sizing = params.get("position_sizing", "fixed")
         threshold_value = params.get("threshold_value", 0.0)
         execution_size = params.get("execution_size", settings.DEFAULT_EXECUTION_SIZE)
@@ -630,7 +628,6 @@ class TradingStrategy:
         window_history = params.get("window_history")
         quantile_signals = params.get("quantile_signals")
         position_sizing = params.get("position_sizing", "fixed")
-        execution_size = params.get("execution_size", settings.DEFAULT_EXECUTION_SIZE)
         max_position_size = params.get("max_position_size")
         min_position_size = params.get("min_position_size")
         min_history_length = params.get("min_history_length", settings.DEFAULT_MIN_HISTORY_LENGTH)
@@ -747,7 +744,7 @@ class TradingStrategy:
 
         # Find matching quantile signal
         matched_signal = None
-        for key, signal_config in quantile_signals.items():
+        for _key, signal_config in quantile_signals.items():
             range_min, range_max = signal_config["range"]
             if range_min <= percentile < range_max:
                 matched_signal = signal_config

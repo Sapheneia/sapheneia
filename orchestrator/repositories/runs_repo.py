@@ -191,5 +191,5 @@ class MetricsRepository:
                 metrics.get("max_drawdown"),
                 metrics.get("win_rate"),
                 metrics.get("total_return"),
-                json.dumps(metrics.get("extra")) if metrics.get("extra") is not None else None,
+                (json.dumps(metrics.get("extra")) if metrics.get("extra") is not None else None),
             )

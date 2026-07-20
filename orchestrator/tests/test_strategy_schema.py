@@ -14,7 +14,9 @@ def test_valid_strategy(sample_strategy: dict) -> None:
     assert cfg.trading.horizon == 1
 
 
-def test_trading_horizon_must_not_exceed_forecast_horizon(sample_strategy: dict) -> None:
+def test_trading_horizon_must_not_exceed_forecast_horizon(
+    sample_strategy: dict,
+) -> None:
     sample_strategy["trading"]["horizon"] = 99  # > forecast_horizon 5
     with pytest.raises(Exception):
         StrategyConfig.model_validate(sample_strategy)

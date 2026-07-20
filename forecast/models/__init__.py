@@ -5,7 +5,7 @@ Central registry for all forecasting models available in the API.
 Each model is a separate module under forecast/models/ with its own routes and services.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 # Model registry - maps model name to module information
 MODEL_REGISTRY: dict[str, dict[str, Any]] = {

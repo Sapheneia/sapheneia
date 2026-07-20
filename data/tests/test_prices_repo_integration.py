@@ -40,7 +40,15 @@ def timescaledb_dsn() -> str:
         )
         env = {**os.environ, "DATABASE_URL": psycopg_url}
         result = subprocess.run(
-            [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "upgrade", "head"],
+            [
+                sys.executable,
+                "-m",
+                "alembic",
+                "-c",
+                str(ALEMBIC_INI),
+                "upgrade",
+                "head",
+            ],
             capture_output=True,
             text=True,
             env=env,

@@ -142,7 +142,10 @@ async def initialize_model_endpoint(
             model_info=model_info,
         )
 
-    except (ModelInitializationError, timesfm_model_service.ModelInitializationError) as e:
+    except (
+        ModelInitializationError,
+        timesfm_model_service.ModelInitializationError,
+    ) as e:
         logger.error(f"❌ Initialization error: {e}")
         # Let SapheneiaException handler handle this
         if not isinstance(e, ModelInitializationError):
@@ -239,7 +242,9 @@ def _run_inference_sync(
 
     target_inputs, covariates, processed_data = (
         timesfm_data_service.load_and_transform_timesfm_data(
-            data_source=data_source, data_definition=data_definition, parameters=parameters
+            data_source=data_source,
+            data_definition=data_definition,
+            parameters=parameters,
         )
     )
 
@@ -407,7 +412,10 @@ async def inference_endpoint(
         )
 
     # --- Exception Handling (Phase 7: Improved) ---
-    except (ModelNotInitializedError, timesfm_model_service.ModelNotInitializedError) as e:
+    except (
+        ModelNotInitializedError,
+        timesfm_model_service.ModelNotInitializedError,
+    ) as e:
         logger.error(f"❌ Model not initialized: {e}")
         # Let SapheneiaException handler in main.py handle this
         if isinstance(e, ModelNotInitializedError):

@@ -79,9 +79,9 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=cors_methods,
-    allow_headers=["*"]
-    if settings.CORS_ALLOW_HEADERS == "*"
-    else settings.CORS_ALLOW_HEADERS.split(","),
+    allow_headers=(
+        ["*"] if settings.CORS_ALLOW_HEADERS == "*" else settings.CORS_ALLOW_HEADERS.split(",")
+    ),
 )
 
 logger.info("CORS middleware configured:")
@@ -303,7 +303,9 @@ logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.rou
 # service to call a consistent endpoint regardless of which model container is targeted.
 from fastapi import APIRouter, Body
 
-from .models.chronos.routes.endpoints import inference_endpoint as chronos_inference_endpoint
+from .models.chronos.routes.endpoints import (
+    inference_endpoint as chronos_inference_endpoint,
+)
 from .models.chronos.schemas.schema import InferenceInput, InferenceOutput
 
 generic_inference_router = APIRouter(
@@ -347,7 +349,11 @@ async def root(request: Request, response: Response):
         Simple status message confirming API is running
     """
     logger.debug("Root endpoint '/' called")
-    return {"status": "Sapheneia API is running", "version": app.version, "docs": "/docs"}
+    return {
+        "status": "Sapheneia API is running",
+        "version": app.version,
+        "docs": "/docs",
+    }
 
 
 @app.get("/health", tags=["Health"])
@@ -393,7 +399,11 @@ async def api_info(request: Request, response: Response):
         "api_host": settings.API_HOST,
         "api_port": settings.API_PORT,
         "available_models": get_available_models(),
-        "documentation": {"swagger": "/docs", "redoc": "/redoc", "openapi_json": "/openapi.json"},
+        "documentation": {
+            "swagger": "/docs",
+            "redoc": "/redoc",
+            "openapi_json": "/openapi.json",
+        },
         "features": {"api_authentication": True},
     }
 

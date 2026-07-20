@@ -128,7 +128,9 @@ def _validate_returns(returns: pd.Series | np.ndarray | list) -> pd.Series:
 
 
 def calculate_sharpe_ratio(
-    returns: pd.Series | np.ndarray | list, risk_free_rate: float = 0.0, periods_per_year: int = 252
+    returns: pd.Series | np.ndarray | list,
+    risk_free_rate: float = 0.0,
+    periods_per_year: int = 252,
 ) -> float:
     """
     Calculate Sharpe Ratio: risk-adjusted return metric.
@@ -383,7 +385,6 @@ def _get_overall_assessment(sharpe: float, max_dd: float, calmar: float, win_rat
 
     # Calculate total score
     total_score = sharpe_score + mdd_score + calmar_score + win_rate_score
-    max_score = 11
 
     # Provide assessment
     if total_score >= 9:

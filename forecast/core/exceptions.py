@@ -41,7 +41,11 @@ class SapheneiaException(Exception):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary format."""
-        return {"error": self.error_code, "message": self.message, "details": self.details}
+        return {
+            "error": self.error_code,
+            "message": self.message,
+            "details": self.details,
+        }
 
 
 # --- Data Errors ---
@@ -52,7 +56,11 @@ class DataError(SapheneiaException):
 
     def __init__(self, message: str, details: dict[str, Any] | None = None, **kwargs):
         super().__init__(
-            message, error_code="DATA_ERROR", details=details, suggested_status_code=400, **kwargs
+            message,
+            error_code="DATA_ERROR",
+            details=details,
+            suggested_status_code=400,
+            **kwargs,
         )
 
 
@@ -164,7 +172,9 @@ class InferenceError(ModelError):
     """Inference operation failed."""
 
     def __init__(
-        self, message: str = "Inference operation failed", details: dict[str, Any] | None = None
+        self,
+        message: str = "Inference operation failed",
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(message, details, suggested_status_code=500)
 
@@ -202,7 +212,10 @@ class ConfigurationError(SapheneiaException):
         if setting:
             details["setting"] = setting
         super().__init__(
-            message, error_code="CONFIG_ERROR", details=details, suggested_status_code=500
+            message,
+            error_code="CONFIG_ERROR",
+            details=details,
+            suggested_status_code=500,
         )
 
 
@@ -223,7 +236,10 @@ class SecurityError(SapheneiaException):
         if violation_type:
             details["violation_type"] = violation_type
         super().__init__(
-            message, error_code="SECURITY_ERROR", details=details, suggested_status_code=403
+            message,
+            error_code="SECURITY_ERROR",
+            details=details,
+            suggested_status_code=403,
         )
 
 
@@ -275,7 +291,10 @@ class RateLimitExceededError(APIError):
         if limit:
             details["rate_limit"] = limit
         super().__init__(
-            message, error_code="RATE_LIMIT_EXCEEDED", details=details, suggested_status_code=429
+            message,
+            error_code="RATE_LIMIT_EXCEEDED",
+            details=details,
+            suggested_status_code=429,
         )
 
 
@@ -283,7 +302,10 @@ class RequestTooLargeError(APIError):
     """Request size exceeds limits."""
 
     def __init__(
-        self, max_size: int, actual_size: int | None = None, details: dict[str, Any] | None = None
+        self,
+        max_size: int,
+        actual_size: int | None = None,
+        details: dict[str, Any] | None = None,
     ):
         message = f"Request size exceeds maximum allowed size of {max_size} bytes"
         if details is None:
@@ -292,5 +314,8 @@ class RequestTooLargeError(APIError):
             details["actual_size"] = actual_size
             details["percentage"] = f"{(actual_size / max_size * 100):.1f}%"
         super().__init__(
-            message, error_code="REQUEST_TOO_LARGE", details=details, suggested_status_code=413
+            message,
+            error_code="REQUEST_TOO_LARGE",
+            details=details,
+            suggested_status_code=413,
         )

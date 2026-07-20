@@ -117,7 +117,5 @@ Makefile               Convenience targets
 
 ## Design background
 
-- [`docs/audit/`](docs/audit/) — pre-refactor audit (architecture, pitfalls, runbook).
-- [`.local/refactor-2/refactor-design-plan.md`](.local/refactor-2/refactor-design-plan.md) — architectural design.
-- [`.local/refactor-2/PRD.md`](.local/refactor-2/PRD.md) — refactor PRD.
-- [`.local/refactor-2/implementation-plan.md`](.local/refactor-2/implementation-plan.md) — implementation plan.
+- [`.config/agentic-engineering/project-engineering.md`](.config/agentic-engineering/project-engineering.md) — architecture rules (§3-§9).
+- [`CLAUDE.md`](CLAUDE.md) — agent routing + gates + invariants.

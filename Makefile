@@ -38,7 +38,7 @@ smoke:
 	./setup.sh down
 
 fmt:
-	uv run black .
+	uv run ruff format .
 	uv run ruff check --fix .
 
 lint:
