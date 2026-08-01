@@ -142,6 +142,12 @@ class RunsRepository:
             return [dict(r) for r in rows]
 
     async def reconcile_stale(self, stale_after_seconds: float) -> int:
+        """Mark stuck runs as failed.
+
+        Covers both ``running`` runs whose heartbeat is stale, and ``pending``
+        runs that were never picked up (e.g. the orchestrator restarted and the
+        in-memory task that would have flipped them to ``running`` is gone).
+        """
         async with self._pool.acquire() as conn:
             result = await conn.execute(
                 f"""
@@ -149,7 +155,7 @@ class RunsRepository:
                 SET status = 'failed',
                     error = COALESCE(error, 'heartbeat timeout'),
                     completed_at = now()
-                WHERE status = 'running'
+                WHERE status IN ('running', 'pending')
                   AND heartbeat_at < now() - INTERVAL '{int(stale_after_seconds)} seconds'
                 """
             )

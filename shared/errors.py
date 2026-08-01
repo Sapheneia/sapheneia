@@ -18,13 +18,13 @@ Usage:
 """
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Machine-readable error codes for structured error responses."""
 
     VALIDATION_ERROR = "VALIDATION_ERROR"

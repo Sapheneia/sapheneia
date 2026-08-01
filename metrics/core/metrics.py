@@ -26,7 +26,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-import quantstats as qs
+import quantstats as qs  # noqa: E402
 
 # --- Performance Thresholds ---
 # These provide interpretation guidance for metric values

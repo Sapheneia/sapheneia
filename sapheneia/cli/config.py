@@ -139,7 +139,9 @@ class StrategyConfig:
             dt = datetime.strptime(date_str, "%Y-%m-%d")
             return dt.strftime("%Y-%m-%d")
         except ValueError:
-            raise ValueError(f"Invalid date format: {date_str}. Expected YYYY-MM-DD or YYYYMMDD")
+            raise ValueError(
+                f"Invalid date format: {date_str}. Expected YYYY-MM-DD or YYYYMMDD"
+            ) from None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

@@ -178,7 +178,7 @@ def initialize_model(
         logger.error(f"❌ TimesFM-2.0 initialization failed: {e}")
         logger.error("=" * 80)
 
-        raise ModelInitializationError(f"Model initialization failed: {e}")
+        raise ModelInitializationError(f"Model initialization failed: {e}") from e
 
 
 def _initialize_from_hf(

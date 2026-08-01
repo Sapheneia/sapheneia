@@ -99,7 +99,7 @@ logger.info("GZip compression middleware configured (min_size=1000 bytes)")
 # --- Request-ID Middleware ---
 # Mirrors trading/main.py: every request gets an X-Request-ID (generated if
 # the caller didn't supply one) so logs can be correlated across services.
-import uuid as _uuid
+import uuid as _uuid  # noqa: E402
 
 
 @app.middleware("http")
@@ -301,12 +301,12 @@ logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.rou
 # When a container runs a single model (e.g., chronos-t5-tiny), it exposes inference
 # at the generic path without the model name prefix. This allows the orchestration
 # service to call a consistent endpoint regardless of which model container is targeted.
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body  # noqa: E402
 
-from .models.chronos.routes.endpoints import (
+from .models.chronos.routes.endpoints import (  # noqa: E402
     inference_endpoint as chronos_inference_endpoint,
 )
-from .models.chronos.schemas.schema import InferenceInput, InferenceOutput
+from .models.chronos.schemas.schema import InferenceInput, InferenceOutput  # noqa: E402
 
 generic_inference_router = APIRouter(
     tags=["Generic Inference"], dependencies=[Depends(get_api_key)]

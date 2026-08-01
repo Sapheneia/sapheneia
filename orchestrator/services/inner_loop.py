@@ -215,7 +215,7 @@ def _to_date(t) -> date:
 
 def _equity_to_returns(equity: list[float]) -> list[float]:
     out: list[float] = []
-    for prev, curr in zip(equity, equity[1:]):
+    for prev, curr in zip(equity, equity[1:], strict=False):
         if prev > 0:
             out.append((curr - prev) / prev)
     return out

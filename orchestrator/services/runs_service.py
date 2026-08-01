@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import uuid
 from datetime import datetime
 from typing import Any
+
+from shared.model_family import ModelFamily
 
 from ..repositories.runs_repo import RunsRepository
 from ..schemas.strategy import StrategyConfig
@@ -16,12 +19,7 @@ logger = logging.getLogger("sapheneia.orchestrator.runs")
 
 
 def _family_from_model_id(model_id: str) -> str:
-    m = model_id.lower()
-    if "chronos" in m:
-        return "chronos"
-    if "timesfm" in m:
-        return "timesfm"
-    return "unknown"
+    return ModelFamily.from_model_id(model_id).value
 
 
 def make_run_id(experiment_id: str, ticker: str, model_id: str, suffix: str | None = None) -> str:
@@ -38,11 +36,13 @@ class RunsService:
         runs_repo: RunsRepository,
         inner_loop: InnerLoop,
         max_concurrent_runs: int,
+        heartbeat_refresh_interval: float = 60.0,
     ):
         self.runs_repo = runs_repo
         self.inner = inner_loop
         self._semaphore = asyncio.Semaphore(max_concurrent_runs)
         self._active_tasks: dict[str, asyncio.Task] = {}
+        self._heartbeat_refresh_interval = heartbeat_refresh_interval
 
     async def submit(self, strategy_data: dict[str, Any]) -> tuple[str, str]:
         cfg = StrategyConfig.model_validate(strategy_data)
@@ -83,10 +83,8 @@ class RunsService:
         if task is None:
             return False
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
-        except (asyncio.CancelledError, Exception):  # noqa: BLE001
-            pass
         await self.runs_repo.update_status(
             run_id, "cancelled", error="cancelled by request", completed=True
         )
@@ -95,5 +93,18 @@ class RunsService:
     async def _run_with_semaphore(
         self, run_id: str, cfg: StrategyConfig, experiment_id: str
     ) -> None:
-        async with self._semaphore:
+        # While waiting for a concurrency slot the run is still `pending`; refresh
+        # its heartbeat so the reconciler does not mistake a queued run for an
+        # orphaned one (which would be killed after HEARTBEAT_STALE_AFTER).
+        while True:
+            try:
+                await asyncio.wait_for(
+                    self._semaphore.acquire(), timeout=self._heartbeat_refresh_interval
+                )
+                break
+            except TimeoutError:
+                await self.runs_repo.heartbeat(run_id)
+        try:
             await self.inner.run(run_id, cfg, experiment_id)
+        finally:
+            self._semaphore.release()

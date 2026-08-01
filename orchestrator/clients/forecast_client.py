@@ -9,13 +9,7 @@ from __future__ import annotations
 
 import httpx
 
-
-def _family(model_id: str) -> str:
-    if "chronos" in model_id.lower():
-        return "chronos"
-    if "timesfm" in model_id.lower():
-        return "timesfm20"
-    raise ValueError(f"Unknown model family for model_id={model_id!r}")
+from shared.model_family import ModelFamily
 
 
 class ForecastClient:
@@ -33,14 +27,14 @@ class ForecastClient:
         num_samples: int = 20,
         request_id: str | None = None,
     ) -> dict:
-        family = _family(model_id)
-        path = f"/forecast/v1/{family}/inference"
+        family = ModelFamily.from_model_id(model_id)
+        path = f"/forecast/v1/{family.route_suffix}/inference"
         body = {
             "context": context,
             "prediction_length": horizon,
             "num_samples": num_samples,
         }
-        if family == "chronos":
+        if family is ModelFamily.CHRONOS:
             body["model_variant"] = model_id
         else:
             body["checkpoint"] = model_id

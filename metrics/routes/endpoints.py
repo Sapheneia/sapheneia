@@ -200,9 +200,9 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
         raise ValidationError(
             message=str(e),
             details={"metric": request.metric},
-        )
+        ) from e
     except Exception as e:
         raise ComputationError(
             message=f"Calculation error: {str(e)}",
             details={"metric": request.metric},
-        )
+        ) from e

@@ -376,17 +376,14 @@ class TradingStrategy:
         close_history = TradingStrategy._convert_to_array(params.get("close_history"))
 
         # Validate OHLC data for ATR threshold type
-        if threshold_type == ThresholdType.ATR.value:
-            if (
-                open_history is None
-                or high_history is None
-                or low_history is None
-                or close_history is None
-            ):
-                logger.warning(
-                    "ATR threshold requires OHLC data, falling back to absolute threshold"
-                )
-                threshold_type = "absolute"
+        if threshold_type == ThresholdType.ATR.value and (
+            open_history is None
+            or high_history is None
+            or low_history is None
+            or close_history is None
+        ):
+            logger.warning("ATR threshold requires OHLC data, falling back to absolute threshold")
+            threshold_type = "absolute"
 
         # Calculate threshold
         threshold = TradingStrategy._calculate_threshold(
@@ -499,12 +496,15 @@ class TradingStrategy:
                 },
             )
 
-        if max_position_size is not None and min_position_size is not None:
-            if max_position_size < min_position_size:
-                raise InvalidParametersError(
-                    message="max_position_size must be >= min_position_size",
-                    parameter="position_size_constraints",
-                )
+        if (
+            max_position_size is not None
+            and min_position_size is not None
+            and max_position_size < min_position_size
+        ):
+            raise InvalidParametersError(
+                message="max_position_size must be >= min_position_size",
+                parameter="position_size_constraints",
+            )
 
         # Calculate expected return
         expected_return = (forecast_price - current_price) / current_price

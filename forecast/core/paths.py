@@ -19,11 +19,7 @@ logger = getLogger(__name__)
 IS_DOCKER = os.path.exists("/app")
 
 # PROJECT_ROOT detection
-if IS_DOCKER:
-    PROJECT_ROOT = Path("/app")
-else:
-    # In venv: go up from forecast/core/ to project root
-    PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path("/app") if IS_DOCKER else Path(__file__).parent.parent.parent
 
 # Base directories (consistent across environments)
 DATA_DIR = PROJECT_ROOT / "data"
@@ -144,7 +140,7 @@ def normalize_data_path(path: str | Path) -> Path:
             f"Resolved to: {abs_path}\n"
             f"Allowed directory: {DATA_DIR}\n"
             f"This prevents access to files outside the data directory."
-        )
+        ) from None
 
     return abs_path
 

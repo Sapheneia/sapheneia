@@ -96,17 +96,9 @@ class Forecaster:
         logger.info(f"Performing TimesFM forecasting (covariates={use_covariates})...")
 
         # Normalize inputs format
-        if isinstance(inputs[0], (int, float)):
-            # inputs is a single list of numbers
-            inputs_norm = [inputs]
-        else:
-            # inputs is already a list of lists
-            inputs_norm = inputs
+        inputs_norm = [inputs] if isinstance(inputs[0], (int, float)) else inputs
 
-        if isinstance(freq, int):
-            freq_norm = [freq] * len(inputs_norm)
-        else:
-            freq_norm = freq
+        freq_norm = [freq] * len(inputs_norm) if isinstance(freq, int) else freq
 
         try:
             if use_covariates and any(

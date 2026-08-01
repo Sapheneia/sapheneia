@@ -120,7 +120,7 @@ def initialize_model(model_variant: str | None = None, device: str | None = None
         logger.error(f"❌ Chronos initialization failed: {e}")
         logger.error("=" * 80)
 
-        raise ModelInitializationError(f"Model initialization failed: {e}")
+        raise ModelInitializationError(f"Model initialization failed: {e}") from e
 
 
 def get_status() -> tuple[str, str | None]:

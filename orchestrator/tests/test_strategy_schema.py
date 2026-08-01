@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from orchestrator.schemas.strategy import StrategyConfig
 
@@ -18,7 +19,7 @@ def test_trading_horizon_must_not_exceed_forecast_horizon(
     sample_strategy: dict,
 ) -> None:
     sample_strategy["trading"]["horizon"] = 99  # > forecast_horizon 5
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         StrategyConfig.model_validate(sample_strategy)
 
 
@@ -31,7 +32,7 @@ def test_parse_date_accepts_two_formats(sample_strategy: dict, date_str: str) ->
 
 def test_invalid_strategy_type_rejected(sample_strategy: dict) -> None:
     sample_strategy["trading"]["strategy_type"] = "bogus"
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         StrategyConfig.model_validate(sample_strategy)
 
 

@@ -149,7 +149,7 @@ async def initialize_model_endpoint(
         logger.error(f"❌ Initialization error: {e}")
         # Let SapheneiaException handler handle this
         if not isinstance(e, ModelInitializationError):
-            raise ModelInitializationError(str(e), source=source_type)
+            raise ModelInitializationError(str(e), source=source_type) from e
         raise
 
     except (FileNotFoundError, ValueError) as e:
@@ -157,7 +157,7 @@ async def initialize_model_endpoint(
         # Wrap in ConfigurationError
         from ....core.exceptions import ConfigurationError
 
-        raise ConfigurationError(str(e), setting="model_checkpoint")
+        raise ConfigurationError(str(e), setting="model_checkpoint") from e
 
     except SapheneiaException:
         # Already structured - pass through
@@ -420,7 +420,7 @@ async def inference_endpoint(
         # Let SapheneiaException handler in main.py handle this
         if isinstance(e, ModelNotInitializedError):
             raise e
-        raise ModelNotInitializedError(str(e))
+        raise ModelNotInitializedError(str(e)) from e
 
     except (
         DataError,
@@ -434,9 +434,9 @@ async def inference_endpoint(
         if not isinstance(e, SapheneiaException):
             # Wrap in DataValidationError or DataFetchError
             if "not found" in str(e).lower() or "fetch" in str(e).lower():
-                raise DataFetchError(str(e))
+                raise DataFetchError(str(e)) from e
             else:
-                raise DataValidationError(str(e))
+                raise DataValidationError(str(e)) from e
 
     except SapheneiaException:
         # Already a structured error - let it pass through to handler

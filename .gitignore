@@ -234,6 +234,8 @@ app_old.py
 .claude/
 .config/
 .setup/
+.hermes/
+.models_cache/
 sapheneia.egg-info/
 .mcp.json
 CLAUDE.md

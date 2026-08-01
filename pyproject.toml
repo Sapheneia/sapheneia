@@ -173,7 +173,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C901"]
-ignore = ["E501"]
+# B008: FastAPI's canonical DI idiom is `Depends()/Body()/Query()/Security()`
+#       in argument defaults; flagged across every service. Modern Annotated[]
+#       conversion is orthogonal to this PR — tracked as follow-up debt.
+ignore = ["E501", "B008"]
 
 [tool.ruff.lint.mccabe]
 # Ratchet threshold — current max in codebase is 24; tighten to 15 then 10 over time.

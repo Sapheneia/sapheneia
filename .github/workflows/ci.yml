@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, agentic-refactor]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-format:
+    name: Lint + Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install package (dev deps only)
+        run: uv sync --group dev --no-install-project
+      - name: Ruff check
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  typecheck:
+    name: Type-check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install package (dev deps only)
+        run: uv sync --group dev --no-install-project
+      - name: mypy
+        run: uv run mypy shared orchestrator/core
+
+  test:
+    name: Tests (unit)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install package
+        run: uv sync --group dev --extra db --extra data --extra mcp
+      - name: Run unit tests
+        run: uv run pytest -m "not integration" -q
+        env:
+          TIMESCALEDB_HOST: localhost

@@ -126,7 +126,7 @@ def load_and_transform_timesfm_data(
 
     except Exception as e:
         logger.error(f"❌ Data transformation failed: {str(e)}")
-        raise TimesFMDataError(f"Failed to transform data for TimesFM: {str(e)}")
+        raise TimesFMDataError(f"Failed to transform data for TimesFM: {str(e)}") from e
 
 
 def prepare_timesfm_visualization_data(
@@ -174,7 +174,7 @@ def prepare_timesfm_visualization_data(
 
     except Exception as e:
         logger.error(f"❌ Visualization data preparation failed: {str(e)}")
-        raise TimesFMDataError(f"Failed to prepare visualization data: {str(e)}")
+        raise TimesFMDataError(f"Failed to prepare visualization data: {str(e)}") from e
 
 
 def validate_timesfm_data_structure(
@@ -250,4 +250,4 @@ def validate_timesfm_data_structure(
         raise
     except Exception as e:
         logger.error(f"❌ Data validation failed: {str(e)}")
-        raise TimesFMDataError(f"Data validation failed: {str(e)}")
+        raise TimesFMDataError(f"Data validation failed: {str(e)}") from e

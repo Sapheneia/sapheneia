@@ -1,6 +1,6 @@
 """sapheneia-mcp server entry point.
 
-Registers 12 tools and starts either an HTTP/SSE server or a stdio transport.
+Registers 13 tools and starts either an HTTP/SSE server or a stdio transport.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ logger = logging.getLogger("sapheneia.mcp")
 
 
 def build_server():
-    """Construct an MCP server with our 12 tools registered.
+    """Construct an MCP server with our 13 tools registered.
 
     Imports the MCP SDK lazily so unit tests can exercise the underlying
     tool functions without requiring the SDK installed.

@@ -78,7 +78,7 @@ class DataProcessor:
             logger.info(f"Loaded CSV with shape: {self.data.shape}")
             logger.info(f"Columns: {list(self.data.columns)}")
         except FileNotFoundError:
-            raise FileNotFoundError(f"CSV file not found: {csv_file_path}")
+            raise FileNotFoundError(f"CSV file not found: {csv_file_path}") from None
 
         # Validate that 'date' column exists
         if "date" not in self.data.columns:

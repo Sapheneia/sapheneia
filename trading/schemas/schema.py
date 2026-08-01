@@ -5,8 +5,8 @@ Defines request and response models for all trading strategy endpoints with
 comprehensive validation and documentation.
 """
 
-from enum import Enum
-from typing import Any, Literal, Union
+from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -16,7 +16,7 @@ from ..core.config import settings
 # ========== ENUM CLASSES ==========
 
 
-class StrategyTypeEnum(str, Enum):
+class StrategyTypeEnum(StrEnum):
     """
     Enumeration of supported trading strategy types.
 
@@ -128,17 +128,16 @@ class ThresholdStrategyRequest(BaseStrategyRequest):
     @model_validator(mode="after")
     def validate_atr_requirements(self):
         """Validate that OHLC data is provided when threshold_type is 'atr'."""
-        if self.threshold_type == "atr":
-            if (
-                self.open_history is None
-                or self.high_history is None
-                or self.low_history is None
-                or self.close_history is None
-            ):
-                raise ValueError(
-                    "All OHLC histories (open_history, high_history, low_history, close_history) "
-                    "are required when threshold_type is 'atr'"
-                )
+        if self.threshold_type == "atr" and (
+            self.open_history is None
+            or self.high_history is None
+            or self.low_history is None
+            or self.close_history is None
+        ):
+            raise ValueError(
+                "All OHLC histories (open_history, high_history, low_history, close_history) "
+                "are required when threshold_type is 'atr'"
+            )
         return self
 
     @field_validator("open_history", "high_history", "low_history", "close_history")
@@ -436,7 +435,7 @@ class QuantileStrategyRequest(BaseStrategyRequest):
 # ========== DISCRIMINATED UNION ==========
 
 # Union type for request routing (discriminated by strategy_type)
-StrategyRequest = Union[ThresholdStrategyRequest, ReturnStrategyRequest, QuantileStrategyRequest]
+StrategyRequest = ThresholdStrategyRequest | ReturnStrategyRequest | QuantileStrategyRequest
 
 
 # ========== RESPONSE SCHEMAS ==========

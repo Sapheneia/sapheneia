@@ -161,13 +161,13 @@ async def execute_strategy(
         # These are expected exceptions, already logged in TradingStrategy
         request_id = getattr(request.state, "request_id", "unknown")
         logger.warning(f"[{request_id}] Strategy execution failed: {e.error_code} - {e.message}")
-        raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict())
+        raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict()) from e
 
     except TradingException as e:
         # Other trading exceptions
         request_id = getattr(request.state, "request_id", "unknown")
         logger.error(f"[{request_id}] Trading exception: {e.error_code} - {e.message}")
-        raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict())
+        raise HTTPException(status_code=e.suggested_status_code, detail=e.to_dict()) from e
 
     except Exception as e:
         # Unexpected exceptions
@@ -181,7 +181,7 @@ async def execute_strategy(
                 "message": "An unexpected error occurred during strategy execution",
                 "details": {"error_type": type(e).__name__},
             },
-        )
+        ) from e
 
 
 @router.get("/strategies", response_model=StrategyListResponse)

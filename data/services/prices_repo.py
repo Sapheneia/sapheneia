@@ -150,6 +150,4 @@ def _covers(rows: Sequence[asyncpg.Record], start: date, end: date) -> bool:
     last = rows[-1]["time"].date()
     if first - start > timedelta(days=7):
         return False
-    if end - last > timedelta(days=7):
-        return False
-    return True
+    return end - last <= timedelta(days=7)

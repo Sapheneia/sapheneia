@@ -124,7 +124,7 @@ def _fetch_local_file(file_path: Path) -> pd.DataFrame:
 
     except Exception as e:
         logger.error(f"Failed to load file: {e}")
-        raise DataFetchError(f"Failed to load file: {e}")
+        raise DataFetchError(f"Failed to load file: {e}") from e
 
 
 def _fetch_http_url(url: str, timeout: int = 30) -> pd.DataFrame:
@@ -174,11 +174,11 @@ def _fetch_http_url(url: str, timeout: int = 30) -> pd.DataFrame:
 
     except requests.exceptions.RequestException as e:
         logger.error(f"HTTP request failed: {str(e)}")
-        raise DataFetchError(f"Failed to fetch data from URL: {str(e)}")
+        raise DataFetchError(f"Failed to fetch data from URL: {str(e)}") from e
 
     except Exception as e:
         logger.error(f"Failed to parse data from URL: {str(e)}")
-        raise DataFetchError(f"Failed to parse data from URL: {str(e)}")
+        raise DataFetchError(f"Failed to parse data from URL: {str(e)}") from e
 
 
 def validate_data_structure(data: pd.DataFrame) -> bool:

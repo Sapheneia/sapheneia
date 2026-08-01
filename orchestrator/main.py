@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
@@ -85,6 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         runs_repo=runs_repo,
         inner_loop=inner,
         max_concurrent_runs=settings.MAX_CONCURRENT_RUNS,
+        heartbeat_refresh_interval=settings.HEARTBEAT_INTERVAL,
     )
 
     app.state.pool = pool
@@ -102,10 +103,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         reconciler_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await reconciler_task
-        except asyncio.CancelledError:
-            pass
         await pool.close()
         logger.info("Orchestrator shutdown complete")
 

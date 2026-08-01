@@ -93,13 +93,13 @@ async def initialize_model_endpoint(
         chronos_model_service.ModelInitializationError,
     ) as e:
         logger.error(f"❌ Initialization error: {e}")
-        raise ModelInitializationError(str(e))
+        raise ModelInitializationError(str(e)) from e
 
     except ValueError as e:
         logger.error(f"❌ Configuration error: {e}")
         from ....core.exceptions import ConfigurationError
 
-        raise ConfigurationError(str(e), setting="model_variant")
+        raise ConfigurationError(str(e), setting="model_variant") from e
 
     except Exception:
         logger.exception("❌ Unexpected error during initialization")
@@ -179,7 +179,7 @@ async def inference_endpoint(
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to lazy initialize Chronos model: {e}",
-                )
+                ) from e
         else:
             logger.error(f"❌ Inference called but model not ready. Status: {status}")
             raise HTTPException(
@@ -220,7 +220,7 @@ async def inference_endpoint(
         chronos_model_service.ModelNotInitializedError,
     ) as e:
         logger.error(f"❌ Model not initialized: {e}")
-        raise ModelNotInitializedError(str(e))
+        raise ModelNotInitializedError(str(e)) from e
 
     except SapheneiaException:
         raise
