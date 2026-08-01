@@ -21,8 +21,9 @@ jobs:
           enable-cache: true
       - name: Set up Python
         run: uv python install 3.11
-      - name: Install package (dev deps only)
-        run: uv sync --group dev --no-install-project
+      - name: Install dev tooling
+        # ruff/mypy/pytest live in the `dev` *extra* (not [dependency-groups]).
+        run: uv sync --extra dev --no-install-project
       - name: Ruff check
         run: uv run ruff check .
       - name: Ruff format check
@@ -39,8 +40,8 @@ jobs:
           enable-cache: true
       - name: Set up Python
         run: uv python install 3.11
-      - name: Install package (dev deps only)
-        run: uv sync --group dev --no-install-project
+      - name: Install dev tooling
+        run: uv sync --extra dev --no-install-project
       - name: mypy
         run: uv run mypy shared orchestrator/core
 
@@ -58,8 +59,9 @@ jobs:
           enable-cache: true
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
-      - name: Install package
-        run: uv sync --group dev --extra db --extra data --extra mcp
+      - name: Install package + test deps
+        # Leaves out `forecasting` (torch/jax/timesfm) — its tests skip gracefully.
+        run: uv sync --extra dev --extra data --extra db --extra mcp --extra trading --extra metrics
       - name: Run unit tests
         run: uv run pytest -m "not integration" -q
         env:
