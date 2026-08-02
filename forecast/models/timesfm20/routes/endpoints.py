@@ -494,9 +494,20 @@ async def shutdown_model_endpoint(request: Request, response: Response):
 # same canonical contract as chronos. Both families now return one shape.
 
 
-def _container_model_id() -> str:
-    """The checkpoint this container is pinned to serve."""
-    return os.getenv("TIMESFM20_DEFAULT_CHECKPOINT", settings.TIMESFM20_DEFAULT_CHECKPOINT)
+def _container_model_id() -> str | None:
+    """The model this container is pinned to serve, or None if unpinned.
+
+    Deliberately reads MODEL_VARIANT — the same variable chronos uses — rather
+    than TIMESFM20_DEFAULT_CHECKPOINT. Every container mounts *both* family
+    routers, so a family that derives its identity from a defaulted setting can
+    never report "unpinned": the mismatch check below would pass on any
+    container, and a chronos box asked for a TimesFM model would start loading
+    a 500M checkpoint. Returning None here makes that a 503 instead.
+
+    TIMESFM20_DEFAULT_CHECKPOINT remains the default for the legacy /inference
+    path, which does not route by model identity.
+    """
+    return os.getenv("MODEL_VARIANT") or None
 
 
 def _timesfm_quantile_bands(results: dict[str, Any], horizon: int) -> list[QuantileBand]:
@@ -536,6 +547,11 @@ async def forecast_endpoint(
     **Returns:** a `ForecastEnvelope` — top-level `median` plus `quantiles`.
     """
     served = _container_model_id()
+    if served is None:
+        raise HTTPException(
+            status_code=503,
+            detail="This container has no MODEL_VARIANT configured; it cannot serve forecasts.",
+        )
     if payload.model_id and payload.model_id != served:
         raise HTTPException(
             status_code=409,

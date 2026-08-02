@@ -65,6 +65,7 @@ services:
       MODEL_NAME: all
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -99,6 +100,7 @@ services:
       DEVICE: ${DEVICE:-cpu}
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -127,6 +129,7 @@ services:
       DEVICE: ${DEVICE:-cpu}
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -155,6 +158,7 @@ services:
       DEVICE: ${DEVICE:-cpu}
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -183,6 +187,7 @@ services:
       DEVICE: ${DEVICE:-cpu}
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -211,6 +216,7 @@ services:
       DEVICE: ${DEVICE:-cpu}
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -234,11 +240,15 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 8000
       MODEL_NAME: timesfm20
+      # Same pin variable every family reads; the canonical /forecast route
+      # refuses to serve a model this container is not pinned to.
+      MODEL_VARIANT: google/timesfm-2.0-500m-pytorch
       TIMESFM20_DEFAULT_CHECKPOINT: google/timesfm-2.0-500m-pytorch
       HF_HOME: /models_cache
       DEVICE: ${DEVICE:-cpu}
       PYTHONPATH: /app
       API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
@@ -264,7 +274,6 @@ services:
       TRADING_API_HOST: 0.0.0.0
       TRADING_API_PORT: 9000
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
       PYTHONPATH: /app
     volumes:
       - ./trading:/app/trading
@@ -282,7 +291,7 @@ services:
         limits:
           cpus: "${SERVICE_CPUS:-1}"
           memory: "${SERVICE_MEM_LIMIT:-1G}"
-    ports: ["${METRICS_PORT:-12702}:8000"]
+    ports: ["127.0.0.1:${METRICS_PORT:-12702}:8000"]
     environment:
       METRICS_HOST: 0.0.0.0
       METRICS_PORT: 8000
@@ -291,6 +300,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - ./shared:/app/shared
+      - ./logs:/app/logs
     networks: [sapheneia-net]
     restart: unless-stopped
     healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 10s }
@@ -304,7 +314,7 @@ services:
         limits:
           cpus: "${SERVICE_CPUS:-2}"
           memory: "${SERVICE_MEM_LIMIT:-2G}"
-    ports: ["${DATA_API_PORT:-12701}:8000"]
+    ports: ["127.0.0.1:${DATA_API_PORT:-12701}:8000"]
     environment:
       DATA_HOST: 0.0.0.0
       DATA_PORT: 8000
@@ -335,7 +345,7 @@ services:
         limits:
           cpus: "${SERVICE_CPUS:-2}"
           memory: "${SERVICE_MEM_LIMIT:-2G}"
-    ports: ["${ORCHESTRATOR_PORT:-12704}:8000"]
+    ports: ["127.0.0.1:${ORCHESTRATOR_PORT:-12704}:8000"]
     environment:
       ORCHESTRATOR_HOST: 0.0.0.0
       ORCHESTRATOR_PORT: 8000
@@ -384,7 +394,7 @@ services:
         limits:
           cpus: "${SERVICE_CPUS:-1}"
           memory: "${SERVICE_MEM_LIMIT:-1G}"
-    ports: ["${SAPHENEIA_MCP_PORT:-12703}:8000"]
+    ports: ["127.0.0.1:${SAPHENEIA_MCP_PORT:-12703}:8000"]
     environment:
       SAPHENEIA_MCP_HOST: 0.0.0.0
       SAPHENEIA_MCP_PORT: 8000
