@@ -1,152 +1,45 @@
 """
-Sapheneia Model Registry
+Sapheneia model accessors.
 
-Central registry for all forecasting models available in the API.
-Each model is a separate module under forecast/models/ with its own routes and services.
+This module used to carry a second, independent ``MODEL_REGISTRY`` dict: nine
+models on ports 8001/8100-8107 that no longer corresponded to anything in
+``docker-compose.yml``. ``GET /models`` served *that* one, while both READMEs
+documented ``forecast/models/registry.py`` — six models on ports 12710-12721 —
+as the source of truth, and nothing imported it.
+
+There is now one registry (``shared.model_registry``); these helpers read it.
 """
 
 from typing import Any
 
-# Model registry - maps model name to module information
-MODEL_REGISTRY: dict[str, dict[str, Any]] = {
-    "timesfm20": {
-        "name": "TimesFM 2.0",
-        "version": "2.0.500m",
-        "description": "Google's TimesFM 2.0 - 500M parameter foundation model for time series forecasting",
-        "module": "forecast.models.timesfm20",
-        "router_path": "forecast.models.timesfm20.routes.endpoints",
-        "service_path": "forecast.models.timesfm20.services.model",
-        "default_port": 8001,
-        "status": "active",
-    },
-    # Amazon Chronos Models
-    "chronos-t5-tiny": {
-        "name": "Chronos T5 Tiny",
-        "version": "1.0",
-        "description": "Amazon Chronos T5 Tiny - Compact time series forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8100,
-        "huggingface_id": "amazon/chronos-t5-tiny",
-        "status": "active",
-    },
-    "chronos-t5-mini": {
-        "name": "Chronos T5 Mini",
-        "version": "1.0",
-        "description": "Amazon Chronos T5 Mini - Small time series forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8101,
-        "huggingface_id": "amazon/chronos-t5-mini",
-        "status": "active",
-    },
-    "chronos-t5-small": {
-        "name": "Chronos T5 Small",
-        "version": "1.0",
-        "description": "Amazon Chronos T5 Small - Medium time series forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8102,
-        "huggingface_id": "amazon/chronos-t5-small",
-        "status": "active",
-    },
-    "chronos-t5-base": {
-        "name": "Chronos T5 Base",
-        "version": "1.0",
-        "description": "Amazon Chronos T5 Base - Base time series forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8103,
-        "huggingface_id": "amazon/chronos-t5-base",
-        "status": "active",
-    },
-    "chronos-t5-large": {
-        "name": "Chronos T5 Large",
-        "version": "1.0",
-        "description": "Amazon Chronos T5 Large - Large time series forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8104,
-        "huggingface_id": "amazon/chronos-t5-large",
-        "status": "active",
-    },
-    "chronos-bolt-mini": {
-        "name": "Chronos Bolt Mini",
-        "version": "1.0",
-        "description": "Amazon Chronos Bolt Mini - Fast mini forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8105,
-        "huggingface_id": "amazon/chronos-bolt-mini",
-        "status": "active",
-    },
-    "chronos-bolt-small": {
-        "name": "Chronos Bolt Small",
-        "version": "1.0",
-        "description": "Amazon Chronos Bolt Small - Fast small forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8106,
-        "huggingface_id": "amazon/chronos-bolt-small",
-        "status": "active",
-    },
-    "chronos-bolt-base": {
-        "name": "Chronos Bolt Base",
-        "version": "1.0",
-        "description": "Amazon Chronos Bolt Base - Fast base forecasting model",
-        "module": "forecast.models.chronos",
-        "router_path": "forecast.models.chronos.routes.endpoints",
-        "service_path": "forecast.models.chronos.services.model",
-        "default_port": 8107,
-        "huggingface_id": "amazon/chronos-bolt-base",
-        "status": "active",
-    },
-}
+from shared.model_registry import all_models, as_dicts, by_id
 
 
 def get_available_models() -> list[str]:
-    """
-    Get list of available model names.
-
-    Returns:
-        List of model identifiers
-    """
-    return [
-        model_id for model_id, config in MODEL_REGISTRY.items() if config.get("status") == "active"
-    ]
+    """Model IDs that are wired and expected to work."""
+    return [m.model_id for m in all_models() if m.is_working]
 
 
 def get_model_info(model_id: str) -> dict[str, Any]:
-    """
-    Get information about a specific model.
-
-    Args:
-        model_id: Model identifier (e.g., "timesfm20")
-
-    Returns:
-        Model configuration dictionary
+    """Information about a specific model.
 
     Raises:
-        KeyError: If model_id not found in registry
+        KeyError: If model_id is not in the registry.
     """
-    if model_id not in MODEL_REGISTRY:
+    info = by_id(model_id)
+    if info is None:
         raise KeyError(f"Model '{model_id}' not found in registry")
-
-    return MODEL_REGISTRY[model_id]
+    return {
+        "model_id": info.model_id,
+        "family": info.family.value,
+        "container": info.container,
+        "port": info.port,
+        "status": info.status,
+        "notes": info.notes,
+        "base_url": info.base_url,
+    }
 
 
 def get_all_models_info() -> dict[str, dict[str, Any]]:
-    """
-    Get information about all registered models.
-
-    Returns:
-        Complete model registry
-    """
-    return MODEL_REGISTRY.copy()
+    """The complete registry, keyed by model ID."""
+    return {d["model_id"]: d for d in as_dicts()}

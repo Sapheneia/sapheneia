@@ -10,12 +10,16 @@ Implements the REST API for TimesFM-2.0 model operations:
 
 import asyncio
 import logging
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
+
+from shared.contracts import ForecastEnvelope, ForecastRequest, QuantileBand
+from shared.model_family import ModelFamily
 
 from ....core.config import settings
 from ....core.data import DataFetchError
@@ -475,3 +479,118 @@ async def shutdown_model_endpoint(request: Request, response: Response):
     else:
         logger.warning("⚠️  Model was not initialized or already shut down")
         return ShutdownOutput(message="Model was not initialized or already shut down")
+
+
+# --- Canonical forecast contract -------------------------------------------
+#
+# ``/inference`` above requires `data_source_url_or_path` + `data_definition`
+# and loads a CSV itself — a contract the orchestrator cannot satisfy, since it
+# already holds the context series in memory. That mismatch meant every
+# orchestrator call to this family was a hard 422 and the "timesfm" branch was
+# effectively dead.
+#
+# The underlying service function `run_inference(target_inputs, ...)` already
+# accepts raw series, so this endpoint is a thin adapter over it that speaks the
+# same canonical contract as chronos. Both families now return one shape.
+
+
+def _container_model_id() -> str:
+    """The checkpoint this container is pinned to serve."""
+    return os.getenv("TIMESFM20_DEFAULT_CHECKPOINT", settings.TIMESFM20_DEFAULT_CHECKPOINT)
+
+
+def _timesfm_quantile_bands(results: dict[str, Any], horizon: int) -> list[QuantileBand]:
+    """Extract decile bands from TimesFM's quantile_forecast array.
+
+    TimesFM returns shape (batch, horizon, 10) where index 0 is the mean and
+    indices 1..9 are deciles 0.1 .. 0.9.
+    """
+    raw = results.get("quantile_forecast")
+    if raw is None:
+        return []
+    arr = np.asarray(raw)
+    if arr.ndim != 3 or arr.shape[0] < 1 or arr.shape[2] < 10:
+        logger.warning("Unexpected quantile_forecast shape %s; omitting bands", arr.shape)
+        return []
+    bands = []
+    for idx in range(1, 10):
+        bands.append(
+            QuantileBand(
+                quantile=idx / 10.0,
+                values=[float(v) for v in arr[0, :horizon, idx]],
+            )
+        )
+    return bands
+
+
+@router.post("/forecast", response_model=ForecastEnvelope)
+@limiter.limit(get_rate_limit("inference"))
+async def forecast_endpoint(
+    request: Request, response: Response, payload: ForecastRequest = Body()
+):
+    """
+    Run a forecast using the canonical cross-family contract.
+
+    **Request Body:** `context`, `prediction_length`, `num_samples`, `model_id`
+
+    **Returns:** a `ForecastEnvelope` — top-level `median` plus `quantiles`.
+    """
+    served = _container_model_id()
+    if payload.model_id and payload.model_id != served:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Model mismatch: this container serves {served!r} but the request "
+                f"asked for {payload.model_id!r}. Route to that model's container."
+            ),
+        )
+
+    status, _ = timesfm_model_service.get_status()
+    if status == "uninitialized":
+        logger.info("Lazy initializing TimesFM %s", served)
+        await asyncio.get_running_loop().run_in_executor(
+            _executor,
+            lambda: timesfm_model_service.initialize_model(
+                source_type="hf",
+                checkpoint=served,
+                horizon_len=max(payload.prediction_length, settings.TIMESFM20_DEFAULT_HORIZON_LEN),
+            ),
+        )
+        status, _ = timesfm_model_service.get_status()
+    if status != "ready":
+        raise HTTPException(status_code=503, detail=f"Model not ready (status: {status})")
+
+    start = time.time()
+    results = await asyncio.get_running_loop().run_in_executor(
+        _executor,
+        lambda: timesfm_model_service.run_inference(
+            target_inputs=[list(payload.context)],
+            covariates=None,
+            parameters={
+                "use_covariates": False,
+                "use_quantiles": True,
+                "horizon_len": payload.prediction_length,
+            },
+        ),
+    )
+    elapsed = time.time() - start
+
+    point = np.asarray(results.get("point_forecast"))
+    if point.size == 0:
+        raise HTTPException(status_code=500, detail="TimesFM returned an empty point_forecast")
+    if point.ndim > 1:
+        point = point[0]
+    median = [float(v) for v in point[: payload.prediction_length]]
+
+    return ForecastEnvelope(
+        model_id=served,
+        family=ModelFamily.TIMESFM.value,
+        median=median,
+        quantiles=_timesfm_quantile_bands(results, payload.prediction_length),
+        metadata={
+            "inference_time_seconds": round(elapsed, 3),
+            "context_length": len(payload.context),
+            "prediction_length": payload.prediction_length,
+            "method": results.get("method"),
+        },
+    )

@@ -5,9 +5,13 @@ REST API for Chronos model operations.
 """
 
 import logging
+import os
 import time
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
+
+from shared.contracts import ForecastEnvelope, ForecastRequest, QuantileBand
+from shared.model_family import ModelFamily
 
 from ....core.exceptions import (
     ModelInitializationError,
@@ -158,8 +162,6 @@ async def inference_endpoint(
     status, error_msg = chronos_model_service.get_status()
     if status != "ready":
         if status == "uninitialized":
-            import os
-
             try:
                 body = await request.json()
             except Exception:
@@ -249,3 +251,89 @@ async def shutdown_model_endpoint(request: Request, response: Response):
     else:
         logger.warning("⚠️  Model was not initialized")
         return ShutdownOutput(message="Model was not initialized or already shut down")
+
+
+# --- Canonical forecast contract -------------------------------------------
+#
+# ``/inference`` above is the legacy, family-specific endpoint: it nests its
+# result under ``prediction`` and consults ``model_variant`` from the request
+# body only while the pipeline is uninitialized. The orchestrator speaks the
+# canonical contract in ``shared.contracts`` instead, so that:
+#
+#   * one response shape covers every family (no shape-sniffing downstream), and
+#   * a request that reaches the wrong container is REJECTED rather than being
+#     served by whichever model this process loaded first.
+#
+# Which model this container serves is fixed by its MODEL_VARIANT env var. The
+# request body never selects a model; it only asserts which one it expects.
+
+
+def _container_model_id() -> str | None:
+    """The model this container is pinned to serve."""
+    loaded = chronos_model_service._model_variant
+    return loaded or os.getenv("MODEL_VARIANT")
+
+
+@router.post("/forecast", response_model=ForecastEnvelope)
+@limiter.limit(get_rate_limit("default"))
+async def forecast_endpoint(
+    request: Request, response: Response, payload: ForecastRequest = Body()
+):
+    """
+    Run a forecast using the canonical cross-family contract.
+
+    **Request Body:** `context`, `prediction_length`, `num_samples`, `model_id`
+
+    **Returns:** a `ForecastEnvelope` — top-level `median` plus `quantiles`.
+    """
+    served = _container_model_id()
+    if served is None:
+        raise HTTPException(
+            status_code=503,
+            detail="This container has no MODEL_VARIANT configured and no model loaded.",
+        )
+    if payload.model_id and payload.model_id != served:
+        # The caller routed to the wrong container. Failing here is the whole
+        # point: silently serving `served` would record a forecast under the
+        # requested model_id that the requested model never produced.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Model mismatch: this container serves {served!r} but the request "
+                f"asked for {payload.model_id!r}. Route to that model's container."
+            ),
+        )
+
+    status, _ = chronos_model_service.get_status()
+    if status == "uninitialized":
+        device = os.getenv("DEVICE", "cpu")
+        logger.info("Lazy initializing Chronos %s on %s", served, device)
+        chronos_model_service.initialize_model(model_variant=served, device=device)
+        status, _ = chronos_model_service.get_status()
+    if status != "ready":
+        raise HTTPException(status_code=503, detail=f"Model not ready (status: {status})")
+
+    start = time.time()
+    results = chronos_model_service.run_inference(
+        context=payload.context,
+        prediction_length=payload.prediction_length,
+        num_samples=payload.num_samples,
+    )
+    elapsed = time.time() - start
+
+    quantiles = [
+        QuantileBand(quantile=int(k) / 100.0, values=[float(v) for v in vals])
+        for k, vals in (results.get("quantiles") or {}).items()
+    ]
+    return ForecastEnvelope(
+        model_id=served,
+        family=ModelFamily.CHRONOS.value,
+        median=[float(v) for v in results["median"]],
+        quantiles=sorted(quantiles, key=lambda b: b.quantile),
+        metadata={
+            "inference_time_seconds": round(elapsed, 3),
+            "context_length": len(payload.context),
+            "prediction_length": payload.prediction_length,
+            "num_samples": payload.num_samples,
+        },
+    )
