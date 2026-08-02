@@ -11,6 +11,8 @@ import os
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from shared.service_config import validate_api_key
+
 
 class Settings(BaseSettings):
     """
@@ -27,11 +29,15 @@ class Settings(BaseSettings):
     )
 
     # --- Core API Settings ---
+    # ENVIRONMENT MUST be declared before API_SECRET_KEY. Pydantic validates in
+    # declaration order and `info.data` exposes only already-validated fields,
+    # so the reverse order made the key validator always read the "development"
+    # fallback and the production guard never fire.
+    ENVIRONMENT: str = "development"  # Can be: development, staging, production
     API_SECRET_KEY: str = "default_secret_key_please_change"  # MUST be set in .env or environment
     LOG_LEVEL: str = "INFO"
     API_PORT: int = 8000  # Default port for Uvicorn
     API_HOST: str = "0.0.0.0"  # Listen on all interfaces, crucial for Docker
-    ENVIRONMENT: str = "development"  # Can be: development, staging, production
 
     # --- CORS Settings ---
     CORS_ALLOWED_ORIGINS: str = (
@@ -72,44 +78,16 @@ class Settings(BaseSettings):
     @field_validator("API_SECRET_KEY")
     @classmethod
     def validate_api_key(cls, v: str, info) -> str:
+        """Refuse to boot in production with a placeholder or short key.
+
+        Shared with the other four services via ``shared.service_config`` so the
+        guard cannot drift between them (CLAUDE.md §5.4).
         """
-        Validate that API_SECRET_KEY is changed from default in production.
-
-        Raises:
-            ValueError: If default key is used in production environment
-        """
-        environment = info.data.get("ENVIRONMENT", "development")
-
-        if v == "default_secret_key_please_change":
-            if environment == "production":
-                raise ValueError(
-                    "❌ CRITICAL SECURITY ERROR: API_SECRET_KEY must be changed from default value in production! "
-                    "Set API_SECRET_KEY in your .env file or environment variables."
-                )
-            else:
-                # Log warning but allow in development/staging
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    "⚠️  WARNING: Using default API_SECRET_KEY! This is NOT secure for production."
-                )
-
-        # Validate minimum length
-        if len(v) < 32:
-            if environment == "production":
-                raise ValueError(
-                    "❌ SECURITY ERROR: API_SECRET_KEY must be at least 32 characters long in production."
-                )
-            else:
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"⚠️  WARNING: API_SECRET_KEY is only {len(v)} characters. Recommended: 32+ characters."
-                )
-
-        return v
+        return validate_api_key(
+            v,
+            environment=info.data.get("ENVIRONMENT", "development"),
+            field_name="API_SECRET_KEY",
+        )
 
     def get_cors_origins(self) -> list[str]:
         """Convert comma-separated CORS origins string to list."""

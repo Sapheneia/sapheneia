@@ -23,6 +23,10 @@ import pytest
 # (import path, class name, env var holding the key)
 CONFIGS = [
     ("trading.core.config", "TradingSettings", "TRADING_API_KEY"),
+    # forecast was missed by the first pass of this very fix — it kept its own
+    # bespoke validator AND the field-ordering bug, on the service with the most
+    # published containers.
+    ("forecast.core.config", "Settings", "API_SECRET_KEY"),
     ("orchestrator.core.config", "OrchestratorSettings", "ORCHESTRATOR_API_KEY"),
     ("data.core.config", "DataSettings", "DATA_API_KEY"),
     ("metrics.core.config", "Settings", "METRICS_API_KEY"),
@@ -31,6 +35,7 @@ CONFIGS = [
 # Each config reads ENVIRONMENT under its own prefix (or bare, for trading).
 ENV_ALIASES = [
     "ENVIRONMENT",
+    "FORECAST_ENVIRONMENT",
     "TRADING_ENVIRONMENT",
     "ORCHESTRATOR_ENVIRONMENT",
     "DATA_ENVIRONMENT",

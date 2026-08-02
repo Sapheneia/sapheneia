@@ -37,17 +37,20 @@ def make_bearer_dependency(
     expected_key: Callable[[], str],
     *,
     service_name: str,
-    open_when_unset: bool = True,
+    open_when_unset: bool = False,
 ) -> Callable:
     """Build a FastAPI dependency that validates a Bearer token.
 
     Args:
         expected_key: Called per-request so config reloads are picked up.
         service_name: Used only for the logger name.
-        open_when_unset: When True an empty configured key disables auth
-            (the intra-cluster development default). Production hardening is
-            enforced separately by ``shared.service_config``, which refuses to
-            boot with an empty key when ``ENVIRONMENT=production``.
+        open_when_unset: When True an empty configured key disables auth — the
+            intra-cluster development default for services that shipped that
+            way. It defaults to **False** so that opening a service is always an
+            explicit, greppable decision at the call site: taking the default
+            silently converted the forecast service from fail-closed (its
+            previous ``HTTPBearer(auto_error=True)`` rejected everything when
+            the key was empty) to fail-open on seven published ports.
     """
     logger = logging.getLogger(f"sapheneia.{service_name}.auth")
 
