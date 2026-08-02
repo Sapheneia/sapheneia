@@ -66,3 +66,44 @@ jobs:
         run: uv run pytest -m "not integration" -q
         env:
           TIMESCALEDB_HOST: localhost
+
+  integration:
+    name: Tests (integration, real TimescaleDB)
+    runs-on: ubuntu-latest
+    # The unit job above runs `-m "not integration"`, which excludes every test
+    # that touches a real database. Without this job, none of the repository
+    # SQL — the cache-lookup JOIN, reconcile_stale's interval query, the
+    # migration itself — is ever executed against Postgres, so a syntax error
+    # or a wrong column name cannot fail the build.
+    services:
+      timescaledb:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: sapheneia
+          POSTGRES_PASSWORD: sapheneia
+          POSTGRES_DB: sapheneia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sapheneia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install package + test deps
+        run: uv sync --extra dev --extra data --extra db --extra mcp --extra trading --extra metrics
+      - name: Run integration tests
+        run: uv run pytest -m integration -q
+        env:
+          TIMESCALEDB_HOST: localhost
+          TIMESCALEDB_PORT: "5432"
+          TIMESCALEDB_USER: sapheneia
+          TIMESCALEDB_PASSWORD: sapheneia
+          TIMESCALEDB_DB: sapheneia
