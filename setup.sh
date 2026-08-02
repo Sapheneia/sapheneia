@@ -17,7 +17,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 ENV_TEMPLATE="${REPO_ROOT}/.env.template"
-DB_VOLUME="sapheneia_timescaledb_data"
+# Compose prefixes named volumes with the project name, which defaults to the
+# directory basename. Hardcoding the prefix means `reset` silently removes
+# nothing when the repo is cloned elsewhere or COMPOSE_PROJECT_NAME is set.
+COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$REPO_ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]_-')}"
+DB_VOLUME="${COMPOSE_PROJECT}_timescaledb_data"
 SKILLS_SRC="${REPO_ROOT}/skills"
 CLAUDE_SKILLS_DIR="${REPO_ROOT}/.claude/skills"
 AGENT_SKILLS_DIR="${REPO_ROOT}/.agent/skills"
@@ -58,8 +62,13 @@ ensure_env() {
 }
 
 # Database storage is a Docker named volume; compose creates it on demand.
+# The bind-mounted directories do need to exist and be writable by the
+# containers, which run as uid 1000 — on Linux a host-owned directory is not.
 ensure_data_dir() {
-    :
+    for dir in "${REPO_ROOT}/logs" "${MODELS_CACHE_PATH:-${REPO_ROOT}/.models_cache}"; do
+        mkdir -p "$dir"
+        chmod a+rwX "$dir" 2>/dev/null || warn "could not relax permissions on $dir"
+    done
 }
 
 create_skill_symlinks() {
@@ -131,6 +140,10 @@ cmd_up() {
     wait_healthy sapheneia-timescaledb 60 || exit 1
 
     run_migrations
+
+    log "Waiting for a forecast model container to be healthy"
+    wait_healthy forecast-chronos-t5-tiny 180 \
+        || warn "no forecast model container is healthy; runs will fail to reach a model"
 
     log "Waiting for orchestrator to be healthy"
     wait_healthy sapheneia-orchestrator 90 || warn "orchestrator did not pass /health in time"
