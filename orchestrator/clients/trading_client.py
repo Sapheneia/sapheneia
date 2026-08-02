@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+from shared.http_client import BaseHttpClient
 
 
-class TradingClient:
+class TradingClient(BaseHttpClient):
     def __init__(self, base_url: str, *, api_key: str = "", timeout: float = 30.0):
-        self._base = base_url.rstrip("/")
-        self._timeout = timeout
-        self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        super().__init__(base_url, api_key=api_key, timeout=timeout)
 
     async def execute(
         self,
@@ -34,10 +32,4 @@ class TradingClient:
             "initial_capital": initial_capital,
             **params,
         }
-        headers = dict(self._headers)
-        if request_id:
-            headers["X-Request-ID"] = request_id
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            r = await client.post(f"{self._base}/trading/execute", json=body, headers=headers)
-            r.raise_for_status()
-            return r.json()
+        return await self.post("/trading/execute", json=body, request_id=request_id)
