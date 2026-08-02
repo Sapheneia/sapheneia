@@ -30,8 +30,23 @@ ALEMBIC_INI = REPO_ROOT / "migrations" / "alembic.ini"
 TIMESCALEDB_IMAGE = "timescale/timescaledb:2.17.2-pg16"
 
 
+#: Opt-in required before the suite will touch an externally provided database.
+#: These tests DROP AND RECREATE the schema and DELETE rows, so pointing them at
+#: a database that happens to be reachable is destructive. `.env.template` ships
+#: TIMESCALEDB_HOST=localhost and docker-compose keeps the DB in a *persistent*
+#: named volume, so a developer who ran `docker compose up timescaledb` and then
+#: the documented `make test` would otherwise lose their schema and price data.
+ALLOW_EXTERNAL_DB_RESET = "SAPHENEIA_TEST_ALLOW_DB_RESET"
+
+
 def _external_dsn() -> str | None:
-    """Return a psycopg DSN for an externally provided DB, if one is reachable."""
+    """Return a psycopg DSN for an externally provided DB, if one is usable.
+
+    Requires explicit opt-in: without it we fall back to a throwaway
+    testcontainers instance, which is always safe.
+    """
+    if os.getenv(ALLOW_EXTERNAL_DB_RESET, "").strip().lower() not in {"1", "true", "yes"}:
+        return None
     host = os.getenv("TIMESCALEDB_HOST")
     if not host:
         return None
@@ -74,7 +89,11 @@ def timescaledb_psycopg_dsn() -> str:
     try:
         from testcontainers.postgres import PostgresContainer
     except ImportError:
-        pytest.skip("no external TIMESCALEDB_HOST and testcontainers is not installed")
+        pytest.skip(
+            "testcontainers is not installed. Either install it, or point the suite "
+            f"at a DISPOSABLE database by setting {ALLOW_EXTERNAL_DB_RESET}=1 together "
+            "with TIMESCALEDB_HOST (this DROPS the schema)."
+        )
 
     try:
         container = PostgresContainer(

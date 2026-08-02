@@ -77,6 +77,8 @@ jobs:
     # or a wrong column name cannot fail the build.
     services:
       timescaledb:
+        # Keep in sync with TIMESCALEDB_IMAGE in conftest.py and
+        # docker-compose.yml; tests/test_image_pins.py asserts they match.
         image: timescale/timescaledb:2.17.2-pg16
         env:
           POSTGRES_USER: sapheneia
@@ -102,6 +104,10 @@ jobs:
       - name: Run integration tests
         run: uv run pytest -m integration -q
         env:
+          # The service container above is disposable, so opting in to the
+          # destructive schema reset is safe here. It is deliberately NOT the
+          # default: without this the suite uses a throwaway testcontainer.
+          SAPHENEIA_TEST_ALLOW_DB_RESET: "1"
           TIMESCALEDB_HOST: localhost
           TIMESCALEDB_PORT: "5432"
           TIMESCALEDB_USER: sapheneia
