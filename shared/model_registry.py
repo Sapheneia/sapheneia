@@ -12,13 +12,18 @@ pipeline, so "which model ran" is a property of *which container was called*,
 not of a field in the request body. Routing therefore has to be resolved
 before the request is sent.
 
-To add a new model:
+To add a new model (this list is canonical; the READMEs link here):
   1. Add a row to ``WORKING_MODELS`` below with its HuggingFace ID, family,
      container name, and assigned host port.
-  2. Add a service block to ``docker-compose.yml`` (copy an existing entry,
-     change ``MODEL_VARIANT`` and the port to match the row above).
+  2. Add a service block to ``docker-compose.yml`` (copy an existing entry).
+     It MUST set ``MODEL_VARIANT`` to the same HuggingFace ID and publish the
+     same port — every family reads ``MODEL_VARIANT`` as its container pin, and
+     ``tests/test_deployment_consistency.py`` fails the build if the two tables
+     disagree.
   3. If it is a new model family, add a service module under
-     ``forecast/models/{family}/`` mirroring ``chronos`` or ``timesfm20``.
+     ``forecast/models/{family}/`` mirroring ``chronos`` or ``timesfm20``, and
+     give it a canonical ``POST /forecast`` endpoint returning a
+     ``shared.contracts.ForecastEnvelope``.
   4. Append the new model to ``simulations/templates/combinations.example.yaml``
      so the agent path picks it up.
 
@@ -30,8 +35,10 @@ Status values:
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+import os
+from dataclasses import asdict, dataclass
 
+from .errors import ErrorCode, ValidationError
 from .model_family import ModelFamily
 
 #: Every forecast container listens on this port inside the compose network.
@@ -48,17 +55,26 @@ class ModelInfo:
     port: int  # host port (mapped to INTERNAL_PORT in the container)
     status: str = "working"
     notes: str = ""
-    #: Extra request-body fields this model's endpoint requires beyond the
-    #: common ``context``/``prediction_length``/``num_samples`` envelope.
-    extra_body: dict[str, str] = field(default_factory=dict)
 
     @property
     def base_url(self) -> str:
-        """In-network base URL for this model's container."""
-        return f"http://{self.container}:{INTERNAL_PORT}"
+        """In-network base URL for this model's container.
+
+        Overridable per deployment via ``FORECAST_BASE_URL_TEMPLATE`` so the
+        topology is not a hardcoded literal (§3.5); the default matches the
+        compose service names.
+        """
+        template = os.getenv("FORECAST_BASE_URL_TEMPLATE", "http://{container}:{port}")
+        return template.format(container=self.container, port=INTERNAL_PORT)
 
     @property
-    def inference_path(self) -> str:
+    def forecast_path(self) -> str:
+        """Canonical cross-family forecast route for this model."""
+        return f"/forecast/v1/{self.family.route_suffix}/forecast"
+
+    @property
+    def legacy_inference_path(self) -> str:
+        """Family-specific pre-contract route. Kept for direct/manual calls."""
         return f"/forecast/v1/{self.family.route_suffix}/inference"
 
     @property
@@ -81,8 +97,19 @@ WORKING_MODELS: list[ModelInfo] = [
 ]
 
 
-class UnknownModelError(KeyError):
-    """Raised when a model_id is not present in the registry."""
+class UnknownModelError(ValidationError):
+    """Raised when a model_id is not present in the registry, or is not usable.
+
+    Extends the shared ``ValidationError`` so the API boundary answers 400 with
+    the registry's message (which lists every known model) instead of letting
+    the generic handler turn it into an opaque 500.
+    """
+
+    def __init__(self, message: str, details: dict | None = None):
+        super().__init__(message, details=details)
+        # ValidationError hardcodes VALIDATION_ERROR; this is the more specific
+        # code the shared enum already declares for exactly this case.
+        self.error_code = ErrorCode.INVALID_MODEL
 
 
 def all_models() -> list[ModelInfo]:

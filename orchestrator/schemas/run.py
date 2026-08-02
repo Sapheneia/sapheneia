@@ -18,6 +18,22 @@ class RunCreated(BaseModel):
     status: str
 
 
+class BatchItemResult(BaseModel):
+    """One entry in a batch submission response.
+
+    A rejected item is structurally distinguishable from an accepted one. The
+    previous shape returned HTTP 200 with ``run_id="__error__"``, which the
+    agent then polled and got back as ``"not_found"`` — a sentinel-on-failure of
+    exactly the kind ``shared.contracts`` argues against.
+    """
+
+    index: int
+    status: str  # "pending" | "rejected"
+    run_id: str | None = None
+    error_code: str | None = None
+    error: str | None = None
+
+
 class RunSummary(BaseModel):
     run_id: str
     experiment_id: str

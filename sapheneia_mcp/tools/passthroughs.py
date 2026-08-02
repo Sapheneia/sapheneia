@@ -68,7 +68,7 @@ async def forecast(
     )
     base = settings.FORECAST_URL or info.base_url
     raw = await _client(base, settings.FORECAST_API_KEY).post(
-        f"/forecast/v1/{info.family.route_suffix}/forecast",
+        info.forecast_path,
         json=payload.model_dump(),
         request_id=request_id,
     )

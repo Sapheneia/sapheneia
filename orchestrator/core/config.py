@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import socket
-import uuid
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,8 +11,16 @@ from shared.service_config import validate_api_key
 
 
 def _default_owner_id() -> str:
-    """Stable-per-process identity used to scope heartbeat reconciliation."""
-    return f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
+    """Identity used to scope heartbeat reconciliation.
+
+    Stable per *instance*, not per *process*. A uuid suffix would make every
+    restart a new owner, so with RECONCILE_ALL_OWNERS disabled — the setting
+    documented for multi-instance deployments — runs left `running` by a crash
+    would be invisible to every future reconciler, which is precisely the
+    failure the reconciler exists to prevent. In compose the hostname is the
+    container name, which is exactly the identity we want.
+    """
+    return socket.gethostname()
 
 
 class OrchestratorSettings(BaseSettings):

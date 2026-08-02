@@ -63,7 +63,7 @@ class ForecastClient(BaseHttpClient):
             model_id=model_id,
         )
         raw = await self.post(
-            f"/forecast/v1/{info.family.route_suffix}/forecast",
+            info.forecast_path,
             json=payload.model_dump(),
             request_id=request_id,
             base_url=base,

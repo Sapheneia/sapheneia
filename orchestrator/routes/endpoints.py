@@ -10,6 +10,7 @@ from ..core.security import get_api_key
 from ..repositories.forecasts_repo import ForecastsRepository
 from ..repositories.runs_repo import RunsRepository
 from ..schemas.run import (
+    BatchItemResult,
     BatchSubmitRequest,
     CleanupResult,
     MetricsRow,
@@ -49,10 +50,9 @@ async def submit_run(request: Request, strategy: dict[str, Any] = Body(...)) -> 
     return RunCreated(run_id=run_id, status=status)
 
 
-@router.post("/runs/batch", response_model=list[RunCreated])
-async def submit_batch(request: Request, body: BatchSubmitRequest) -> list[RunCreated]:
-    pairs = await _runs_service(request).submit_batch(body.strategies)
-    return [RunCreated(run_id=rid, status=st) for rid, st in pairs]
+@router.post("/runs/batch", response_model=list[BatchItemResult])
+async def submit_batch(request: Request, body: BatchSubmitRequest) -> list[BatchItemResult]:
+    return await _runs_service(request).submit_batch(body.strategies)
 
 
 @router.get("/runs", response_model=list[RunSummary])

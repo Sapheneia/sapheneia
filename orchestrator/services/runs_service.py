@@ -9,9 +9,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from shared.errors import ErrorCode, SapheneiaError
 from shared.model_registry import require as require_model
 
 from ..repositories.runs_repo import RunsRepository
+from ..schemas.run import BatchItemResult
 from ..schemas.strategy import StrategyConfig
 from .inner_loop import InnerLoop
 
@@ -73,14 +75,37 @@ class RunsService:
         task.add_done_callback(_discard)
         return run_id, "pending"
 
-    async def submit_batch(self, strategies: list[dict[str, Any]]) -> list[tuple[str, str]]:
-        out = []
-        for s in strategies:
+    async def submit_batch(self, strategies: list[dict[str, Any]]) -> list[BatchItemResult]:
+        """Submit each strategy, isolating per-item failures.
+
+        A rejected item is reported as a distinct record rather than a sentinel
+        run_id, so callers can tell "not submitted" from "submitted, unknown".
+        """
+        out: list[BatchItemResult] = []
+        for index, strategy in enumerate(strategies):
             try:
-                out.append(await self.submit(s))
+                run_id, status = await self.submit(strategy)
+                out.append(BatchItemResult(index=index, status=status, run_id=run_id))
+            except SapheneiaError as exc:
+                logger.warning("Batch item %d rejected: %s", index, exc.message)
+                out.append(
+                    BatchItemResult(
+                        index=index,
+                        status="rejected",
+                        error_code=exc.error_code,
+                        error=exc.message,
+                    )
+                )
             except Exception as exc:  # noqa: BLE001
-                logger.exception("Failed to submit strategy: %s", exc)
-                out.append(("__error__", f"validation: {exc}"))
+                logger.exception("Batch item %d failed to submit", index)
+                out.append(
+                    BatchItemResult(
+                        index=index,
+                        status="rejected",
+                        error_code=ErrorCode.VALIDATION_ERROR,
+                        error=str(exc),
+                    )
+                )
         return out
 
     async def cancel(self, run_id: str) -> bool:
