@@ -15,6 +15,8 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uvicorn  # noqa: E402
+from starlette.responses import JSONResponse  # noqa: E402
+from starlette.routing import Route  # noqa: E402
 
 from sapheneia_mcp.auth import BearerTokenMiddleware  # noqa: E402
 from sapheneia_mcp.config import settings  # noqa: E402
@@ -195,6 +197,13 @@ def main() -> None:
         )
 
     app = server.sse_app()
+    # FastMCP's SSE app has no health route, so the container healthcheck was
+    # curling /sse (correctly 401'd) and swallowing the result with `|| exit 0`
+    # — it reported healthy even with the process dead. PUBLIC_PATHS keeps this
+    # one unauthenticated so it is a real liveness signal.
+    app.router.routes.append(
+        Route("/health", lambda _request: JSONResponse({"status": "ok"}), methods=["GET"])
+    )
     if settings.TOKEN:
         app.add_middleware(BearerTokenMiddleware, token=settings.TOKEN)
         logger.info("SSE transport authenticated via SAPHENEIA_MCP_TOKEN")

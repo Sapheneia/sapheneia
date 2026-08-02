@@ -28,7 +28,12 @@ class ForecastRequest(BaseModel):
     the caller reached the right container and refuse otherwise.
     """
 
-    context: list[float] = Field(..., min_length=2, description="Historical values, oldest first")
+    #: Bounded: the model containers are single-worker and pinned, so one
+    #: oversized request would OOM the container and take out every run that
+    #: needs that model. 8192 is far above any realistic backtest context.
+    context: list[float] = Field(
+        ..., min_length=2, max_length=8192, description="Historical values, oldest first"
+    )
     prediction_length: int = Field(..., gt=0, le=1024, description="Steps to forecast")
     num_samples: int = Field(default=20, gt=0, le=1000)
     model_id: str | None = Field(

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import yaml
 
-from ._orchestrator import orchestrator_client
+from ._orchestrator import orchestrator_client, validate_run_id
 
 
 def _strategy_payload(strategy_yaml: str) -> dict:
@@ -33,7 +33,7 @@ async def get_run_status(run_ids: list[str]) -> list[dict]:
     out: list[dict] = []
     for rid in run_ids:
         try:
-            out.append(await client.get(f"/v1/orchestration/runs/{rid}"))
+            out.append(await client.get(f"/v1/orchestration/runs/{validate_run_id(rid)}"))
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 out.append({"run_id": rid, "status": "not_found"})

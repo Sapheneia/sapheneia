@@ -6,7 +6,10 @@ Reads downstream service URLs and per-service Bearer tokens from env. The
 
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from shared.service_config import validate_api_key
 
 
 class McpSettings(BaseSettings):
@@ -17,6 +20,7 @@ class McpSettings(BaseSettings):
         extra="ignore",
     )
 
+    ENVIRONMENT: str = "development"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     #: The single agent ↔ MCP token. Enforced on the SSE transport; see
@@ -43,6 +47,31 @@ class McpSettings(BaseSettings):
     METRICS_API_KEY: str = ""
 
     HTTP_TIMEOUT: float = 60.0
+
+    @field_validator("TOKEN")
+    @classmethod
+    def _check_token(cls, v: str, info) -> str:
+        """The token guarding the process that holds every downstream key.
+
+        It was the one credential exempt from the strength/placeholder checks
+        every service key goes through.
+        """
+        return validate_api_key(
+            v,
+            environment=info.data.get("ENVIRONMENT", "development"),
+            field_name="SAPHENEIA_MCP_TOKEN",
+            required=False,
+        )
+
+    @field_validator("ALLOW_UNAUTHENTICATED_SSE")
+    @classmethod
+    def _no_open_sse_in_production(cls, v: bool, info) -> bool:
+        if v and info.data.get("ENVIRONMENT", "development").strip().lower() == "production":
+            raise ValueError(
+                "SECURITY: SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE cannot be true when "
+                "ENVIRONMENT=production. This process holds every downstream service key."
+            )
+        return v
 
 
 settings = McpSettings()

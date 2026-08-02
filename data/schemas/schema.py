@@ -6,6 +6,12 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+#: yfinance intervals this service accepts. Shared with the query-parameter
+#: entry point in routes/endpoints.py: an unvalidated interval reaches
+#: yf.download and is then written into prices.interval, creating cache rows
+#: under a key no later read will ever match.
+ALLOWED_INTERVALS = frozenset({"1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"})
+
 
 class FetchRequest(BaseModel):
     tickers: list[str] = Field(min_length=1, max_length=100)
@@ -16,9 +22,8 @@ class FetchRequest(BaseModel):
     @field_validator("interval")
     @classmethod
     def _check_interval(cls, v: str) -> str:
-        allowed = {"1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"}
-        if v not in allowed:
-            raise ValueError(f"interval must be one of {sorted(allowed)}")
+        if v not in ALLOWED_INTERVALS:
+            raise ValueError(f"interval must be one of {sorted(ALLOWED_INTERVALS)}")
         return v
 
     @field_validator("end")

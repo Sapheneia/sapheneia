@@ -6,12 +6,14 @@ from typing import Any
 
 import httpx
 
-from ._orchestrator import orchestrator_client
+from ._orchestrator import orchestrator_client, validate_run_id
 
 
 async def delete_run(run_id: str) -> dict:
     try:
-        return await orchestrator_client().delete(f"/v1/orchestration/runs/{run_id}")
+        return await orchestrator_client().delete(
+            f"/v1/orchestration/runs/{validate_run_id(run_id)}"
+        )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return {"deleted": False, "reason": "not_found"}
