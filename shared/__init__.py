@@ -2,6 +2,7 @@
 Shared utilities for Sapheneia services.
 """
 
+from .contracts import ForecastEnvelope, ForecastRequest, ModelMismatchError, QuantileBand
 from .errors import (
     ComputationError,
     ErrorCode,
@@ -13,6 +14,11 @@ from .errors import (
     ValidationError,
     register_error_handlers,
 )
+from .model_family import ModelFamily
+
+# NOTE: ``shared.http_client`` is deliberately NOT re-exported here — importing it
+# would pull ``httpx`` into every service image, including leaf services that make
+# no outbound calls. Callers import ``shared.http_client`` directly.
 
 __all__ = [
     "SapheneiaError",
@@ -24,4 +30,9 @@ __all__ = [
     "ComputationError",
     "ErrorCode",
     "register_error_handlers",
+    "ForecastEnvelope",
+    "ForecastRequest",
+    "QuantileBand",
+    "ModelMismatchError",
+    "ModelFamily",
 ]
