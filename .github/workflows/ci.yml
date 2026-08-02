@@ -40,10 +40,12 @@ jobs:
           enable-cache: true
       - name: Set up Python
         run: uv python install 3.11
-      - name: Install dev tooling
-        run: uv sync --extra dev --no-install-project
+      - name: Install dev tooling + runtime deps
+        # `--extra trading` brings slowapi, which shared/rate_limit.py imports.
+        run: uv sync --extra dev --extra trading --extra data --extra db --extra mcp --extra metrics --no-install-project
       - name: mypy
-        run: uv run mypy shared orchestrator/core
+        # Scope comes from [tool.mypy] files in pyproject.toml.
+        run: uv run mypy
 
   test:
     name: Tests (unit)
@@ -101,8 +103,10 @@ jobs:
         run: uv python install 3.11
       - name: Install package + test deps
         run: uv sync --extra dev --extra data --extra db --extra mcp --extra trading --extra metrics
-      - name: Run integration tests
-        run: uv run pytest -m integration -q
+      - name: Run full test suite against real TimescaleDB
+        # Full suite (not just `-m integration`): the coverage gate (35%) only
+        # clears on the complete run (unit + integration ≈ 53%).
+        run: uv run pytest -q
         env:
           # The service container above is disposable, so opting in to the
           # destructive schema reset is safe here. It is deliberately NOT the
