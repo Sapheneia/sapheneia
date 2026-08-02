@@ -42,23 +42,31 @@
 
 ## Architecture rules
 
-> Universal `[ABS]` principles. The full discussion of each lives in [project-engineering.md](.config/agentic-engineering/project-engineering.md) under the named category. These short rules are duplicated here because every subagent reads `CLAUDE.md` before any work; only `architecture-reviewer` reads `project-engineering.md`.
+> Universal `[ABS]` principles. These short rules are the **authoritative in-repo statement** — every subagent reads `CLAUDE.md` before any work. Longer-form discussion lives outside the repository under `.config/agentic-engineering/` (gitignored, per-developer); treat it as commentary, never as the source of truth, and never link to it as if it ships.
 
-- **§3.5 Parameterization discipline.** Never hardcode values that vary across contexts (tickers, model IDs, paths, timeouts, URLs). Code is generic; varying inputs are parameters loaded from `pydantic-settings` or YAML. If a value appears as a literal in two places, extract it to a shared constant or config field. The current known drift — model-family slugs `"chronos"` / `"timesfm20"` duplicated in `orchestrator/clients/forecast_client.py` and `orchestrator/services/runs_service.py` — is tracked as a NIT and should converge to a shared enum in `shared/`. See [project-engineering.md §3.5](.config/agentic-engineering/project-engineering.md).
+- **§3.5 Parameterization discipline.** Never hardcode values that vary across contexts (tickers, model IDs, paths, timeouts, URLs). Code is generic; varying inputs are parameters loaded from `pydantic-settings` or YAML. If a value appears as a literal in two places, extract it to a shared constant or config field.
 
-- **§4.3 Dependency direction & enforcement.** Leaf services (`forecast`, `trading`, `metrics`) must never import from persistence layers (`asyncpg`, `shared.db`). The orchestrator is the sole writer of run-state. This invariant is currently enforced by code review only (no `pytest-archon`); preserve the invariant manually in every PR. See [project-engineering.md §4.3](.config/agentic-engineering/project-engineering.md).
+  Model identity is the standing example. `shared/model_family.py` owns the family slugs and `shared/model_registry.py` owns the model -> container/port table; both the forecast service (`GET /models`) and the orchestrator (`model_id` -> base URL routing) read from them. Never re-derive a family from a substring check (`"chronos" in model_id`) and never add a second registry — an inline check silently routes unknown IDs to a default, and a second registry drifts out of sync with `docker-compose.yml` without anything failing.
 
-- **§5.4 Symmetric fixes require symmetric tests.** When fixing a bug class that exists at multiple sites (e.g., the auth-header propagation pattern across all four orchestrator clients), fix every site AND add a test for every site. If a site's test is deferred, log it as a WARN in `code-review-followups.md`. See [project-engineering.md §5.4](.config/agentic-engineering/project-engineering.md).
+- **§4.3 Dependency direction & enforcement.** The invariant is **table-scoped, not service-scoped**:
 
-- **§7.2 Specs must include explicit decisions.** Task specs (e.g., `.local/01-phase/*.md` design plans) must name reference implementations and explicit decisions, not just intent. "Add forecast caching" is incomplete; "Add forecast cache with 6-column unique index `(model_id, ticker, time, context_size, horizon_size, run_id)` excluding `trading_horizon`, mirrored by a 5-column non-unique lookup index" is complete. See [project-engineering.md §7.2](.config/agentic-engineering/project-engineering.md).
+  - `forecast`, `trading`, `metrics` are pure compute. They must never import `asyncpg` or `shared.db`.
+  - `data` owns the `prices` and `tickers` tables and *does* hold a pool — it is a leaf service by call graph, not by persistence.
+  - The **orchestrator is the sole writer of run-state**: `runs`, `forecasts`, `trades`, `equity`, `metrics`. Nothing else writes those five tables.
 
-- **§7.3 Iterative refinement loop — write first, edit in file.** Drop the draft into `.local/01-phase/` early; iterate by editing the file in subsequent turns. Avoid long chat-only drafting sessions — get the structure on disk first so it's diff-able and reviewable. See [project-engineering.md §7.3](.config/agentic-engineering/project-engineering.md).
+  Enforced by code review only (no `pytest-archon`); preserve it manually in every PR.
 
-- **§7.7 WARN/NIT capture.** Every `code-reviewer` WARN/NIT that does not block merge must be appended to `.config/agentic-engineering/code-review-followups.md` (Open items section). Closing an item moves it to the Closed section with the resolution. Never let WARN/NIT items vanish in chat. See [project-engineering.md §7.7](.config/agentic-engineering/project-engineering.md).
+- **§5.4 Symmetric fixes require symmetric tests.** When fixing a bug class that exists at multiple sites, fix every site AND add a test for every site. The reference case is auth-header propagation across the four orchestrator clients: one `BaseHttpClient` in `shared/http_client.py`, and a per-client test in `orchestrator/tests/test_clients_unit.py` covering URL, `Authorization`, `X-Request-ID`, and upstream 5xx. The production-key guard in `shared/service_config.py` is the same shape, applied to all four service configs.
 
-- **§7.8 Cleanest-answer meta-rule.** When two solutions exist — one architecturally clean (often more work) and one expedient patch — default to the clean answer. The Phase 1d plan and Appendix entries (no-look-ahead at SQL layer, cascade deletes, heartbeat reconciler, double-index design) are exemplars. Patches are permitted only when explicitly traded off against schedule and logged as tech debt. See [project-engineering.md §7.8](.config/agentic-engineering/project-engineering.md).
+- **§7.2 Specs must include explicit decisions.** Task specs must name reference implementations and explicit decisions, not just intent. "Add forecast caching" is incomplete. The shipped design is complete and is the model to imitate: forecast identity is the **6-column primary key** `(run_id, ticker, time, model_id, context_size, horizon_size)`, mirrored by the **5-column non-unique** `ix_forecasts_cache_lookup` `(model_id, ticker, time, context_size, horizon_size)` for cross-run reads, with `trading_horizon` deliberately excluded because a forecast does not depend on it. Keep the spec and `migrations/versions/001_initial_schema.py` in agreement — a key narrower than the identity makes `ON CONFLICT DO NOTHING` discard real rows in silence.
 
-- **§9.3 Out-of-band success verification.** For long-running upstream calls (300s+ Chronos inference, multi-step forecasts), if a call errors, FIRST probe whether the work was actually completed (e.g., check whether a forecast row was already written for this run+date) BEFORE retrying. Retries that aren't idempotent will duplicate work on flaky timeouts. This is currently NOT IMPLEMENTED in orchestrator clients — flagged as a future gap. See [project-engineering.md §9.3](.config/agentic-engineering/project-engineering.md).
+- **§7.3 Iterative refinement loop — write first, edit in file.** Drop the draft into `.local/01-phase/` early; iterate by editing the file in subsequent turns. Avoid long chat-only drafting sessions — get the structure on disk first so it's diff-able and reviewable.
+
+- **§7.7 WARN/NIT capture.** Every review WARN/NIT that does not block merge must be written down before the session ends — the local ledger at `.config/agentic-engineering/code-review-followups.md` (gitignored) or a tracker issue. Anything that must outlive the working copy belongs in a tracker issue, not the local file. Never let WARN/NIT items vanish in chat.
+
+- **§7.8 Cleanest-answer meta-rule.** When two solutions exist — one architecturally clean (often more work) and one expedient patch — default to the clean answer. Exemplars in this repo: no-look-ahead enforced in the SQL `WHERE` clause rather than filtered in application code; cascade deletes on every run-scoped hypertable; the double-index cache design; one canonical `ForecastEnvelope` returned by every model family instead of shape-sniffing at the call site. Patches are permitted only when explicitly traded off against schedule and logged as tech debt.
+
+- **§9.3 Out-of-band success verification.** For long-running upstream calls (300s+ Chronos inference, multi-step forecasts), if a call errors, FIRST probe whether the work was actually completed (e.g., check whether a forecast row was already written for this run+date) BEFORE retrying. Retries that aren't idempotent will duplicate work on flaky timeouts. **Still NOT IMPLEMENTED** in the orchestrator clients — the clients have no retry logic at all today, so the gap is latent rather than active. Anything that adds a retry must add the probe in the same change.
 
 ## Gates required (autopilot trust requires these to pass)
 
@@ -69,7 +77,13 @@
 | Complexity | ruff `C901` (mccabe) | `[tool.ruff.lint.mccabe]` — `max-complexity = 25` (ratchet from current max 24; tighten to 15 then 10 over time) |
 | Type-check | `mypy` | `[tool.mypy]` — lenient_ratchet with `disable_error_code` for the four no-type-annotation errors |
 | Tests + coverage | `pytest --cov` | `[tool.coverage.report].fail_under = 35` |
-| Architecture tests | plugin runner at `/home/marcelo/.services/jarvis/plugins/agentic-engineering/scripts/test_architecture.py` | rules in `.config/agentic-engineering/architecture-rules.yaml` |
-| Dead code | (skipped) | `tooling.dead_code_detector: none` in `project-parameters.yaml` |
+| Architecture tests | local plugin runner (not in-repo; see §4.3 — enforced by review) | local `.config/agentic-engineering/architecture-rules.yaml` |
+| Dead code | (skipped) | `tooling.dead_code_detector: none` |
+
+CI (`.github/workflows/ci.yml`) runs lint/format, mypy, unit tests, and a
+separate **integration** job against a real TimescaleDB service container — the
+unit job runs `-m "not integration"`, so repository SQL is only covered by that
+second job. The architecture-test and dead-code gates run from a developer's
+local plugin install and are not reproduced in CI.
 
 All run via `/home/marcelo/.services/jarvis/plugins/agentic-engineering/scripts/gates.sh`. Autopilot mode requires every detected gate to pass before commit.

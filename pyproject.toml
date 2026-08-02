@@ -50,6 +50,7 @@ forecasting = [
 metrics = [
     "quantstats>=0.0.62",
     "ipython>=8.12.0",
+    "slowapi>=0.1.9",
 ]
 
 # Trading service
@@ -62,10 +63,12 @@ trading = [
 # Data service (Python rewrite)
 data = [
     "yfinance>=0.2.0",
+    "slowapi>=0.1.9",
 ]
 
 # Database access (orchestrator + data)
 db = [
+    "slowapi>=0.1.9",
     "asyncpg>=0.29.0",
     "psycopg[binary]>=3.1.0",
     "alembic>=1.13.0",
@@ -89,6 +92,8 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.4.0",
     "mypy>=1.5.0",
+    "types-PyYAML>=6.0.0",
+    "psycopg[binary]>=3.1.0",
 ]
 
 # Convenience: install everything
@@ -179,15 +184,17 @@ select = ["E", "F", "I", "B", "UP", "SIM", "C901"]
 ignore = ["E501", "B008"]
 
 [tool.ruff.lint.mccabe]
-# Ratchet threshold — current max in codebase is 24; tighten to 15 then 10 over time.
-# Track in code-review-followups.md.
+# Ratchet threshold — tighten to 15 then 10 over time (see CLAUDE.md gates table).
 max-complexity = 25
 
 [tool.mypy]
 python_version = "3.11"
-# Ratchet: start with the most type-friendly subset; widen over time.
-# Track widening in code-review-followups.md.
-files = ["shared", "orchestrator/core"]
+# Ratchet: widen coverage over time (see CLAUDE.md gates table).
+# Widened from ["shared", "orchestrator/core"]: the orchestrator services,
+# repositories, and clients hold the §4.3 dependency-direction invariant, so
+# leaving them outside the type gate defeated the point. Tests stay excluded.
+files = ["shared", "orchestrator", "data", "sapheneia_mcp"]
+exclude = "/tests/"
 warn_unused_ignores = true
 warn_redundant_casts = true
 check_untyped_defs = true

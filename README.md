@@ -19,7 +19,7 @@ orchestrator-service (:12704)  ── owns ALL run-state writes ────┘
    ├─► forecast   (:12700)  Python (TimesFM 2.0 + Chronos T5), stateless inference
    ├─► trading    (:12132)  Python (threshold/return/quantile), stateless
    ├─► metrics    (:12702)  Python (quantstats wrappers), stateless
-   └─► timescaledb (:5432, in-repo `./.timescaledb-data/`, .gitignore'd)
+   └─► timescaledb (:5432 on loopback, Docker named volume `timescaledb_data`)
 ```
 
 ## Quick start
@@ -87,13 +87,15 @@ Coverage gate (in `pyproject.toml`): ≥ 35% across the in-scope modules.
 | `orchestrator/tests/`   | Orchestrator: schema, inner loop with mocked clients, endpoints |
 | `sapheneia_mcp/tests/`  | MCP tools: combinations validation/expansion/rendering, mocked HTTP |
 | `sapheneia/cli/tests/`  | `sapheneia simulate` CLI |
-| `forecast/models/`      | Existing model unit tests (preserved from v1) |
-| `trading/tests/`        | Existing trading strategy tests (preserved from v1) |
-| `tests/metrics/`        | Existing metrics tests + new auth test |
+| `trading/tests/`        | Trading strategies: `unit/` + `integration/` |
+| `tests/metrics/`        | Metrics computation + auth |
+| `tests/shared/`         | Model registry/family, DSN + config validators, time utils |
 
 Integration tests are marked `@pytest.mark.integration` and require Docker
-(testcontainers spins up a real TimescaleDB). Skipped automatically when
-testcontainers isn't installed.
+(testcontainers spins up a real TimescaleDB). They are skipped automatically
+when testcontainers isn't installed, and run in CI as a separate job with a
+real TimescaleDB service container — the unit job runs `-m "not integration"`,
+so repository SQL is only exercised by that second job.
 
 ## Repository layout
 
@@ -105,7 +107,8 @@ data/                  FastAPI: yfinance cache against TimescaleDB
 orchestrator/          FastAPI: sole writer of run-state
 sapheneia_mcp/         MCP server (HTTP/SSE + stdio)
 sapheneia/cli/         `sapheneia simulate` developer CLI
-shared/                Cross-service errors + DB pool factory
+shared/                Cross-service contracts, model registry, HTTP client,
+                       auth/config validators, errors, DB pool factory
 migrations/            Alembic schema versions
 skills/                Claude Code skills (run-simulation)
 simulations/templates/ Strategy YAML template + combinations example
@@ -117,5 +120,9 @@ Makefile               Convenience targets
 
 ## Design background
 
-- [`.config/agentic-engineering/project-engineering.md`](.config/agentic-engineering/project-engineering.md) — architecture rules (§3-§9).
-- [`CLAUDE.md`](CLAUDE.md) — agent routing + gates + invariants.
+- [`CLAUDE.md`](CLAUDE.md) — agent routing, gates, and the architecture
+  invariants (§3–§9) this repository is held to.
+
+> The longer-form engineering notes live outside the repository under
+> `.config/agentic-engineering/` (gitignored, local to each developer's
+> machine). `CLAUDE.md` is the authoritative in-repo statement of the rules.
