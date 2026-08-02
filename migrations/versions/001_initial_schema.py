@@ -54,19 +54,27 @@ def upgrade() -> None:
             heartbeat_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
             completed_at   TIMESTAMPTZ,
             status         TEXT NOT NULL DEFAULT 'pending',
-            error          TEXT
+            error          TEXT,
+            -- Identifies the orchestrator instance that claimed this run, so the
+            -- heartbeat reconciler can scope itself to its own runs instead of
+            -- failing another instance's live work.
+            owner_id       TEXT
         )
         """
     )
     op.create_index("ix_runs_experiment", "runs", ["experiment_id", "started_at"])
     op.create_index("ix_runs_status", "runs", ["status", "heartbeat_at"])
+    # `list()` exposes ticker and model_id as filters; without these a filtered
+    # listing sequential-scans the whole runs table as history accumulates.
+    op.create_index("ix_runs_ticker", "runs", ["ticker", "started_at"])
+    op.create_index("ix_runs_model", "runs", ["model_id", "started_at"])
 
     # Hypertables ---------------------------------------------------------
     op.execute(
         """
         CREATE TABLE prices (
             time      TIMESTAMPTZ NOT NULL,
-            ticker    TEXT NOT NULL,
+            ticker    TEXT NOT NULL REFERENCES tickers(ticker),
             open      DOUBLE PRECISION,
             high      DOUBLE PRECISION,
             low       DOUBLE PRECISION,
@@ -95,13 +103,21 @@ def upgrade() -> None:
             q10           DOUBLE PRECISION[],
             q90           DOUBLE PRECISION[],
             created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-            PRIMARY KEY (run_id, ticker, time)
+            -- 6-column identity. A 3-column (run_id, ticker, time) key would
+            -- collapse two forecast configurations within the same run — e.g.
+            -- the same ticker/day at two context sizes — and ON CONFLICT DO
+            -- NOTHING would silently drop the second.
+            -- TimescaleDB requires the partition column ('time') in any PK.
+            PRIMARY KEY (run_id, ticker, time, model_id, context_size, horizon_size)
         )
         """
     )
     op.execute(
         "SELECT create_hypertable('forecasts', 'time', chunk_time_interval => INTERVAL '30 days')"
     )
+    # Non-unique mirror of the identity minus run_id: this is the cache read
+    # path, which looks across runs. `trading_horizon` is deliberately absent —
+    # a forecast does not depend on it.
     op.create_index(
         "ix_forecasts_cache_lookup",
         "forecasts",
@@ -116,9 +132,15 @@ def upgrade() -> None:
             iteration_idx INTEGER NOT NULL,
             ticker        TEXT NOT NULL,
             action        TEXT NOT NULL,
-            size          DOUBLE PRECISION,
-            price         DOUBLE PRECISION,
-            value         DOUBLE PRECISION,
+            -- NUMERIC, not DOUBLE PRECISION: these are accumulated across every
+            -- iteration of a run and feed Sharpe/CAGR/drawdown. Binary float
+            -- error compounds over a long backtest and shows up as drift in the
+            -- exact numbers this platform exists to report. Raw OHLC below stays
+            -- DOUBLE PRECISION — it arrives as float from yfinance and is not
+            -- accumulated.
+            size          NUMERIC(20, 8),
+            price         NUMERIC(20, 8),
+            value         NUMERIC(20, 8),
             reason        TEXT,
             -- TimescaleDB requires the partition column ('time') in any unique index/PK
             PRIMARY KEY (run_id, iteration_idx, time)
@@ -134,9 +156,9 @@ def upgrade() -> None:
         CREATE TABLE equity (
             time     TIMESTAMPTZ NOT NULL,
             run_id   TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-            cash     DOUBLE PRECISION,
-            position DOUBLE PRECISION,
-            equity   DOUBLE PRECISION,
+            cash     NUMERIC(20, 8),
+            position NUMERIC(20, 8),
+            equity   NUMERIC(20, 8),
             PRIMARY KEY (run_id, time)
         )
         """
