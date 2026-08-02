@@ -4,7 +4,7 @@
 # Examples:
 #   docker build -f Dockerfile.trading -t sapheneia-trading .
 
-FROM python:3.11-slim
+FROM python:3.11.11-slim
 
 LABEL maintainer="Sapheneia Team"
 LABEL description="Sapheneia Trading Strategies API"
@@ -38,6 +38,12 @@ RUN uv pip install --system --no-cache -e ".[trading]"
 RUN mkdir -p logs
 
 # Expose port 9000
+# Run as an unprivileged user. Bind-mounted host dirs (./logs, model cache)
+# must be writable by uid 1000.
+RUN useradd --create-home --uid 1000 sapheneia \
+    && chown -R sapheneia:sapheneia /app
+USER sapheneia
+
 EXPOSE 9000
 
 # Health check

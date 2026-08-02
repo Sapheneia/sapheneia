@@ -10,16 +10,29 @@ services:
 
   # --- Persistence -----------------------------------------------------------
   timescaledb:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:2.17.2-pg16
     container_name: sapheneia-timescaledb
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPUS:-2}"
+          memory: "${DB_MEM_LIMIT:-4G}"
     environment:
       POSTGRES_USER:     ${TIMESCALEDB_USER:-sapheneia}
       POSTGRES_PASSWORD: ${TIMESCALEDB_PASSWORD:-sapheneia}
       POSTGRES_DB:       ${TIMESCALEDB_DB:-sapheneia}
     ports:
-      - "${TIMESCALEDB_PORT:-5432}:5432"
+      # Bound to loopback: services reach the DB by DNS name on sapheneia-net,
+      # so nothing outside this host needs the port. Docker's published-port
+      # rules bypass most host firewall configs, and the default credential is
+      # a one-guess `sapheneia`/`sapheneia`.
+      - "127.0.0.1:${TIMESCALEDB_PORT:-5432}:5432"
     volumes:
-      - ./.timescaledb-data:/var/lib/postgresql/data
+      # Named volume, NOT a host bind mount. Postgres chowns its data
+      # directory to uid 999 at startup, which fails on a host-owned bind
+      # mount (Docker Desktop's virtiofs rejects the chown and the container
+      # restart-loops). A named volume is created with correct ownership.
+      - timescaledb_data:/var/lib/postgresql/data
     networks: [sapheneia-net]
     restart: unless-stopped
     healthcheck:
@@ -39,9 +52,13 @@ services:
         MODEL_NAME: all
         MODEL_PORT: 8000
     container_name: sapheneia-forecast
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_CPUS:-4}"
+          memory: "${FORECAST_MEM_LIMIT:-16G}"
     ports:
       - "${FORECAST_PORT:-12700}:8000"
-    env_file: [.env]
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8000
@@ -67,6 +84,11 @@ services:
     profiles: ["cpu"]
     build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-tiny
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_SMALL_CPUS:-2}"
+          memory: "${FORECAST_SMALL_MEM_LIMIT:-6G}"
     ports: ["${CHRONOS_T5_TINY_PORT:-12710}:8000"]
     environment:
       API_HOST: 0.0.0.0
@@ -90,6 +112,11 @@ services:
     profiles: ["cpu"]
     build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-mini
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_SMALL_CPUS:-2}"
+          memory: "${FORECAST_SMALL_MEM_LIMIT:-6G}"
     ports: ["${CHRONOS_T5_MINI_PORT:-12711}:8000"]
     environment:
       API_HOST: 0.0.0.0
@@ -113,6 +140,11 @@ services:
     profiles: ["cpu"]
     build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-small
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_CPUS:-4}"
+          memory: "${FORECAST_MEM_LIMIT:-16G}"
     ports: ["${CHRONOS_T5_SMALL_PORT:-12712}:8000"]
     environment:
       API_HOST: 0.0.0.0
@@ -136,6 +168,11 @@ services:
     profiles: ["cpu"]
     build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-base
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_CPUS:-4}"
+          memory: "${FORECAST_MEM_LIMIT:-16G}"
     ports: ["${CHRONOS_T5_BASE_PORT:-12713}:8000"]
     environment:
       API_HOST: 0.0.0.0
@@ -159,6 +196,11 @@ services:
     profiles: ["cpu"]
     build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-large
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_LARGE_CPUS:-6}"
+          memory: "${FORECAST_LARGE_MEM_LIMIT:-24G}"
     ports: ["${CHRONOS_T5_LARGE_PORT:-12714}:8000"]
     environment:
       API_HOST: 0.0.0.0
@@ -182,6 +224,11 @@ services:
     profiles: ["cpu"]
     build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: timesfm20, MODEL_PORT: 8000 } }
     container_name: forecast-timesfm-2-0
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_LARGE_CPUS:-6}"
+          memory: "${FORECAST_LARGE_MEM_LIMIT:-24G}"
     ports: ["${TIMESFM_2_0_PORT:-12721}:8000"]
     environment:
       API_HOST: 0.0.0.0
@@ -206,8 +253,12 @@ services:
   trading:
     build: { context: ., dockerfile: Dockerfile.trading }
     container_name: sapheneia-trading
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-1}"
+          memory: "${SERVICE_MEM_LIMIT:-1G}"
     ports: ["${TRADING_API_PORT:-12132}:9000"]
-    env_file: [.env]
     environment:
       TRADING_API_KEY: ${TRADING_API_KEY}
       TRADING_API_HOST: 0.0.0.0
@@ -226,13 +277,20 @@ services:
   metrics:
     build: { context: ., dockerfile: Dockerfile.metrics }
     container_name: sapheneia-metrics
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-1}"
+          memory: "${SERVICE_MEM_LIMIT:-1G}"
     ports: ["${METRICS_PORT:-12702}:8000"]
-    env_file: [.env]
     environment:
       METRICS_HOST: 0.0.0.0
       METRICS_PORT: 8000
       METRICS_API_KEY: ${METRICS_API_KEY}
+      METRICS_ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./shared:/app/shared
     networks: [sapheneia-net]
     restart: unless-stopped
     healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 10s }
@@ -241,13 +299,18 @@ services:
   data:
     build: { context: ., dockerfile: Dockerfile.data }
     container_name: sapheneia-data
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-2}"
+          memory: "${SERVICE_MEM_LIMIT:-2G}"
     ports: ["${DATA_API_PORT:-12701}:8000"]
-    env_file: [.env]
     environment:
       DATA_HOST: 0.0.0.0
       DATA_PORT: 8000
       DATA_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATA_API_KEY: ${DATA_API_KEY:-}
+      DATA_ENVIRONMENT: ${ENVIRONMENT:-development}
       TIMESCALEDB_HOST: timescaledb
       TIMESCALEDB_PORT: 5432
       TIMESCALEDB_USER: ${TIMESCALEDB_USER:-sapheneia}
@@ -267,23 +330,35 @@ services:
   orchestrator:
     build: { context: ., dockerfile: Dockerfile.orchestrator }
     container_name: sapheneia-orchestrator
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-2}"
+          memory: "${SERVICE_MEM_LIMIT:-2G}"
     ports: ["${ORCHESTRATOR_PORT:-12704}:8000"]
-    env_file: [.env]
     environment:
       ORCHESTRATOR_HOST: 0.0.0.0
       ORCHESTRATOR_PORT: 8000
       ORCHESTRATOR_LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:-}
+      ORCHESTRATOR_ENVIRONMENT: ${ENVIRONMENT:-development}
       ORCHESTRATOR_DATA_SERVICE_URL: http://data:8000
-      ORCHESTRATOR_FORECAST_SERVICE_URL: http://forecast:8000
+      # Deliberately EMPTY: each model is served by its own container, so the
+      # orchestrator resolves model_id -> container via shared/model_registry.py.
+      # Pointing this at a single endpoint makes every model in a sweep return
+      # whichever model that container loaded first.
+      ORCHESTRATOR_FORECAST_SERVICE_URL: ""
       ORCHESTRATOR_TRADING_SERVICE_URL: http://trading:9000
       ORCHESTRATOR_METRICS_SERVICE_URL: http://metrics:8000
       ORCHESTRATOR_DATA_API_KEY: ${DATA_API_KEY:-}
       ORCHESTRATOR_FORECAST_API_KEY: ${API_SECRET_KEY:-}
       ORCHESTRATOR_TRADING_API_KEY: ${TRADING_API_KEY:-}
       ORCHESTRATOR_METRICS_API_KEY: ${METRICS_API_KEY:-}
-      ORCHESTRATOR_MAX_CONCURRENT_RUNS: ${MAX_CONCURRENT_RUNS:-4}
-      ORCHESTRATOR_MAX_PER_MODEL: ${MAX_PER_MODEL:-2}
+      ORCHESTRATOR_MAX_CONCURRENT_RUNS: ${ORCHESTRATOR_MAX_CONCURRENT_RUNS:-4}
+      ORCHESTRATOR_MAX_PER_MODEL: ${ORCHESTRATOR_MAX_PER_MODEL:-2}
+      ORCHESTRATOR_HEARTBEAT_INTERVAL: ${ORCHESTRATOR_HEARTBEAT_INTERVAL:-30}
+      ORCHESTRATOR_HEARTBEAT_STALE_AFTER: ${ORCHESTRATOR_HEARTBEAT_STALE_AFTER:-900}
+      ORCHESTRATOR_RECONCILE_ALL_OWNERS: ${ORCHESTRATOR_RECONCILE_ALL_OWNERS:-true}
       TIMESCALEDB_HOST: timescaledb
       TIMESCALEDB_PORT: 5432
       TIMESCALEDB_USER: ${TIMESCALEDB_USER:-sapheneia}
@@ -304,15 +379,21 @@ services:
   sapheneia-mcp:
     build: { context: ., dockerfile: Dockerfile.mcp }
     container_name: sapheneia-mcp
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-1}"
+          memory: "${SERVICE_MEM_LIMIT:-1G}"
     ports: ["${SAPHENEIA_MCP_PORT:-12703}:8000"]
-    env_file: [.env]
     environment:
       SAPHENEIA_MCP_HOST: 0.0.0.0
       SAPHENEIA_MCP_PORT: 8000
       SAPHENEIA_MCP_TOKEN: ${SAPHENEIA_MCP_TOKEN:-}
+      SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE: ${SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE:-false}
       SAPHENEIA_MCP_ORCHESTRATOR_URL: http://orchestrator:8000
       SAPHENEIA_MCP_DATA_URL: http://data:8000
-      SAPHENEIA_MCP_FORECAST_URL: http://forecast:8000
+      # Empty: resolve model_id -> container via shared/model_registry.py.
+      SAPHENEIA_MCP_FORECAST_URL: ""
       SAPHENEIA_MCP_TRADING_URL: http://trading:9000
       SAPHENEIA_MCP_METRICS_URL: http://metrics:8000
       SAPHENEIA_MCP_ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:-}
@@ -330,5 +411,7 @@ networks:
     driver: bridge
 
 volumes:
+  timescaledb_data:
+    driver: local
   forecast_models_timesfm20:
     driver: local

@@ -9,7 +9,7 @@
 #   docker build -t sapheneia-api .
 #   docker build -t sapheneia-api-timesfm20 --build-arg MODEL_NAME=timesfm20 --build-arg MODEL_PORT=8001 .
 
-FROM python:3.11-slim
+FROM python:3.11.11-slim
 
 # Build arguments
 ARG MODEL_NAME=all
@@ -44,8 +44,6 @@ COPY pyproject.toml ./
 COPY forecast/ ./forecast/
 COPY orchestrator/ ./orchestrator/
 COPY shared/ ./shared/
-COPY .env .env
-
 # Install base dependencies with forecasting extras (includes uvicorn, fastapi, etc.)
 RUN uv pip install --system --no-cache -e ".[forecasting]"
 
@@ -69,6 +67,12 @@ RUN mkdir -p \
     logs
 
 # Expose the specified port
+# Run as an unprivileged user. Bind-mounted host dirs (./logs, model cache)
+# must be writable by uid 1000.
+RUN useradd --create-home --uid 1000 sapheneia \
+    && chown -R sapheneia:sapheneia /app
+USER sapheneia
+
 EXPOSE ${MODEL_PORT}
 
 # Health check - adjust port based on MODEL_PORT

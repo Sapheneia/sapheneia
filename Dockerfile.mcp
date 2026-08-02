@@ -1,5 +1,5 @@
 # Sapheneia MCP server (HTTP/SSE)
-FROM python:3.11-slim
+FROM python:3.11.11-slim
 
 LABEL maintainer="Sapheneia"
 LABEL description="sapheneia-mcp — MCP server wrapping the orchestrator + leaf services"
@@ -22,6 +22,12 @@ COPY simulations/templates/ ./simulations/templates/
 COPY sapheneia_mcp/ ./sapheneia_mcp/
 
 RUN uv pip install --system --no-cache -e ".[mcp]"
+
+# Run as an unprivileged user. Bind-mounted host dirs (./logs, model cache)
+# must be writable by uid 1000.
+RUN useradd --create-home --uid 1000 sapheneia \
+    && chown -R sapheneia:sapheneia /app
+USER sapheneia
 
 EXPOSE 8000
 
