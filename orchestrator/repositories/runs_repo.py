@@ -44,14 +44,15 @@ class RunsRepository:
         config: dict[str, Any],
         cache_enabled: bool,
         cache_scope: str,
+        owner_id: str | None = None,
     ) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO runs
                   (run_id, experiment_id, ticker, model_id, strategy_type,
-                   config, cache_enabled, cache_scope, status)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+                   config, cache_enabled, cache_scope, status, owner_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9)
                 ON CONFLICT (run_id) DO NOTHING
                 """,
                 run_id,
@@ -62,6 +63,7 @@ class RunsRepository:
                 json.dumps(config),
                 cache_enabled,
                 cache_scope,
+                owner_id,
             )
 
     async def update_status(
@@ -71,13 +73,22 @@ class RunsRepository:
         *,
         error: str | None = None,
         completed: bool = False,
+        clear_error: bool = False,
     ) -> None:
+        """Update a run's status.
+
+        ``clear_error`` exists because ``error`` is otherwise sticky: the
+        ``COALESCE`` below preserves any prior message so a later status update
+        cannot erase it. Without a way to clear it, a run that the reconciler
+        transiently flagged and that then finished successfully would remain
+        ``completed`` *with* a stale ``heartbeat timeout`` error forever.
+        """
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
                 UPDATE runs
                 SET status = $2,
-                    error = COALESCE($3, error),
+                    error = CASE WHEN $5 THEN NULL ELSE COALESCE($3, error) END,
                     completed_at = CASE WHEN $4 THEN now() ELSE completed_at END,
                     heartbeat_at = now()
                 WHERE run_id = $1
@@ -86,6 +97,7 @@ class RunsRepository:
                 status,
                 error,
                 completed,
+                clear_error,
             )
 
     async def heartbeat(self, run_id: str) -> None:
@@ -141,13 +153,28 @@ class RunsRepository:
             )
             return [dict(r) for r in rows]
 
-    async def reconcile_stale(self, stale_after_seconds: float) -> int:
+    async def reconcile_stale(
+        self, stale_after_seconds: float, *, owner_id: str | None = None
+    ) -> int:
         """Mark stuck runs as failed.
 
         Covers both ``running`` runs whose heartbeat is stale, and ``pending``
         runs that were never picked up (e.g. the orchestrator restarted and the
         in-memory task that would have flipped them to ``running`` is gone).
+
+        ``owner_id`` scopes reconciliation to runs this process claimed. Runs are
+        claimed by the instance that created them (``runs.owner_id``); without
+        that predicate a second orchestrator instance would happily fail the
+        first instance's live runs. Passing ``None`` reconciles orphans of *any*
+        owner and is only correct for a single-instance deployment — see
+        ``ORCHESTRATOR_RECONCILE_ALL_OWNERS``.
         """
+        stale = int(stale_after_seconds)
+        params: list[Any] = []
+        owner_clause = ""
+        if owner_id is not None:
+            params.append(owner_id)
+            owner_clause = f"AND (owner_id IS NULL OR owner_id = ${len(params)})"
         async with self._pool.acquire() as conn:
             result = await conn.execute(
                 f"""
@@ -156,8 +183,10 @@ class RunsRepository:
                     error = COALESCE(error, 'heartbeat timeout'),
                     completed_at = now()
                 WHERE status IN ('running', 'pending')
-                  AND heartbeat_at < now() - INTERVAL '{int(stale_after_seconds)} seconds'
-                """
+                  AND heartbeat_at < now() - INTERVAL '{stale} seconds'
+                  {owner_clause}
+                """,
+                *params,
             )
             # asyncpg returns "UPDATE n"
             return int(result.split()[-1]) if result else 0

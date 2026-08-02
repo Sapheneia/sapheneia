@@ -5,7 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+#: Upper bound on a single batch submission. Matches the data service's
+#: existing bound on its sibling schema. Each entry costs three DB writes and
+#: an asyncio task, so an unbounded list is write amplification on one request.
+MAX_BATCH_STRATEGIES = 100
 
 
 class RunCreated(BaseModel):
@@ -54,4 +59,4 @@ class CleanupResult(BaseModel):
 
 
 class BatchSubmitRequest(BaseModel):
-    strategies: list[dict[str, Any]]
+    strategies: list[dict[str, Any]] = Field(..., min_length=1, max_length=MAX_BATCH_STRATEGIES)

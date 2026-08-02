@@ -41,10 +41,14 @@ class TradingConfig(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+def _default_cache_what() -> list[Literal["forecasts"]]:
+    return ["forecasts"]
+
+
 class CacheConfig(BaseModel):
     enabled: bool = False
     scope: Literal["experiment", "global"] = "experiment"
-    what: list[Literal["forecasts"]] = Field(default_factory=lambda: ["forecasts"])
+    what: list[Literal["forecasts"]] = Field(default_factory=_default_cache_what)
 
 
 class StrategyConfig(BaseModel):

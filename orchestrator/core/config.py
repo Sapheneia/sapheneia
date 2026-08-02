@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+import socket
+import uuid
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from shared.service_config import validate_api_key
+
+
+def _default_owner_id() -> str:
+    """Stable-per-process identity used to scope heartbeat reconciliation."""
+    return f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
 
 
 class OrchestratorSettings(BaseSettings):
@@ -13,6 +24,7 @@ class OrchestratorSettings(BaseSettings):
         extra="ignore",
     )
 
+    ENVIRONMENT: str = "development"
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     LOG_LEVEL: str = "INFO"
@@ -20,7 +32,11 @@ class OrchestratorSettings(BaseSettings):
 
     # Downstream service URLs
     DATA_SERVICE_URL: str = "http://data:8000"
-    FORECAST_SERVICE_URL: str = "http://forecast:8000"
+    #: Empty means "route each model to its own container via
+    #: shared.model_registry" — the correct setting for the compose stack.
+    #: Set this only for a single-model deployment; it forces every model's
+    #: request to one endpoint, which cannot serve a multi-model sweep.
+    FORECAST_SERVICE_URL: str = ""
     TRADING_SERVICE_URL: str = "http://trading:9000"
     METRICS_SERVICE_URL: str = "http://metrics:8000"
 
@@ -40,9 +56,31 @@ class OrchestratorSettings(BaseSettings):
     TRADING_TIMEOUT: float = 30.0
     METRICS_TIMEOUT: float = 30.0
 
+    # Requests/minute/client across all endpoints. Bearer validation on its own
+    # has no lockout, and the write endpoints are the costliest in the system.
+    # Sized for the agent polling every in-flight run on a short interval.
+    RATE_LIMIT_PER_MINUTE: int = 1200
+
     # Heartbeat reconciler
     HEARTBEAT_INTERVAL: float = 30.0
-    HEARTBEAT_STALE_AFTER: float = 300.0  # 5 minutes
+    HEARTBEAT_STALE_AFTER: float = 900.0  # 15 minutes; > FORECAST_TIMEOUT with headroom
+
+    #: Identity of this orchestrator process. Runs it creates are stamped with
+    #: it, and the reconciler only fails runs it owns.
+    OWNER_ID: str = Field(default_factory=_default_owner_id)
+    #: Single-instance deployments should reconcile orphaned runs left behind by
+    #: a previous process (same host, new OWNER_ID). Set False when running more
+    #: than one orchestrator against the same database.
+    RECONCILE_ALL_OWNERS: bool = True
+
+    @field_validator("API_KEY")
+    @classmethod
+    def _check_api_key(cls, v: str, info) -> str:
+        return validate_api_key(
+            v,
+            environment=info.data.get("ENVIRONMENT", "development"),
+            field_name="ORCHESTRATOR_API_KEY",
+        )
 
 
 settings = OrchestratorSettings()

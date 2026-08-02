@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared import db as shared_db  # noqa: E402
 from shared.errors import register_error_handlers  # noqa: E402
+from shared.rate_limit import install as install_rate_limit  # noqa: E402
+from shared.rate_limit import make_limiter  # noqa: E402
 
 from .clients.data_client import DataClient  # noqa: E402
 from .clients.forecast_client import ForecastClient  # noqa: E402
@@ -80,12 +82,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         equity_repo=equity_repo,
         metrics_repo=metrics_repo,
         per_model_semaphores=per_model_semaphores,
+        max_per_model=settings.MAX_PER_MODEL,
+        heartbeat_interval=settings.HEARTBEAT_INTERVAL,
     )
     runs_service = RunsService(
         runs_repo=runs_repo,
         inner_loop=inner,
         max_concurrent_runs=settings.MAX_CONCURRENT_RUNS,
         heartbeat_refresh_interval=settings.HEARTBEAT_INTERVAL,
+        owner_id=settings.OWNER_ID,
     )
 
     app.state.pool = pool
@@ -95,7 +100,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     reconciler_task = asyncio.create_task(
         heartbeat_reconciler_loop(
-            runs_repo, settings.HEARTBEAT_INTERVAL, settings.HEARTBEAT_STALE_AFTER
+            runs_repo,
+            settings.HEARTBEAT_INTERVAL,
+            settings.HEARTBEAT_STALE_AFTER,
+            owner_id=None if settings.RECONCILE_ALL_OWNERS else settings.OWNER_ID,
         )
     )
 
@@ -116,6 +124,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 register_error_handlers(app)
+# Bearer validation alone has no lockout; the write endpoints below are the
+# most expensive surface in the system.
+install_rate_limit(app, make_limiter(default_limit=f"{settings.RATE_LIMIT_PER_MINUTE}/minute"))
 app.include_router(orch_router)
 
 

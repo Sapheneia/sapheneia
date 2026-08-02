@@ -6,6 +6,8 @@ from datetime import datetime
 
 import asyncpg
 
+from shared.timeutils import ensure_utc
+
 
 class ForecastsRepository:
     def __init__(self, pool: asyncpg.Pool):
@@ -22,6 +24,7 @@ class ForecastsRepository:
         experiment_id: str | None = None,
     ) -> dict | None:
         """Find a usable cache row. Scope-aware via experiment_id JOIN."""
+        params: tuple
         if experiment_id is not None:
             sql = """
                 SELECT f.median, f.q10, f.q90
@@ -31,7 +34,7 @@ class ForecastsRepository:
                   AND r.experiment_id = $6
                 LIMIT 1
             """
-            params = (model_id, ticker, time, context_size, horizon_size, experiment_id)
+            params = (model_id, ticker, ensure_utc(time), context_size, horizon_size, experiment_id)
         else:
             sql = """
                 SELECT median, q10, q90
@@ -40,7 +43,7 @@ class ForecastsRepository:
                   AND context_size = $4 AND horizon_size = $5
                 LIMIT 1
             """
-            params = (model_id, ticker, time, context_size, horizon_size)
+            params = (model_id, ticker, ensure_utc(time), context_size, horizon_size)
 
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(sql, *params)
@@ -65,9 +68,10 @@ class ForecastsRepository:
                 INSERT INTO forecasts
                   (time, run_id, ticker, model_id, context_size, horizon_size, median, q10, q90)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                ON CONFLICT (run_id, ticker, time) DO NOTHING
+                ON CONFLICT (run_id, ticker, time, model_id, context_size, horizon_size)
+                DO NOTHING
                 """,
-                time,
+                ensure_utc(time),
                 run_id,
                 ticker,
                 model_id,

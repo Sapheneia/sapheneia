@@ -9,17 +9,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from shared.model_family import ModelFamily
+from shared.model_registry import require as require_model
 
 from ..repositories.runs_repo import RunsRepository
 from ..schemas.strategy import StrategyConfig
 from .inner_loop import InnerLoop
 
 logger = logging.getLogger("sapheneia.orchestrator.runs")
-
-
-def _family_from_model_id(model_id: str) -> str:
-    return ModelFamily.from_model_id(model_id).value
 
 
 def make_run_id(experiment_id: str, ticker: str, model_id: str, suffix: str | None = None) -> str:
@@ -37,20 +33,24 @@ class RunsService:
         inner_loop: InnerLoop,
         max_concurrent_runs: int,
         heartbeat_refresh_interval: float = 60.0,
+        owner_id: str | None = None,
     ):
         self.runs_repo = runs_repo
         self.inner = inner_loop
         self._semaphore = asyncio.Semaphore(max_concurrent_runs)
         self._active_tasks: dict[str, asyncio.Task] = {}
         self._heartbeat_refresh_interval = heartbeat_refresh_interval
+        self._owner_id = owner_id
 
     async def submit(self, strategy_data: dict[str, Any]) -> tuple[str, str]:
         cfg = StrategyConfig.model_validate(strategy_data)
+        # Resolve against the registry up front: an unroutable model_id must
+        # fail at submit time, not silently land on whichever container a
+        # shared endpoint happened to load first.
+        model = require_model(cfg.forecast.model)
         run_id = make_run_id(cfg.metadata.experiment_id, cfg.evaluation.ticker, cfg.forecast.model)
         await self.runs_repo.ensure_ticker(cfg.evaluation.ticker)
-        await self.runs_repo.ensure_model(
-            cfg.forecast.model, _family_from_model_id(cfg.forecast.model)
-        )
+        await self.runs_repo.ensure_model(model.model_id, model.family.value, model.status)
         await self.runs_repo.create(
             run_id=run_id,
             experiment_id=cfg.metadata.experiment_id,
@@ -60,12 +60,17 @@ class RunsService:
             config=strategy_data,
             cache_enabled=cfg.cache.enabled,
             cache_scope=cfg.cache.scope,
+            owner_id=self._owner_id,
         )
         task = asyncio.create_task(
             self._run_with_semaphore(run_id, cfg, cfg.metadata.experiment_id)
         )
         self._active_tasks[run_id] = task
-        task.add_done_callback(lambda _t, rid=run_id: self._active_tasks.pop(rid, None))
+
+        def _discard(_task: asyncio.Task, rid: str = run_id) -> None:
+            self._active_tasks.pop(rid, None)
+
+        task.add_done_callback(_discard)
         return run_id, "pending"
 
     async def submit_batch(self, strategies: list[dict[str, Any]]) -> list[tuple[str, str]]:

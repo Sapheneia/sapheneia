@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from shared.service_security import create_api_key_header, make_bearer_dependency
 
 from .config import settings
 
-bearer_scheme = HTTPBearer(auto_error=False)
+get_api_key = make_bearer_dependency(
+    lambda: settings.API_KEY,
+    service_name="orchestrator",
+)
 
-
-def get_api_key(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> str:
-    if not settings.API_KEY:
-        return ""
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(401, "Missing Bearer token", {"WWW-Authenticate": "Bearer"})
-    if credentials.credentials != settings.API_KEY:
-        raise HTTPException(401, "Invalid API key", {"WWW-Authenticate": "Bearer"})
-    return credentials.credentials
+__all__ = ["get_api_key", "create_api_key_header"]
