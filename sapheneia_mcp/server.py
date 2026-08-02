@@ -14,6 +14,9 @@ from typing import Any
 # Path bootstrap when run as a script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import uvicorn  # noqa: E402
+
+from sapheneia_mcp.auth import BearerTokenMiddleware  # noqa: E402
 from sapheneia_mcp.config import settings  # noqa: E402
 from sapheneia_mcp.tools import cache as cache_tools  # noqa: E402
 from sapheneia_mcp.tools import combinations as combo_tools  # noqa: E402
@@ -169,13 +172,35 @@ def main() -> None:
     )
     server = build_server()
     if args.transport == "stdio":
+        # stdio is inherently point-to-point: the transport IS the auth
+        # boundary, so there is no token to check.
         logger.info("Starting sapheneia-mcp on stdio")
         server.run()
-    else:
-        logger.info("Starting sapheneia-mcp on http://%s:%s/sse", args.host, args.port)
-        server.settings.host = args.host
-        server.settings.port = args.port
-        server.run(transport="sse")
+        return
+
+    if not settings.TOKEN:
+        if not settings.ALLOW_UNAUTHENTICATED_SSE:
+            raise SystemExit(
+                "Refusing to start the SSE transport without SAPHENEIA_MCP_TOKEN.\n"
+                "This process holds every downstream service key, so an open listener "
+                "would let any network peer run simulations and delete runs/cache using "
+                "those keys.\n"
+                "Set SAPHENEIA_MCP_TOKEN in your .env, or set "
+                "SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE=true to accept that risk "
+                "explicitly (single-user isolated host only)."
+            )
+        logger.warning(
+            "SSE transport starting WITHOUT authentication "
+            "(SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE=true)"
+        )
+
+    app = server.sse_app()
+    if settings.TOKEN:
+        app.add_middleware(BearerTokenMiddleware, token=settings.TOKEN)
+        logger.info("SSE transport authenticated via SAPHENEIA_MCP_TOKEN")
+
+    logger.info("Starting sapheneia-mcp on http://%s:%s/sse", args.host, args.port)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

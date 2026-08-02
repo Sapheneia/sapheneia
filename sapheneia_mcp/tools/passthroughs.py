@@ -2,15 +2,26 @@
 
 These exist for ad-hoc agent inspection and debugging. The skill prefers the
 composite tools (run_simulation, etc.) for normal workflows.
+
+All four go through ``shared.http_client.BaseHttpClient`` so they get the same
+bearer-header assembly and ``X-Request-ID`` propagation as the orchestrator's
+clients — the hand-rolled versions here never propagated a request ID, which
+made passthrough calls untraceable.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import httpx
+from shared.contracts import ForecastEnvelope, ForecastRequest
+from shared.http_client import BaseHttpClient
+from shared.model_registry import require as require_model
 
 from ..config import settings
+
+
+def _client(base_url: str, api_key: str) -> BaseHttpClient:
+    return BaseHttpClient(base_url, api_key=api_key, timeout=settings.HTTP_TIMEOUT)
 
 
 async def fetch_prices(
@@ -19,15 +30,19 @@ async def fetch_prices(
     end: str,
     end_date: str | None = None,
     interval: str = "1d",
+    request_id: str | None = None,
 ) -> dict:
-    params = {"ticker": ticker, "start": start, "end": end, "interval": interval}
+    params: dict[str, Any] = {
+        "ticker": ticker,
+        "start": start,
+        "end": end,
+        "interval": interval,
+    }
     if end_date:
         params["end_date"] = end_date
-    headers = {"Authorization": f"Bearer {settings.DATA_API_KEY}"} if settings.DATA_API_KEY else {}
-    async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
-        r = await client.get(f"{settings.DATA_URL}/v1/data/prices", params=params, headers=headers)
-        r.raise_for_status()
-        return r.json()
+    return await _client(settings.DATA_URL, settings.DATA_API_KEY).get(
+        "/v1/data/prices", params=params, request_id=request_id
+    )
 
 
 async def forecast(
@@ -35,30 +50,29 @@ async def forecast(
     context: list[float],
     prediction_length: int,
     num_samples: int = 20,
+    request_id: str | None = None,
 ) -> dict:
-    family = "chronos" if "chronos" in model_id.lower() else "timesfm20"
-    body: dict[str, Any] = {
-        "context": context,
-        "prediction_length": prediction_length,
-        "num_samples": num_samples,
-    }
-    if family == "chronos":
-        body["model_variant"] = model_id
-    else:
-        body["checkpoint"] = model_id
-    headers = (
-        {"Authorization": f"Bearer {settings.FORECAST_API_KEY}"}
-        if settings.FORECAST_API_KEY
-        else {}
+    """Forecast via the model's own container.
+
+    Resolves ``model_id`` through the shared registry rather than re-deriving
+    the family from a substring check. The old inline check silently routed an
+    unrecognised model to timesfm20; ``require`` raises instead, and the URL it
+    returns points at the container that actually holds the model.
+    """
+    info = require_model(model_id)
+    payload = ForecastRequest(
+        context=context,
+        prediction_length=prediction_length,
+        num_samples=num_samples,
+        model_id=model_id,
     )
-    async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
-        r = await client.post(
-            f"{settings.FORECAST_URL}/forecast/v1/{family}/inference",
-            json=body,
-            headers=headers,
-        )
-        r.raise_for_status()
-        return r.json()
+    base = settings.FORECAST_URL or info.base_url
+    raw = await _client(base, settings.FORECAST_API_KEY).post(
+        f"/forecast/v1/{info.family.route_suffix}/forecast",
+        json=payload.model_dump(),
+        request_id=request_id,
+    )
+    return ForecastEnvelope.model_validate(raw).model_dump()
 
 
 async def execute_trade(
@@ -69,6 +83,7 @@ async def execute_trade(
     available_cash: float,
     initial_capital: float,
     params: dict[str, Any] | None = None,
+    request_id: str | None = None,
 ) -> dict:
     body = {
         "strategy_type": strategy_type,
@@ -79,24 +94,18 @@ async def execute_trade(
         "initial_capital": initial_capital,
         **(params or {}),
     }
-    headers = (
-        {"Authorization": f"Bearer {settings.TRADING_API_KEY}"} if settings.TRADING_API_KEY else {}
+    return await _client(settings.TRADING_URL, settings.TRADING_API_KEY).post(
+        "/trading/execute", json=body, request_id=request_id
     )
-    async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
-        r = await client.post(f"{settings.TRADING_URL}/trading/execute", json=body, headers=headers)
-        r.raise_for_status()
-        return r.json()
 
 
-async def compute_metrics(returns: list[float], metric: str = "performance") -> dict:
-    headers = (
-        {"Authorization": f"Bearer {settings.METRICS_API_KEY}"} if settings.METRICS_API_KEY else {}
+async def compute_metrics(
+    returns: list[float],
+    metric: str = "performance",
+    request_id: str | None = None,
+) -> dict:
+    return await _client(settings.METRICS_URL, settings.METRICS_API_KEY).post(
+        "/metrics/v1/compute",
+        json={"returns": returns, "metric": metric},
+        request_id=request_id,
     )
-    async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
-        r = await client.post(
-            f"{settings.METRICS_URL}/metrics/v1/compute",
-            json={"returns": returns, "metric": metric},
-            headers=headers,
-        )
-        r.raise_for_status()
-        return r.json()

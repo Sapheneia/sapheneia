@@ -19,11 +19,20 @@ class McpSettings(BaseSettings):
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    TOKEN: str = ""  # the single agent ↔ MCP token
+    #: The single agent ↔ MCP token. Enforced on the SSE transport; see
+    #: ``ALLOW_UNAUTHENTICATED_SSE`` for the escape hatch.
+    TOKEN: str = ""
+    #: SSE refuses to start without a TOKEN. This process holds every
+    #: downstream service key, so an unauthenticated listener would launder
+    #: anonymous requests into authenticated ones against every leaf service.
+    #: Set True only for an isolated single-user box where that is acceptable.
+    ALLOW_UNAUTHENTICATED_SSE: bool = False
 
     ORCHESTRATOR_URL: str = "http://orchestrator:8000"
     DATA_URL: str = "http://data:8000"
-    FORECAST_URL: str = "http://forecast:8000"
+    #: Empty means "route each model to its own container via
+    #: shared.model_registry". Set only for a single-model deployment.
+    FORECAST_URL: str = ""
     TRADING_URL: str = "http://trading:9000"
     METRICS_URL: str = "http://metrics:8000"
 
