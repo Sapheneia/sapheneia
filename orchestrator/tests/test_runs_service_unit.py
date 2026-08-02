@@ -74,11 +74,15 @@ async def test_submit_batch_isolates_a_bad_strategy(sample_strategy) -> None:
     await asyncio.gather(*svc._active_tasks.values(), return_exceptions=True)
 
     assert len(results) == 3
-    assert results[1][0] == "__error__"
-    assert results[1][1].startswith("validation:")
+    # The rejected item carries its own index, a null run_id and an error code —
+    # it is not a sentinel run_id the caller would then poll as "not_found".
+    assert results[1].index == 1
+    assert results[1].status == "rejected"
+    assert results[1].run_id is None
+    assert results[1].error_code
     # The valid neighbours still submitted.
-    assert results[0][1] == "pending"
-    assert results[2][1] == "pending"
+    assert results[0].status == "pending" and results[0].run_id
+    assert results[2].status == "pending" and results[2].run_id
 
 
 async def test_semaphore_caps_concurrent_runs(sample_strategy) -> None:

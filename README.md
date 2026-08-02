@@ -61,11 +61,13 @@ report under `.local/experiments/{experiment_id}/report.md`.
 
 ## Adding a new model
 
-See "How to add a new model" in [`forecast/README.md`](forecast/README.md).
-The short version: append a row to `forecast/models/registry.py`, copy a
-docker-compose service block, and (if it's a new family) add a
-`forecast/models/{family}/services/model.py`. The agent picks it up
-automatically once it's in the combinations YAML.
+The canonical checklist is the module docstring of
+[`shared/model_registry.py`](shared/model_registry.py) — that is the file you
+edit. In short: add a registry row, add a matching `docker-compose.yml` service
+that sets `MODEL_VARIANT` to the same ID, and (if it is a new family) add a
+`forecast/models/{family}/` module exposing `POST /forecast`.
+`tests/test_deployment_consistency.py` fails the build if the registry and
+compose disagree.
 
 ## Development
 

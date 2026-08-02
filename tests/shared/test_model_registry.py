@@ -80,9 +80,26 @@ def test_base_url_targets_the_container_on_the_internal_port() -> None:
     assert info.base_url == f"http://forecast-chronos-t5-tiny:{INTERNAL_PORT}"
 
 
-def test_inference_path_follows_the_family_route_suffix() -> None:
-    assert require(TINY).inference_path == "/forecast/v1/chronos/inference"
-    assert require(TIMESFM).inference_path == "/forecast/v1/timesfm20/inference"
+def test_forecast_path_is_the_canonical_cross_family_route() -> None:
+    """Both callers build their URL from this, so it must be the /forecast route.
+
+    It previously exposed only `inference_path` — the legacy family-specific
+    endpoint the contract replaced — while both real callers hand-built the
+    canonical path independently.
+    """
+    assert require(TINY).forecast_path == "/forecast/v1/chronos/forecast"
+    assert require(TIMESFM).forecast_path == "/forecast/v1/timesfm20/forecast"
+
+
+def test_legacy_inference_path_still_resolves() -> None:
+    assert require(TINY).legacy_inference_path == "/forecast/v1/chronos/inference"
+    assert require(TIMESFM).legacy_inference_path == "/forecast/v1/timesfm20/inference"
+
+
+def test_base_url_is_overridable_per_deployment(monkeypatch) -> None:
+    """Topology must not be a hardcoded literal (§3.5)."""
+    monkeypatch.setenv("FORECAST_BASE_URL_TEMPLATE", "https://{container}.svc.internal:{port}")
+    assert require(TINY).base_url == "https://forecast-chronos-t5-tiny.svc.internal:8000"
 
 
 def test_by_id_returns_none_for_unknown() -> None:
@@ -120,8 +137,16 @@ def test_as_dicts_is_json_safe() -> None:
     assert all("base_url" in d for d in payload)
 
 
-def test_forecast_package_reexports_the_same_registry() -> None:
-    """`forecast/models/registry.py` must not drift back into a second copy."""
-    from forecast.models import registry as forecast_registry
+def test_forecast_package_reads_the_shared_registry() -> None:
+    """The forecast service must not grow a second registry again.
 
-    assert forecast_registry.WORKING_MODELS is WORKING_MODELS
+    It previously had one: nine models on ports that no longer existed, served
+    by GET /models while the documented file was imported by nothing.
+    """
+    from forecast.models import get_all_models_info, get_available_models
+
+    assert set(get_available_models()) == {m.model_id for m in WORKING_MODELS if m.is_working}
+    served = get_all_models_info()
+    assert set(served) == {m.model_id for m in WORKING_MODELS}
+    for model in WORKING_MODELS:
+        assert served[model.model_id]["port"] == model.port

@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from orchestrator.main import app
+from orchestrator.schemas.run import BatchItemResult
 
 
 # Replace the real lifespan (which would try to connect to TimescaleDB) with a no-op.
@@ -28,8 +29,8 @@ def wired_app(sample_strategy: dict):
     runs_service = AsyncMock()
     runs_service.submit.return_value = ("run-xyz", "pending")
     runs_service.submit_batch.return_value = [
-        ("run-1", "pending"),
-        ("run-2", "pending"),
+        BatchItemResult(index=0, status="pending", run_id="run-1"),
+        BatchItemResult(index=1, status="rejected", error_code="INVALID_MODEL", error="nope"),
     ]
     runs_service.cancel.return_value = True
 
@@ -112,7 +113,13 @@ def test_submit_batch(wired_app, sample_strategy):
             json={"strategies": [sample_strategy, sample_strategy]},
         )
     assert r.status_code == 200, r.text
-    assert len(r.json()) == 2
+    body = r.json()
+    assert len(body) == 2
+    # A rejected item is structurally distinguishable, not a sentinel run_id.
+    assert body[0]["run_id"] == "run-1" and body[0]["status"] == "pending"
+    assert body[1]["run_id"] is None
+    assert body[1]["status"] == "rejected"
+    assert body[1]["error_code"] == "INVALID_MODEL"
 
 
 def test_list_runs(wired_app):

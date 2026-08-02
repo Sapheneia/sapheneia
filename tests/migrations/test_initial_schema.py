@@ -75,16 +75,45 @@ def test_forecast_identity_is_six_columns(conn) -> None:
     )
 
 
-def test_forecast_cache_lookup_index_exists(conn) -> None:
+def _pk_column_order(conn, table: str) -> list[str]:
+    """Primary key columns in *declared* order (not alphabetical)."""
     with conn.cursor() as cur:
-        cur.execute("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_forecasts_cache_lookup'")
-        row = cur.fetchone()
-    assert row is not None, "cache lookup index missing"
-    definition = row[0]
-    for col in ("model_id", "ticker", "time", "context_size", "horizon_size"):
-        assert col in definition
-    # trading_horizon is deliberately excluded: a forecast does not depend on it.
-    assert "trading_horizon" not in definition
+        cur.execute(
+            """
+            SELECT a.attname
+            FROM pg_index i
+            JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+            WHERE i.indrelid = %s::regclass AND i.indisprimary
+            ORDER BY k.ord
+            """,
+            (table,),
+        )
+        return [r[0] for r in cur.fetchall()]
+
+
+def test_forecast_pk_leads_with_the_cache_lookup_prefix(conn) -> None:
+    """One index serves both the identity and the cross-run cache read.
+
+    The cache lookup filters on (model_id, ticker, time, context_size,
+    horizon_size); leading the PK with exactly those makes a separate
+    ix_forecasts_cache_lookup redundant, halving btree maintenance on the
+    highest-write table in every chunk.
+    """
+    order = _pk_column_order(conn, "forecasts")
+    assert order[:5] == ["model_id", "ticker", "time", "context_size", "horizon_size"]
+    assert order[5] == "run_id"
+    # trading_horizon is deliberately absent: a forecast does not depend on it.
+    assert "trading_horizon" not in order
+
+
+def test_no_redundant_cache_lookup_index_remains(conn) -> None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT indexname FROM pg_indexes WHERE tablename = 'forecasts'")
+        names = {r[0] for r in cur.fetchall()}
+    assert "ix_forecasts_cache_lookup" not in names, (
+        "this index duplicates the primary key's leading prefix"
+    )
 
 
 def test_runs_has_owner_id_for_reconciler_scoping(conn) -> None:

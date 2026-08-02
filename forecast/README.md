@@ -15,7 +15,7 @@ All non-`/health` endpoints require `Authorization: Bearer ${API_SECRET_KEY}`.
 | GET    | `/health` | FastAPI liveness; does not check model state |
 | GET    | `/`       | Service banner |
 | GET    | `/info`   | Capabilities + auth flag |
-| GET    | `/models` | Available models (from `forecast/models/registry.py`) |
+| GET    | `/models` | Available models (from `shared/model_registry.py`) |
 | POST   | `/forecast/v1/timesfm20/initialization` | Load TimesFM 2.0 from `TIMESFM20_DEFAULT_CHECKPOINT` |
 | GET    | `/forecast/v1/timesfm20/status`         | `ready` \| `initializing` \| `error` |
 | POST   | `/forecast/v1/timesfm20/inference`      | Run inference with `context`, `prediction_length`, `num_samples` |
@@ -56,7 +56,7 @@ must satisfy `trading_horizon <= prediction_length`.
 
 ## Models (canonical registry)
 
-Sourced from `forecast/models/registry.py`. Working today:
+Sourced from `shared/model_registry.py`. Working today:
 
 | HuggingFace ID                              | Family   | Container                      | Port  |
 |---------------------------------------------|----------|--------------------------------|-------|
@@ -71,7 +71,8 @@ Chronos Bolt is intentionally not shipped (incompatible model signature; broken)
 
 ## How to add a new model
 
-1. **Register it.** Append a `ModelInfo(...)` row to `forecast/models/registry.py`.
+1. **Register it.** Append a `ModelInfo(...)` row to `shared/model_registry.py`
+   (the canonical checklist lives in that module's docstring).
 2. **Add a compose service.** Copy an existing block in `docker-compose.yml`; change `MODEL_VARIANT` (chronos) or `TIMESFM20_DEFAULT_CHECKPOINT` (timesfm) and the host port.
 3. **If it's a new family:** add `forecast/models/{family}/services/model.py` that
    exposes `initialize_model(model_variant, ...)`, `get_status() -> (status, error)`,
