@@ -42,9 +42,15 @@ class Settings(BaseSettings):
     CORS_ALLOW_HEADERS: str = "*"
 
     # --- Rate Limiting Settings ---
+    # Rate limits below are per-client-IP and exist to bound abuse on the
+    # published host port. They are NOT the concurrency control for the
+    # orchestrator: it drives one call per backtest iteration (one per
+    # trading day), so a 10/minute cap made any real backtest impossible —
+    # every run died partway through with a 429. Real concurrency is
+    # bounded by the orchestrator's global and per-model semaphores.
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 60  # Default: 60 requests per minute
-    RATE_LIMIT_INFERENCE_PER_MINUTE: int = 10  # Stricter limit for inference endpoints
+    RATE_LIMIT_PER_MINUTE: int = 600
+    RATE_LIMIT_INFERENCE_PER_MINUTE: int = 600  # one inference per backtest iteration
     RATE_LIMIT_STORAGE_URI: str = "memory://"  # Can be "redis://localhost:6379" for distributed
 
     # --- Request Size Limits (Phase 5) ---

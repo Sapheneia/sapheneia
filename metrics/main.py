@@ -16,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from metrics.core.config import settings
 from metrics.routes import endpoints
 from shared.errors import register_error_handlers
+from shared.rate_limit import install as install_rate_limit
+from shared.rate_limit import make_limiter
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +46,7 @@ app.add_middleware(
 
 # Register shared error handlers
 register_error_handlers(app)
+install_rate_limit(app, make_limiter(default_limit=f"{settings.RATE_LIMIT_PER_MINUTE}/minute"))
 
 # Include routers
 app.include_router(endpoints.router, prefix="/metrics/v1")

@@ -11,6 +11,8 @@ import logging
 from collections.abc import Iterable
 from datetime import date, datetime
 
+from shared.timeutils import ensure_utc
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,11 +44,16 @@ def _fetch_sync(ticker: str, start: date, end: date, interval: str) -> list[dict
 
     rows: list[dict] = []
     for idx, row in df.iterrows():
-        ts = (
+        raw_ts = (
             idx.to_pydatetime()
             if hasattr(idx, "to_pydatetime")
             else datetime.fromisoformat(str(idx))
         )
+        # yfinance daily bars come back tz-naive. Stamp them UTC here rather
+        # than letting asyncpg reinterpret them as host-local wall clock, which
+        # would shift a bar onto a neighbouring calendar day depending on where
+        # the ingest ran.
+        ts = ensure_utc(raw_ts)
         rows.append(
             {
                 "time": ts,

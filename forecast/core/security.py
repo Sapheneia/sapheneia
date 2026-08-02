@@ -1,82 +1,17 @@
 """
-API Security and Authentication
+API Security and Authentication for the forecast service.
 
-Implements API key authentication using the Authorization header.
-Supports both "Bearer" and "Api-Key" authorization schemes.
+Delegates to ``shared.service_security`` so all services validate credentials
+the same way (constant-time comparison, and no credential material in logs).
 """
 
-import logging
-
-from fastapi import HTTPException, Security, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from shared.service_security import create_api_key_header, make_bearer_dependency
 
 from .config import settings
 
-logger = logging.getLogger(__name__)
+get_api_key = make_bearer_dependency(
+    lambda: settings.API_SECRET_KEY,
+    service_name="forecast",
+)
 
-# Security scheme for API key authentication
-security_scheme = HTTPBearer()
-
-
-async def get_api_key(
-    credentials: HTTPAuthorizationCredentials = Security(security_scheme),
-) -> str:
-    """
-    Dependency function to validate API key from Authorization header.
-
-    Supports two formats:
-    - Authorization: Bearer YOUR_API_KEY
-    - Authorization: Api-Key YOUR_API_KEY
-
-    Args:
-        credentials: HTTP authorization credentials from request header
-
-    Returns:
-        The validated API key
-
-    Raises:
-        HTTPException: 401 if API key is invalid or missing
-    """
-    provided_key = credentials.credentials
-
-    # Enhanced logging for debugging authentication issues
-    logger.info("🔐 Authentication attempt:")
-    logger.info(f"   Scheme: {credentials.scheme}")
-    logger.info(
-        f"   Provided key (first 8 chars): {provided_key[:8] if provided_key else 'NONE'}..."
-    )
-    logger.info(f"   Expected key (first 8 chars): {settings.API_SECRET_KEY[:8]}...")
-    logger.info(f"   Keys match: {provided_key == settings.API_SECRET_KEY}")
-
-    # Validate against configured API key
-    if provided_key != settings.API_SECRET_KEY:
-        logger.error("❌ Authentication FAILED:")
-        logger.error(
-            f"   Provided: {provided_key[: min(20, len(provided_key))] if provided_key else 'NONE'}..."
-        )
-        logger.error(
-            f"   Expected: {settings.API_SECRET_KEY[: min(20, len(settings.API_SECRET_KEY))]}..."
-        )
-        logger.error(f"   Provided length: {len(provided_key) if provided_key else 0}")
-        logger.error(f"   Expected length: {len(settings.API_SECRET_KEY)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    logger.info("✅ API key validated successfully")
-    return provided_key
-
-
-def create_api_key_header(api_key: str) -> dict:
-    """
-    Helper function to create Authorization header for API requests.
-
-    Args:
-        api_key: The API key to use
-
-    Returns:
-        Dictionary with Authorization header
-    """
-    return {"Authorization": f"Bearer {api_key}"}
+__all__ = ["get_api_key", "create_api_key_header"]

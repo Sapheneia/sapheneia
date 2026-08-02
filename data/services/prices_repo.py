@@ -8,6 +8,8 @@ from datetime import date, datetime, timedelta
 
 import asyncpg
 
+from shared.timeutils import day_end, day_start, ensure_utc
+
 from . import yfinance_client
 
 
@@ -56,6 +58,23 @@ class PricesRepo:
 
     # ----- writes ------------------------------------------------------------
 
+    async def ensure_ticker(self, ticker: str, asset_class: str = "unknown") -> None:
+        """Register a ticker before writing bars for it.
+
+        ``prices.ticker`` carries an FK to ``tickers(ticker)``, so ingesting a
+        bar for an unregistered symbol would otherwise fail on the constraint.
+        """
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO tickers (ticker, asset_class)
+                VALUES ($1, $2)
+                ON CONFLICT (ticker) DO NOTHING
+                """,
+                ticker,
+                asset_class,
+            )
+
     async def upsert_bars(self, rows: Sequence[dict]) -> int:
         """Insert price bars, ignoring conflicts on ``(ticker, interval, time)``.
 
@@ -64,9 +83,11 @@ class PricesRepo:
         """
         if not rows:
             return 0
+        for ticker in {r["ticker"] for r in rows}:
+            await self.ensure_ticker(ticker)
         records = [
             (
-                r["time"],
+                ensure_utc(r["time"]),
                 r["ticker"],
                 r.get("open"),
                 r.get("high"),
@@ -137,9 +158,14 @@ class PricesRepo:
 
 
 def _to_dt(d: date, end_of_day: bool = False) -> datetime:
-    if end_of_day:
-        return datetime(d.year, d.month, d.day, 23, 59, 59, 999999)
-    return datetime(d.year, d.month, d.day)
+    """Build the UTC-aware boundary used by the no-look-ahead SQL clamp.
+
+    These must be timezone-aware. asyncpg encodes a naive datetime as
+    host-local wall-clock time, which would make the ``time <= $4`` cutoff —
+    and therefore the no-look-ahead guarantee — depend on the timezone of
+    whichever machine issued the query.
+    """
+    return day_end(d) if end_of_day else day_start(d)
 
 
 def _covers(rows: Sequence[asyncpg.Record], start: date, end: date) -> bool:

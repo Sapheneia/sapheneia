@@ -11,6 +11,8 @@ import os
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from shared.service_config import validate_api_key
+
 
 class TradingSettings(BaseSettings):
     """
@@ -27,13 +29,18 @@ class TradingSettings(BaseSettings):
     )
 
     # --- Core API Settings ---
+    # ENVIRONMENT MUST be declared before TRADING_API_KEY. Pydantic validates
+    # fields in declaration order and exposes only already-validated fields via
+    # `info.data`, so with the reverse order the key validator always read the
+    # "development" fallback and the production guard never fired — including
+    # when ENVIRONMENT=production was explicitly set.
+    ENVIRONMENT: str = "development"  # Can be: development, staging, production
     TRADING_API_KEY: str = (
         "default_trading_api_key_please_change"  # MUST be set in .env or environment
     )
     LOG_LEVEL: str = "INFO"
     TRADING_API_PORT: int = 9000  # Default port for Trading API (separate from api/ on 8000+)
     TRADING_API_HOST: str = "0.0.0.0"  # Listen on all interfaces, crucial for Docker
-    ENVIRONMENT: str = "development"  # Can be: development, staging, production
 
     # --- CORS Settings ---
     CORS_ALLOWED_ORIGINS: str = (
@@ -44,9 +51,15 @@ class TradingSettings(BaseSettings):
     CORS_ALLOW_HEADERS: str = "*"
 
     # --- Rate Limiting Settings ---
+    # Rate limits below are per-client-IP and exist to bound abuse on the
+    # published host port. They are NOT the concurrency control for the
+    # orchestrator: it drives one call per backtest iteration (one per
+    # trading day), so a 10/minute cap made any real backtest impossible —
+    # every run died partway through with a 429. Real concurrency is
+    # bounded by the orchestrator's global and per-model semaphores.
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 60  # Default: 60 requests per minute
-    RATE_LIMIT_EXECUTE_PER_MINUTE: int = 10  # Stricter limit for execute endpoint
+    RATE_LIMIT_PER_MINUTE: int = 600
+    RATE_LIMIT_EXECUTE_PER_MINUTE: int = 6000  # ~100/s; one call per backtest iteration
     RATE_LIMIT_STORAGE_URI: str = "memory://"  # Can be "redis://localhost:6379" for distributed
 
     # --- Trading Strategy Defaults ---
@@ -64,51 +77,17 @@ class TradingSettings(BaseSettings):
     @field_validator("TRADING_API_KEY")
     @classmethod
     def validate_api_key(cls, v: str, info) -> str:
+        """Refuse to boot in production with a placeholder or short key.
+
+        The implementation lives in ``shared.service_config`` so the same guard
+        applies to the orchestrator, data, and metrics services — it used to
+        exist only here (CLAUDE.md §5.4).
         """
-        Validate that TRADING_API_KEY is changed from default in production.
-
-        Args:
-            v: The API key value
-            info: Validation info containing other field values
-
-        Returns:
-            The validated API key
-
-        Raises:
-            ValueError: If default key is used in production environment
-        """
-        environment = info.data.get("ENVIRONMENT", "development")
-
-        if v == "default_trading_api_key_please_change":
-            if environment == "production":
-                raise ValueError(
-                    "❌ CRITICAL SECURITY ERROR: TRADING_API_KEY must be changed from default value in production! "
-                    "Set TRADING_API_KEY in your .env file or environment variables."
-                )
-            else:
-                # Log warning but allow in development/staging
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    "⚠️  WARNING: Using default TRADING_API_KEY! This is NOT secure for production."
-                )
-
-        # Validate minimum length
-        if len(v) < 32:
-            if environment == "production":
-                raise ValueError(
-                    "❌ SECURITY ERROR: TRADING_API_KEY must be at least 32 characters long in production."
-                )
-            else:
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"⚠️  WARNING: TRADING_API_KEY is only {len(v)} characters. Recommended: 32+ characters."
-                )
-
-        return v
+        return validate_api_key(
+            v,
+            environment=info.data.get("ENVIRONMENT", "development"),
+            field_name="TRADING_API_KEY",
+        )
 
     def get_cors_origins(self) -> list[str]:
         """

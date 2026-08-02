@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared import db as shared_db  # noqa: E402
 from shared.errors import register_error_handlers  # noqa: E402
+from shared.rate_limit import install as install_rate_limit  # noqa: E402
+from shared.rate_limit import make_limiter  # noqa: E402
 
 from .core.config import settings  # noqa: E402
 from .routes.endpoints import router as data_router  # noqa: E402
@@ -49,6 +51,7 @@ app = FastAPI(
 )
 
 register_error_handlers(app)
+install_rate_limit(app, make_limiter(default_limit=f"{settings.RATE_LIMIT_PER_MINUTE}/minute"))
 app.include_router(data_router)
 
 

@@ -1,70 +1,20 @@
 """Integration tests for the PricesRepo against a real TimescaleDB.
 
-Requires Docker (testcontainers spins up a fresh TimescaleDB image).
-Skipped if testcontainers isn't installed.
+Uses the root ``timescaledb_asyncpg_dsn`` fixture, which prefers an externally
+supplied database (``TIMESCALEDB_HOST``) and falls back to testcontainers.
 """
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 from datetime import date, datetime
-from pathlib import Path
 
 import pytest
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ALEMBIC_INI = REPO_ROOT / "migrations" / "alembic.ini"
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(scope="module")
-def timescaledb_dsn() -> str:
-    try:
-        from testcontainers.postgres import PostgresContainer
-    except ImportError:
-        pytest.skip("testcontainers[postgres] not installed")
-
-    container = PostgresContainer(
-        image="timescale/timescaledb:latest-pg16",
-        username="sapheneia",
-        password="sapheneia",
-        dbname="sapheneia",
-    )
-    container.start()
-    try:
-        psycopg_url = container.get_connection_url().replace(
-            "postgresql+psycopg2://", "postgresql+psycopg://"
-        )
-        env = {**os.environ, "DATABASE_URL": psycopg_url}
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "alembic",
-                "-c",
-                str(ALEMBIC_INI),
-                "upgrade",
-                "head",
-            ],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(REPO_ROOT),
-        )
-        if result.returncode != 0:
-            pytest.skip(f"alembic upgrade failed: {result.stderr}")
-        # asyncpg DSN form
-        asyncpg_url = psycopg_url.replace("postgresql+psycopg://", "postgresql://")
-        yield asyncpg_url
-    finally:
-        container.stop()
-
-
 @pytest.fixture
-async def repo(timescaledb_dsn: str, monkeypatch):
+async def repo(timescaledb_asyncpg_dsn: str, monkeypatch):
     import asyncpg
 
     from data.services import yfinance_client
@@ -96,7 +46,7 @@ async def repo(timescaledb_dsn: str, monkeypatch):
 
     monkeypatch.setattr(yfinance_client, "fetch", fake_fetch)
 
-    pool = await asyncpg.create_pool(timescaledb_dsn, min_size=1, max_size=2)
+    pool = await asyncpg.create_pool(timescaledb_asyncpg_dsn, min_size=1, max_size=2)
     try:
         # Clean any leftover rows from prior tests in this session
         async with pool.acquire() as conn:
