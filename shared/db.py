@@ -7,6 +7,7 @@ DSN construction, pool sizing, and lifecycle are consistent.
 from __future__ import annotations
 
 import os
+from urllib.parse import quote
 
 import asyncpg
 
@@ -20,12 +21,17 @@ def dsn_from_env() -> str:
       TIMESCALEDB_USER     (default: sapheneia)
       TIMESCALEDB_PASSWORD (default: sapheneia)
       TIMESCALEDB_DB       (default: sapheneia)
+
+    User and password are percent-encoded. Without that, a password containing
+    ``@`` re-splits the userinfo/host boundary and the pool silently dials an
+    unintended host — which is exactly the failure mode you hit the first time
+    you replace the default password with a strong generated one.
     """
     host = os.getenv("TIMESCALEDB_HOST", "localhost")
     port = os.getenv("TIMESCALEDB_PORT", "5432")
-    user = os.getenv("TIMESCALEDB_USER", "sapheneia")
-    password = os.getenv("TIMESCALEDB_PASSWORD", "sapheneia")
-    db = os.getenv("TIMESCALEDB_DB", "sapheneia")
+    user = quote(os.getenv("TIMESCALEDB_USER", "sapheneia"), safe="")
+    password = quote(os.getenv("TIMESCALEDB_PASSWORD", "sapheneia"), safe="")
+    db = quote(os.getenv("TIMESCALEDB_DB", "sapheneia"), safe="")
     return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
