@@ -107,22 +107,27 @@ def upgrade() -> None:
             -- collapse two forecast configurations within the same run — e.g.
             -- the same ticker/day at two context sizes — and ON CONFLICT DO
             -- NOTHING would silently drop the second.
-            -- TimescaleDB requires the partition column ('time') in any PK.
-            PRIMARY KEY (run_id, ticker, time, model_id, context_size, horizon_size)
+            --
+            -- Column ORDER is chosen so this one index also serves the
+            -- cross-run cache read (model_id, ticker, time, context_size,
+            -- horizon_size) as a leading-prefix scan. A separate
+            -- ix_forecasts_cache_lookup would share 5 of 6 columns and double
+            -- the btree maintenance on the highest-write table in the schema,
+            -- in every chunk. ON CONFLICT matches a constraint by column set,
+            -- not by declared order, so the writer is unaffected.
+            -- TimescaleDB only requires the partition column ('time') to be
+            -- present, not leading.
+            PRIMARY KEY (model_id, ticker, time, context_size, horizon_size, run_id)
         )
         """
     )
     op.execute(
         "SELECT create_hypertable('forecasts', 'time', chunk_time_interval => INTERVAL '30 days')"
     )
-    # Non-unique mirror of the identity minus run_id: this is the cache read
-    # path, which looks across runs. `trading_horizon` is deliberately absent —
-    # a forecast does not depend on it.
-    op.create_index(
-        "ix_forecasts_cache_lookup",
-        "forecasts",
-        ["model_id", "ticker", "time", "context_size", "horizon_size"],
-    )
+    # No separate cache-lookup index: the primary key above already leads with
+    # exactly (model_id, ticker, time, context_size, horizon_size).
+    # `trading_horizon` is deliberately absent from the key — a forecast does
+    # not depend on it.
 
     op.execute(
         """

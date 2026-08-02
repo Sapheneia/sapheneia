@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 
 import asyncpg
 
+from shared.tickers import ENSURE_TICKER_SQL, UNKNOWN_ASSET_CLASS
 from shared.timeutils import day_end, day_start, ensure_utc
 
 from . import yfinance_client
@@ -58,22 +59,16 @@ class PricesRepo:
 
     # ----- writes ------------------------------------------------------------
 
-    async def ensure_ticker(self, ticker: str, asset_class: str = "unknown") -> None:
+    async def ensure_ticker(self, ticker: str, asset_class: str = UNKNOWN_ASSET_CLASS) -> None:
         """Register a ticker before writing bars for it.
 
         ``prices.ticker`` carries an FK to ``tickers(ticker)``, so ingesting a
-        bar for an unregistered symbol would otherwise fail on the constraint.
+        bar for an unregistered symbol would fail on the constraint. `data` owns
+        the `tickers` table per §4.3; the SQL is shared with the orchestrator's
+        pre-registration path so the two writers cannot drift.
         """
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                """
-                INSERT INTO tickers (ticker, asset_class)
-                VALUES ($1, $2)
-                ON CONFLICT (ticker) DO NOTHING
-                """,
-                ticker,
-                asset_class,
-            )
+            await conn.execute(ENSURE_TICKER_SQL, ticker, asset_class)
 
     async def upsert_bars(self, rows: Sequence[dict]) -> int:
         """Insert price bars, ignoring conflicts on ``(ticker, interval, time)``.

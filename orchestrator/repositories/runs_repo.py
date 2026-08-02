@@ -7,18 +7,21 @@ from typing import Any
 
 import asyncpg
 
+from shared.tickers import ENSURE_TICKER_SQL, UNKNOWN_ASSET_CLASS
+
 
 class RunsRepository:
     def __init__(self, pool: asyncpg.Pool):
         self._pool = pool
 
-    async def ensure_ticker(self, ticker: str, asset_class: str = "unknown") -> None:
+    async def ensure_ticker(self, ticker: str, asset_class: str = UNKNOWN_ASSET_CLASS) -> None:
+        """Pre-register a ticker so `runs.ticker`'s FK is satisfiable.
+
+        `data` owns the `tickers` table; this is a narrow pre-registration for
+        the run row and shares its SQL so the two sites cannot drift.
+        """
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO tickers (ticker, asset_class) VALUES ($1, $2) ON CONFLICT (ticker) DO NOTHING",
-                ticker,
-                asset_class,
-            )
+            await conn.execute(ENSURE_TICKER_SQL, ticker, asset_class)
 
     async def ensure_model(self, model_id: str, family: str, status: str = "working") -> None:
         async with self._pool.acquire() as conn:
