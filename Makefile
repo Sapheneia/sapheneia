@@ -4,7 +4,7 @@ help:
 	@echo "Sapheneia targets:"
 	@echo "  make up              start the docker stack + migrations + skill symlinks"
 	@echo "  make down            stop containers (preserve data)"
-	@echo "  make reset           down + wipe .timescaledb-data/ + remove symlinks"
+	@echo "  make reset           down + drop the database volume + remove symlinks"
 	@echo "  make test            run all tests"
 	@echo "  make test-unit       run unit tests only (skip integration)"
 	@echo "  make test-integration run integration tests only"

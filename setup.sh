@@ -5,7 +5,7 @@
 # Usage:
 #   ./setup.sh up              start full stack + run migrations + create symlinks
 #   ./setup.sh down            stop containers (preserve data)
-#   ./setup.sh reset           down + wipe .timescaledb-data/ + remove symlinks
+#   ./setup.sh reset           down + drop the database volume + remove symlinks
 #   ./setup.sh test            run pytest
 #   ./setup.sh logs [SERVICE]  follow logs
 #   ./setup.sh status          docker compose ps
@@ -17,7 +17,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 ENV_TEMPLATE="${REPO_ROOT}/.env.template"
-DATA_DIR="${REPO_ROOT}/.timescaledb-data"
+DB_VOLUME="sapheneia_timescaledb_data"
 SKILLS_SRC="${REPO_ROOT}/skills"
 CLAUDE_SKILLS_DIR="${REPO_ROOT}/.claude/skills"
 AGENT_SKILLS_DIR="${REPO_ROOT}/.agent/skills"
@@ -57,11 +57,9 @@ ensure_env() {
     fi
 }
 
+# Database storage is a Docker named volume; compose creates it on demand.
 ensure_data_dir() {
-    if [ ! -d "$DATA_DIR" ]; then
-        log "Creating $DATA_DIR"
-        mkdir -p "$DATA_DIR"
-    fi
+    :
 }
 
 create_skill_symlinks() {
@@ -113,7 +111,9 @@ wait_healthy() {
 
 run_migrations() {
     log "Applying alembic migrations"
-    local dsn="postgresql+psycopg://${TIMESCALEDB_USER:-sapheneia}:${TIMESCALEDB_PASSWORD:-sapheneia}@localhost:${TIMESCALEDB_PORT:-5432}/${TIMESCALEDB_DB:-sapheneia}"
+    # Honour TIMESCALEDB_HOST so migrations can also run from inside a
+    # container or against a remote database, matching every service's config.
+    local dsn="postgresql+psycopg://${TIMESCALEDB_USER:-sapheneia}:${TIMESCALEDB_PASSWORD:-sapheneia}@${TIMESCALEDB_HOST:-localhost}:${TIMESCALEDB_PORT:-5432}/${TIMESCALEDB_DB:-sapheneia}"
     DATABASE_URL="$dsn" uv run alembic -c "$REPO_ROOT/migrations/alembic.ini" upgrade head
 }
 
@@ -157,11 +157,8 @@ cmd_down() {
 
 cmd_reset() {
     cmd_down
-    log "Removing $DATA_DIR"
-    if [ -d "$DATA_DIR" ]; then
-        find "$DATA_DIR" -mindepth 1 -delete
-        rmdir "$DATA_DIR" || true
-    fi
+    log "Removing database volume $DB_VOLUME"
+    docker volume rm -f "$DB_VOLUME" >/dev/null 2>&1 || true
     remove_skill_symlinks
     ok "Reset complete"
 }
