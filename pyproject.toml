@@ -76,8 +76,10 @@ db = [
 ]
 
 # MCP server
+# mcp is pinned <2: the 2.x SDK removed mcp.server.fastmcp, which
+# sapheneia_mcp/server.py imports. Revisit when the server migrates.
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0,<2",
     "sse-starlette>=2.0.0",
 ]
 
