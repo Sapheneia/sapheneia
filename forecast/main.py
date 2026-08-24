@@ -5,6 +5,7 @@ Main application entry point for the Sapheneia time series forecasting API.
 Provides REST API endpoints for multiple forecasting models.
 """
 
+import os
 from datetime import datetime
 
 import uvicorn
@@ -31,10 +32,18 @@ from .core.security import get_api_key
 
 # Import model registry
 from .models import get_all_models_info, get_available_models
-from .models.chronos.routes import endpoints as chronos_endpoints
 
 # Import routers from model modules
 from .models.timesfm20.routes import endpoints as timesfm20_endpoints
+
+# Chronos routes are imported conditionally: the chronos service module imports
+# `chronos` at module level, and that package is only installed when
+# MODEL_NAME is chronos/all (Dockerfile.forecast installs per-model deps).
+# Importing it unconditionally crashes every TimesFM-only container at boot.
+MODEL_NAME = os.getenv("MODEL_NAME", "all")
+chronos_endpoints = None
+if MODEL_NAME in ("chronos", "all"):
+    from .models.chronos.routes import endpoints as chronos_endpoints  # type: ignore
 
 # Forecast service is stateless beyond the singleton model state inside the
 # per-model containers. Run-state ownership lives in the orchestrator service
@@ -293,9 +302,13 @@ async def shutdown_event():
 app.include_router(timesfm20_endpoints.router, prefix="/forecast/v1")
 logger.info(f"✅ Included TimesFM-2.0 router at: /forecast/v1{timesfm20_endpoints.router.prefix}")
 
-# Chronos routes under /forecast/v1/chronos
-app.include_router(chronos_endpoints.router, prefix="/forecast/v1")
-logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+# Chronos routes under /forecast/v1/chronos — only when the chronos package is
+# installed (MODEL_NAME chronos/all). See the conditional import at the top.
+if chronos_endpoints is not None:
+    app.include_router(chronos_endpoints.router, prefix="/forecast/v1")
+    logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.router.prefix}")
+else:
+    logger.info("⏭️ Chronos router skipped (MODEL_NAME=%s has no chronos package)", MODEL_NAME)
 
 # Generic inference endpoint at /forecast/v1/inference for dedicated model containers.
 # When a container runs a single model (e.g., chronos-t5-tiny), it exposes inference
@@ -303,34 +316,36 @@ logger.info(f"✅ Included Chronos router at: /forecast/v1{chronos_endpoints.rou
 # service to call a consistent endpoint regardless of which model container is targeted.
 from fastapi import APIRouter, Body  # noqa: E402
 
-from .models.chronos.routes.endpoints import (  # noqa: E402
-    inference_endpoint as chronos_inference_endpoint,
-)
-from .models.chronos.schemas.schema import InferenceInput, InferenceOutput  # noqa: E402
+if chronos_endpoints is not None:
+    from .models.chronos.routes.endpoints import (  # noqa: E402
+        inference_endpoint as chronos_inference_endpoint,
+    )
+    from .models.chronos.schemas.schema import (  # noqa: E402
+        InferenceInput,
+        InferenceOutput,
+    )
 
-generic_inference_router = APIRouter(
-    tags=["Generic Inference"], dependencies=[Depends(get_api_key)]
-)
+    generic_inference_router = APIRouter(
+        tags=["Generic Inference"], dependencies=[Depends(get_api_key)]
+    )
 
+    @generic_inference_router.post("/inference", response_model=InferenceOutput)
+    @limiter.limit(get_rate_limit("inference"))
+    async def generic_inference_endpoint(
+        request: Request, response: Response, input_data: InferenceInput = Body()
+    ):
+        """
+        Generic inference endpoint for dedicated model containers.
 
-@generic_inference_router.post("/inference", response_model=InferenceOutput)
-@limiter.limit(get_rate_limit("inference"))
-async def generic_inference_endpoint(
-    request: Request, response: Response, input_data: InferenceInput = Body()
-):
-    """
-    Generic inference endpoint for dedicated model containers.
+        This endpoint provides a model-agnostic path for inference requests.
+        It delegates to the active model's inference implementation.
 
-    This endpoint provides a model-agnostic path for inference requests.
-    It delegates to the active model's inference implementation (currently Chronos).
+        Use this endpoint when calling dedicated model containers that run a single model.
+        """
+        return await chronos_inference_endpoint(request, response, input_data)
 
-    Use this endpoint when calling dedicated model containers that run a single model.
-    """
-    return await chronos_inference_endpoint(request, response, input_data)
-
-
-app.include_router(generic_inference_router, prefix="/forecast/v1")
-logger.info("✅ Included generic inference router at: /forecast/v1/inference")
+    app.include_router(generic_inference_router, prefix="/forecast/v1")
+    logger.info("✅ Included generic inference router at: /forecast/v1/inference")
 
 # Future models can be added here:
 # app.include_router(other_model_endpoints.router, prefix="/forecast/v1")
