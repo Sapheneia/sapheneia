@@ -29,7 +29,18 @@ def compose() -> dict:
 
 @pytest.fixture(scope="module")
 def forecast_services(compose) -> dict[str, dict]:
-    return {name: svc for name, svc in compose["services"].items() if name.startswith("forecast-")}
+    """Every compose service that serves a model.
+
+    The gpu-profile variants (e.g. forecast-timesfm-gpu) are alternate
+    deployments of the same registry model, not new routable containers — they
+    share the CPU container's MODEL_VARIANT pin and port family. Only the
+    canonical (cpu-profile) services carry registry rows.
+    """
+    return {
+        name: svc
+        for name, svc in compose["services"].items()
+        if name.startswith("forecast-") and "gpu" not in name
+    }
 
 
 def test_every_registry_model_has_a_compose_service(compose, forecast_services) -> None:

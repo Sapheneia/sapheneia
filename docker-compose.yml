@@ -259,6 +259,55 @@ services:
     restart: "no"
     healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 120s }
 
+  # GPU variant of the TimesFM container. Same service contract as
+  # forecast-timesfm-2-0 above (same port family, same pin), but built on the
+  # CUDA base with cu121 torch wheels and DEVICE/TIMESFM20_DEFAULT_BACKEND=gpu.
+  #
+  # NOTE on GPU passthrough: podman 4.x's `podman compose` (docker-compose
+  # backend) drops CDI device reservations from this block — known upstream
+  # gap (containers/podman#28436/#19338). On podman >= 5 this works as written.
+  # On 4.x, run the container manually instead:
+  #   podman run -d --device nvidia.com/gpu=all ... (see .env.template comments)
+  forecast-timesfm-gpu:
+    profiles: ["gpu"]
+    build: { context: ., dockerfile: Dockerfile.gpu, args: { MODEL_NAME: timesfm20, MODEL_PORT: 8000 } }
+    container_name: forecast-timesfm-gpu
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_LARGE_CPUS:-6}"
+          memory: "${FORECAST_LARGE_MEM_LIMIT:-24G}"
+        reservations:
+          devices:
+            # Compose-spec standard GPU reservation. capabilities is required.
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports: ["${TIMESFM_GPU_PORT:-12731}:8000"]
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: timesfm20
+      MODEL_VARIANT: google/timesfm-2.0-500m-pytorch
+      TIMESFM20_DEFAULT_CHECKPOINT: google/timesfm-2.0-500m-pytorch
+      # TimesFM only moves weights to the GPU when its backend hparam is "gpu"
+      # (torch.device("cuda" if backend=="gpu" ...)). DEVICE alone is not read
+      # by the model loader; both must be gpu/cuda for real GPU inference.
+      TIMESFM20_DEFAULT_BACKEND: gpu
+      DEVICE: cuda
+      HF_HOME: /models_cache
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
+    volumes:
+      - ./forecast:/app/forecast
+      - ./logs:/app/logs
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
+    restart: "no"
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 120s }
+
   # --- Trading service -------------------------------------------------------
   trading:
     build: { context: ., dockerfile: Dockerfile.trading }
