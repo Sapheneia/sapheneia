@@ -23,6 +23,12 @@ from .portfolio import Portfolio
 
 logger = logging.getLogger("sapheneia.orchestrator.loop")
 
+#: Bar fields the history-needing strategies' request arrays are built from.
+_OHLC_FIELDS: tuple[str, ...] = ("open", "high", "low", "close")
+#: The runtime array keys the orchestrator owns (config keys like
+#: ``window_history``/``which_history`` also end in "_history" — match exactly).
+_OHLC_HISTORY_KEYS: frozenset[str] = frozenset(f"{f}_history" for f in _OHLC_FIELDS)
+
 
 class InnerLoop:
     def __init__(
@@ -63,6 +69,11 @@ class InnerLoop:
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(run_id))
         try:
             await self.runs.update_status(run_id, "running")
+            if self._needs_price_history(cfg.trading.strategy_type, cfg.trading.params):
+                # Static config check, hoisted so a misconfigured run fails
+                # before paying a price fetch and a forecast round-trip (up to
+                # the full forecast timeout on a cache miss).
+                self._history_window(cfg.trading.strategy_type, cfg.trading.params)
             prices = await self._fetch_prices(cfg)
             if not prices:
                 raise RuntimeError("data service returned no prices for evaluation window")
@@ -96,7 +107,7 @@ class InnerLoop:
 
                 trade = await self.trading_client.execute(
                     strategy_type=cfg.trading.strategy_type,
-                    params=cfg.trading.params,
+                    params=self._trade_params(cfg, prices, as_of),
                     forecast_price=forecast_price,
                     current_price=current_price,
                     current_position=portfolio.position,
@@ -211,6 +222,114 @@ class InnerLoop:
             p for p in prices if to_utc_date(p["time"]) <= as_of_d and p.get("close") is not None
         ]
         return float(rows[-1]["close"]) if rows else 0.0
+
+    def _trade_params(self, cfg: StrategyConfig, prices: list[dict], as_of: datetime) -> dict:
+        """Assemble the per-iteration trading params from config plus market data.
+
+        The trading service is pure compute (§4.3): it has no data client and
+        receives everything in the request. Every strategy variant whose schema
+        demands price-history arrays therefore needs the orchestrator — the
+        assembler that already holds the fetched bars — to supply them; without
+        them each such request 422s on the trading schema's validators. That is
+        quantile always, threshold with ``threshold_type`` "atr" (schema-required)
+        or "std_dev" (silently falls back to an absolute threshold without
+        history), and return with ``position_sizing`` "normalized" (§5.4: one
+        bug class, fixed at every variant it applies to).
+
+        Keyed on ``strategy_type`` and its params, never on ``model_id``: which
+        market context a strategy needs is a property of the strategy, not of
+        the forecasting model (§3.5). Variants that need no history — plain
+        threshold, fixed/proportional return — get the config params verbatim,
+        as before.
+        """
+        params = dict(cfg.trading.params)
+        if self._needs_price_history(cfg.trading.strategy_type, params):
+            embedded = sorted(k for k in params if k in _OHLC_HISTORY_KEYS)
+            if embedded:
+                # Overwriting these silently would make a config that used to
+                # "work" (static arrays passing the schema) compute different
+                # numbers without a trace. History is runtime market data the
+                # orchestrator assembles per iteration; static history in a
+                # backtest config is almost certainly a mistake.
+                raise RuntimeError(
+                    f"trading.params must not embed price history ({', '.join(embedded)}); "
+                    "the orchestrator assembles OHLC arrays per iteration from fetched bars"
+                )
+            window = self._history_window(cfg.trading.strategy_type, params)
+            params.update(self._ohlc_history(prices, as_of, window))
+        return params
+
+    @staticmethod
+    def _needs_price_history(strategy_type: str, params: dict) -> bool:
+        """Whether this strategy variant's trading request needs OHLC arrays."""
+        if strategy_type == "quantile":
+            return True
+        if strategy_type == "threshold":
+            return params.get("threshold_type") in ("atr", "std_dev")
+        if strategy_type == "return":
+            return params.get("position_sizing") == "normalized"
+        return False
+
+    @staticmethod
+    def _history_window(strategy_type: str, params: dict) -> int | None:
+        """The validated lookback window for a history-needing variant.
+
+        Quantile requires ``window_history`` (the trading schema has no default
+        for it); failing loudly here beats letting ``bars[-0:]`` silently ship
+        the whole price history alongside a config the schema rejects anyway.
+        For threshold/return the field is optional with a service-side default,
+        so ``None`` means "send every bar up to as_of and let the service apply
+        its own window slice" — the service slices ``[-window_history:]`` in all
+        four code paths, and duplicating its default constant here would be
+        §3.5 drift.
+        """
+        window = params.get("window_history")
+        if window is None:
+            if strategy_type == "quantile":
+                raise RuntimeError(
+                    "quantile strategy requires a positive integer trading.params.window_history"
+                )
+            return None
+        if not isinstance(window, int) or window <= 0:
+            raise RuntimeError(
+                f"{strategy_type} strategy requires trading.params.window_history "
+                "to be a positive integer when set"
+            )
+        return window
+
+    def _ohlc_history(
+        self, prices: list[dict], as_of: datetime, window: int | None
+    ) -> dict[str, list[float]]:
+        """The last ``window`` complete OHLC bars ending at ``as_of``.
+
+        No look-ahead: only bars with time <= as_of, matching ``_latest_price``
+        (the bar being traded on is part of the observable history). Bars with
+        any missing OHLC field are skipped so the four arrays stay equal-length,
+        which the trading schema validates. The trading service itself slices
+        ``[-window_history:]`` and degrades to hold below its minimum history,
+        so sending fewer than ``window`` bars early in a run is safe — but zero
+        usable bars is not: the quantile schema accepts empty arrays and the
+        service would then hold every iteration, "completing" the run with a
+        flat equity curve and meaningless metrics (threshold/return reject
+        empty arrays outright). A close-only price source must fail the run,
+        not silently hold through it. ``window=None`` sends every usable bar
+        up to ``as_of``; the service applies its own window slice.
+        """
+        as_of_d = to_utc_date(as_of)
+        bars = [
+            p
+            for p in prices
+            if to_utc_date(p["time"]) <= as_of_d
+            and all(p.get(field) is not None for field in _OHLC_FIELDS)
+        ]
+        if window is not None:
+            bars = bars[-window:]
+        if not bars:
+            raise RuntimeError(
+                "this strategy requires OHLC price data; the price source "
+                "returned no bars with complete open/high/low/close values"
+            )
+        return {f"{field}_history": [float(b[field]) for b in bars] for field in _OHLC_FIELDS}
 
 
 def _equity_to_returns(equity: list[float]) -> list[float]:
