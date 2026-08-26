@@ -340,6 +340,48 @@ class TestQuantileStrategy:
         # Should match range [95, 100] and generate buy
         assert result["action"] in ["buy", "hold"]
 
+    def test_all_in_buy_never_leaves_negative_cash(self, base_params):
+        """An all-in buy (multiplier 1.0) must not 500 on float residue.
+
+        actual_size = cash / price, then trade_value = (cash / price) * price,
+        which can exceed cash by ~1 ulp — e.g. cash=112717.52, price=4.91
+        yields a residue of +1.455e-11. new_cash then lands a hair below zero
+        and StrategyResponse's available_cash >= 0 rejects the service's own
+        result with a 500. Observed live on 2 of 16 matrix cells.
+        """
+        from trading.schemas.schema import StrategyResponse
+
+        history = [5.0 + 0.01 * i for i in range(20)]
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "quantile",
+                # Forecast above most of history -> lands in the buy range.
+                "forecast_price": 5.18,
+                "current_price": 4.91,  # reproducing pair with the cash below
+                "current_position": 0.0,
+                "available_cash": 112717.52,
+                "which_history": "close",
+                "window_history": 20,
+                "quantile_signals": {
+                    0: {"range": [75, 100], "signal": "buy", "multiplier": 1.0},
+                },
+                "open_history": history,
+                "high_history": history,
+                "low_history": history,
+                "close_history": history,
+            }
+        )
+
+        result = TradingStrategy.execute_trading_signal(params)
+
+        assert result["action"] == "buy"
+        assert result["available_cash"] >= 0.0
+        # Spent exactly everything: the residue must be zero, not -1e-11.
+        assert result["available_cash"] == 0.0
+        # The exact failure site was response validation — it must round-trip.
+        StrategyResponse(**result)
+
     def test_missing_ohlc_data(self, base_params):
         """Test missing OHLC data raises error."""
         params = base_params.copy()

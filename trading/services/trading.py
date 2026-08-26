@@ -229,6 +229,16 @@ class TradingStrategy:
 
         # Execute trade
         trade_value = actual_size * current_price
+        if sign > 0:
+            # An all-in buy sizes actual_size = available_cash / current_price,
+            # and (cash / price) * price can exceed cash by ~1 ulp of binary
+            # float error — leaving new_cash at a negative femto-dollar that
+            # the response schema's available_cash >= 0 rightly rejects
+            # (observed live: -1.4551915228366852e-11 on a $112k buy -> 500).
+            # A buy can never spend more than the cash it was given, so
+            # enforce the invariant at the computation rather than clamping
+            # the symptom downstream.
+            trade_value = min(trade_value, available_cash)
         new_cash = available_cash - sign * trade_value
         new_position = current_position + sign * actual_size
 
