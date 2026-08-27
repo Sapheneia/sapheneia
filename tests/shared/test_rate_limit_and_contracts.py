@@ -120,3 +120,17 @@ def test_request_accepts_a_realistic_backtest_context() -> None:
     request = ForecastRequest(context=[1.0] * 252, prediction_length=20)
     assert request.num_samples == 20
     assert request.model_id is None
+
+
+# --- history contract floor -------------------------------------------------
+
+
+def test_trading_array_limit_defaults_to_the_shared_contract_floor() -> None:
+    """One constant, two readers: the orchestrator caps its assembly at
+    MAX_HISTORY_BARS and the trading schema rejects beyond MAX_ARRAY_SIZE.
+    If the default ever diverges from the contract floor, the sender can
+    build requests the receiver rejects."""
+    from shared.contracts import MAX_HISTORY_BARS
+    from trading.core.config import TradingSettings
+
+    assert TradingSettings(_env_file=None).MAX_ARRAY_SIZE == MAX_HISTORY_BARS

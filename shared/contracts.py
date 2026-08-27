@@ -18,6 +18,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
+#: Contract floor for price-history arrays exchanged with the trading service.
+#: The trading schema rejects longer arrays; the orchestrator caps what it
+#: assembles at the same constant so a request it builds is always acceptable
+#: to the receiver (OWASP ASVS 4.2.5: the sender validates what it constructs).
+#: One constant, both readers — a literal in two places is §3.5 drift.
+MAX_HISTORY_BARS = 10_000
+
 
 class ForecastRequest(BaseModel):
     """The one request shape every forecast family accepts.

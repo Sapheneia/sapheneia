@@ -11,6 +11,7 @@ import os
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from shared.contracts import MAX_HISTORY_BARS
 from shared.service_config import validate_api_key
 
 
@@ -72,7 +73,9 @@ class TradingSettings(BaseSettings):
     # --- Trading Strategy Constants ---
     MAX_HISTORY_WINDOW: int = 10000  # Maximum window size for history calculations
     DEFAULT_WINDOW_SIZE: int = 20  # Default window size for calculations
-    MAX_ARRAY_SIZE: int = 10000  # Maximum size for history arrays
+    # Maximum size for history arrays. Defaults to the shared contract floor
+    # so the orchestrator's assembly cap and this limit cannot drift (§3.5).
+    MAX_ARRAY_SIZE: int = MAX_HISTORY_BARS
 
     @field_validator("TRADING_API_KEY")
     @classmethod

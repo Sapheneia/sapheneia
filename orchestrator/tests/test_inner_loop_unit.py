@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -497,6 +497,46 @@ async def test_config_embedded_history_is_rejected(sample_strategy, synthetic_oh
     assert _args[:2] == ("run-embedded", "failed")
     assert "close_history" in kwargs["error"]
     inner.trading_client.execute.assert_not_awaited()
+
+
+async def test_no_window_send_is_capped_at_the_contract_floor(sample_strategy) -> None:
+    """The sender must never build a request the receiver rejects (ASVS 4.2.5).
+
+    The trading schema rejects history arrays longer than the shared
+    MAX_HISTORY_BARS, so the send-everything path (window_history unset) caps
+    what it assembles at the same constant instead of 422ing on pathological
+    fetch windows (>10k daily bars is ~40 years).
+    """
+    from shared.contracts import MAX_HISTORY_BARS
+
+    many_bars = [
+        {
+            "time": datetime(2000, 1, 1, tzinfo=UTC) + timedelta(days=i),
+            "open": 99.0,
+            "high": 101.0,
+            "low": 98.0,
+            "close": 100.0,
+        }
+        for i in range(MAX_HISTORY_BARS + 50)
+    ]
+    sample_strategy["evaluation"]["fetch_start_date"] = "2000-01-01"
+    sample_strategy["evaluation"]["start_date"] = "2027-06-01"
+    sample_strategy["evaluation"]["end_date"] = "2027-06-30"
+    sample_strategy["trading"]["params"] = {"threshold_type": "atr", "threshold_value": 2.0}
+    cfg = StrategyConfig.model_validate(sample_strategy)
+    inner, *_ = _make_inner(
+        many_bars,
+        _envelope([110.0]),
+        {"action": "HOLD", "size": 0.0, "value": 0.0},
+        {"sharpe_ratio": 0.0},
+    )
+
+    await inner.run("run-cap", cfg, "exp-test")
+
+    calls = inner.trading_client.execute.await_args_list
+    assert calls, "no trade calls made"
+    last = calls[-1].kwargs["params"]
+    assert len(last["close_history"]) == MAX_HISTORY_BARS
 
 
 # --- helpers --------------------------------------------------------------

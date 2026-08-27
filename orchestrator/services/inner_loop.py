@@ -7,7 +7,7 @@ import contextlib
 import logging
 from datetime import datetime
 
-from shared.contracts import ForecastEnvelope
+from shared.contracts import MAX_HISTORY_BARS, ForecastEnvelope
 from shared.timeutils import to_utc_date, to_utc_datetime
 
 from ..clients.data_client import DataClient
@@ -322,8 +322,12 @@ class InnerLoop:
             if to_utc_date(p["time"]) <= as_of_d
             and all(p.get(field) is not None for field in _OHLC_FIELDS)
         ]
-        if window is not None:
-            bars = bars[-window:]
+        # Cap what we send at the contract floor either way: the trading schema
+        # rejects longer arrays, and a request the orchestrator builds must be
+        # acceptable to the receiver. Only pathological configs reach the cap
+        # (>10k daily bars is ~40 years), and the service slices its own
+        # window from whatever it receives.
+        bars = bars[-(window if window is not None else MAX_HISTORY_BARS) :]
         if not bars:
             raise RuntimeError(
                 "this strategy requires OHLC price data; the price source "
