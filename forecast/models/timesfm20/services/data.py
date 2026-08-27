@@ -6,35 +6,38 @@ Uses core data utilities for fetching and applies model-specific transformations
 """
 
 import logging
-import pandas as pd
+from typing import Any
+
 import numpy as np
-from typing import Dict, List, Tuple, Any, Optional
+import pandas as pd
+
+from ....core.data import DataFetchError, fetch_data_source
 
 # Import core modules (proper Python imports - no sys.path hacks)
 from ....core.data_processing import DataProcessor, prepare_visualization_data
-from ....core.data import fetch_data_source, DataFetchError
 
 logger = logging.getLogger(__name__)
 
 # Use centralized exception hierarchy (Phase 7: Error Handling)
 try:
-    from ...core.exceptions import DataError, DataValidationError, DataProcessingError
-    
+    from ...core.exceptions import DataProcessingError
+
     class TimesFMDataError(DataProcessingError):
         """Raised when TimesFM-specific data processing fails."""
+
         pass
+
 except ImportError:
     # Fallback if exceptions module not available
     class TimesFMDataError(Exception):
         """Raised when TimesFM-specific data processing fails."""
+
         pass
 
 
 def load_and_transform_timesfm_data(
-    data_source: str,
-    data_definition: Dict[str, str],
-    parameters: Dict[str, Any]
-) -> Tuple[List[float], Dict[str, Any], pd.DataFrame]:
+    data_source: str, data_definition: dict[str, str], parameters: dict[str, Any]
+) -> tuple[list[float], dict[str, Any], pd.DataFrame]:
     """
     Load and transform data for TimesFM inference.
 
@@ -61,9 +64,7 @@ def load_and_transform_timesfm_data(
 
         # Validate it's a DataFrame
         if not isinstance(raw_data, pd.DataFrame):
-            raise TimesFMDataError(
-                f"Expected DataFrame from data source, got {type(raw_data)}"
-            )
+            raise TimesFMDataError(f"Expected DataFrame from data source, got {type(raw_data)}")
 
         # Use existing DataProcessor for TimesFM-specific processing
         processor = DataProcessor()
@@ -73,11 +74,11 @@ def load_and_transform_timesfm_data(
         processor.data_definition = data_definition.copy()
 
         # Ensure 'date' column exists and is converted to datetime
-        if 'date' not in processor.data.columns:
+        if "date" not in processor.data.columns:
             raise TimesFMDataError("CSV file must contain a 'date' column")
 
         # Convert date column to datetime
-        processor.data['date'] = pd.to_datetime(processor.data['date'])
+        processor.data["date"] = pd.to_datetime(processor.data["date"])
         logger.info(f"Date range: {processor.data['date'].min()} to {processor.data['date'].max()}")
 
         # Apply data types
@@ -91,13 +92,13 @@ def load_and_transform_timesfm_data(
         logger.info(f"Data processed successfully with shape: {processed_data.shape}")
 
         # Extract parameters
-        context_len = parameters.get('context_len', 64)
-        horizon_len = parameters.get('horizon_len', 24)
+        context_len = parameters.get("context_len", 64)
+        horizon_len = parameters.get("horizon_len", 24)
 
         # Determine target column
         target_column = None
         for col, dtype in data_definition.items():
-            if dtype == 'target':
+            if dtype == "target":
                 target_column = col
                 break
 
@@ -109,10 +110,10 @@ def load_and_transform_timesfm_data(
             data=processed_data,
             context_len=context_len,
             horizon_len=horizon_len,
-            target_column=target_column
+            target_column=target_column,
         )
 
-        logger.info(f"✅ Data transformation complete:")
+        logger.info("✅ Data transformation complete:")
         logger.info(f"  Target inputs length: {len(target_inputs)}")
         logger.info(f"  Covariates keys: {list(covariates.keys())}")
         logger.info(f"  Processed data shape: {processed_data.shape}")
@@ -125,17 +126,17 @@ def load_and_transform_timesfm_data(
 
     except Exception as e:
         logger.error(f"❌ Data transformation failed: {str(e)}")
-        raise TimesFMDataError(f"Failed to transform data for TimesFM: {str(e)}")
+        raise TimesFMDataError(f"Failed to transform data for TimesFM: {str(e)}") from e
 
 
 def prepare_timesfm_visualization_data(
     processed_data: pd.DataFrame,
-    target_inputs: List[float],
+    target_inputs: list[float],
     target_column: str,
     context_len: int,
     horizon_len: int,
-    extended_data: Optional[pd.DataFrame] = None
-) -> Dict[str, Any]:
+    extended_data: pd.DataFrame | None = None,
+) -> dict[str, Any]:
     """
     Prepare visualization data for TimesFM results.
 
@@ -161,10 +162,10 @@ def prepare_timesfm_visualization_data(
             target_column=target_column,
             context_len=context_len,
             horizon_len=horizon_len,
-            extended_data=extended_data
+            extended_data=extended_data,
         )
 
-        logger.info(f"✅ Visualization data prepared:")
+        logger.info("✅ Visualization data prepared:")
         logger.info(f"  Historical data points: {len(viz_data.get('historical_data', []))}")
         logger.info(f"  Future dates: {len(viz_data.get('dates_future', []))}")
         logger.info(f"  Actual future values: {len(viz_data.get('actual_future', []))}")
@@ -173,14 +174,14 @@ def prepare_timesfm_visualization_data(
 
     except Exception as e:
         logger.error(f"❌ Visualization data preparation failed: {str(e)}")
-        raise TimesFMDataError(f"Failed to prepare visualization data: {str(e)}")
+        raise TimesFMDataError(f"Failed to prepare visualization data: {str(e)}") from e
 
 
 def validate_timesfm_data_structure(
-    target_inputs: List[float],
-    covariates: Dict[str, Any],
+    target_inputs: list[float],
+    covariates: dict[str, Any],
     context_len: int,
-    horizon_len: int
+    horizon_len: int,
 ) -> bool:
     """
     Validate data structure is compatible with TimesFM requirements.
@@ -203,8 +204,7 @@ def validate_timesfm_data_structure(
         # Validate target inputs length
         if len(target_inputs) != context_len:
             raise TimesFMDataError(
-                f"Target inputs length {len(target_inputs)} doesn't match "
-                f"context_len {context_len}"
+                f"Target inputs length {len(target_inputs)} doesn't match context_len {context_len}"
             )
 
         # Validate all values are numeric and not NaN
@@ -215,7 +215,10 @@ def validate_timesfm_data_structure(
         total_len = context_len + horizon_len
 
         for cov_type, cov_dict in covariates.items():
-            if cov_type in ['dynamic_numerical_covariates', 'dynamic_categorical_covariates']:
+            if cov_type in [
+                "dynamic_numerical_covariates",
+                "dynamic_categorical_covariates",
+            ]:
                 for name, values_list in cov_dict.items():
                     if len(values_list) != 1:
                         raise TimesFMDataError(
@@ -229,7 +232,10 @@ def validate_timesfm_data_structure(
                             f"got {len(values_list[0])}"
                         )
 
-            elif cov_type in ['static_numerical_covariates', 'static_categorical_covariates']:
+            elif cov_type in [
+                "static_numerical_covariates",
+                "static_categorical_covariates",
+            ]:
                 for name, values_list in cov_dict.items():
                     if len(values_list) != 1:
                         raise TimesFMDataError(
@@ -244,4 +250,4 @@ def validate_timesfm_data_structure(
         raise
     except Exception as e:
         logger.error(f"❌ Data validation failed: {str(e)}")
-        raise TimesFMDataError(f"Data validation failed: {str(e)}")
+        raise TimesFMDataError(f"Data validation failed: {str(e)}") from e

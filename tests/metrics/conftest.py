@@ -1,8 +1,10 @@
 """
 Test fixtures for Metrics tests
 """
+
 import pytest
 from fastapi.testclient import TestClient
+
 from metrics.main import app
 
 

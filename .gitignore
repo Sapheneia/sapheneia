@@ -208,6 +208,7 @@ api/timesfm20/local/.mlflow_cache/
 
 # Logs
 logs/*.log
+logs/
 
 # MLflow
 mlruns/
@@ -231,7 +232,10 @@ app_old.py
 .local/
 .agent/
 .claude/
+.config/
 .setup/
+.hermes/
+.models_cache/
 sapheneia.egg-info/
 .mcp.json
 CLAUDE.md

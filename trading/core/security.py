@@ -1,62 +1,28 @@
 """
-API Security and Authentication for Trading Strategies API
+API Security and Authentication for the Trading Strategies API.
 
-Implements API key authentication using the Authorization header.
-Supports Bearer token authorization scheme.
+Delegates to ``shared.service_security`` so all services validate credentials
+the same way (constant-time comparison, and no credential material in logs).
+
+Trading keeps ``open_when_unset=False``: unlike the intra-cluster services, it
+has no "auth disabled" mode — an unset key is a misconfiguration, not a
+development convenience.
 """
 
-from fastapi import Security, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import logging
+from shared.service_security import (
+    bearer_scheme as security_scheme,
+)
+from shared.service_security import (
+    create_api_key_header,
+    make_bearer_dependency,
+)
+
 from .config import settings
 
-logger = logging.getLogger(__name__)
+get_api_key = make_bearer_dependency(
+    lambda: settings.TRADING_API_KEY,
+    service_name="trading",
+    open_when_unset=False,
+)
 
-# Security scheme for API key authentication
-security_scheme = HTTPBearer()
-
-
-async def get_api_key(
-    credentials: HTTPAuthorizationCredentials = Security(security_scheme),
-) -> str:
-    """
-    Dependency function to validate API key from Authorization header.
-
-    Supports format:
-    - Authorization: Bearer YOUR_API_KEY
-
-    Args:
-        credentials: HTTP authorization credentials from request header
-
-    Returns:
-        The validated API key
-
-    Raises:
-        HTTPException: 401 if API key is invalid or missing
-    """
-    provided_key = credentials.credentials
-
-    # Validate against configured API key
-    if provided_key != settings.TRADING_API_KEY:
-        logger.warning(f"Invalid API key attempt: {provided_key[:8]}...")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    logger.debug("API key validated successfully")
-    return provided_key
-
-
-def create_api_key_header(api_key: str) -> dict:
-    """
-    Helper function to create Authorization header for API requests.
-
-    Args:
-        api_key: The API key to use
-
-    Returns:
-        Dictionary with Authorization header
-    """
-    return {"Authorization": f"Bearer {api_key}"}
+__all__ = ["get_api_key", "create_api_key_header", "security_scheme"]

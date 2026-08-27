@@ -5,10 +5,10 @@ Contains the core trading strategy implementation logic.
 """
 
 from .trading import (
-    TradingStrategy,
+    PositionSizing,
     StrategyType,
     ThresholdType,
-    PositionSizing,
+    TradingStrategy,
     WhichHistory,
 )
 

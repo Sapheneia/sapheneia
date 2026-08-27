@@ -6,9 +6,9 @@ for quantile strategy with various quantile signal configurations.
 """
 
 import pytest
-import numpy as np
-from trading.services.trading import TradingStrategy
+
 from trading.core.exceptions import InvalidParametersError
+from trading.services.trading import TradingStrategy
 
 
 class TestQuantileStrategy:
@@ -251,9 +251,7 @@ class TestQuantileStrategy:
         # Should match range [95, 100] and generate buy signal
         assert result["action"] in ["buy", "hold"]
 
-    def test_multiple_quantile_signals_first_match_wins(
-        self, base_params, sample_ohlc_data
-    ):
+    def test_multiple_quantile_signals_first_match_wins(self, base_params, sample_ohlc_data):
         """Test that first matching quantile signal is used."""
         params = base_params.copy()
         params.update(
@@ -341,6 +339,117 @@ class TestQuantileStrategy:
         # Forecast (105) > all values (100), percentile should be 100
         # Should match range [95, 100] and generate buy
         assert result["action"] in ["buy", "hold"]
+
+    def test_all_in_buy_never_leaves_negative_cash(self, base_params):
+        """An all-in buy (multiplier 1.0) must not 500 on float residue.
+
+        actual_size = cash / price, then trade_value = (cash / price) * price,
+        which can exceed cash by ~1 ulp — e.g. cash=112717.52, price=4.91
+        yields a residue of +1.455e-11. new_cash then lands a hair below zero
+        and StrategyResponse's available_cash >= 0 rejects the service's own
+        result with a 500. Observed live on 2 of 16 matrix cells.
+        """
+        from trading.schemas.schema import StrategyResponse
+
+        history = [5.0 + 0.01 * i for i in range(20)]
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "quantile",
+                # Forecast above most of history -> lands in the buy range.
+                "forecast_price": 5.18,
+                "current_price": 4.91,  # reproducing pair with the cash below
+                "current_position": 0.0,
+                "available_cash": 112717.52,
+                "which_history": "close",
+                "window_history": 20,
+                "quantile_signals": {
+                    0: {"range": [75, 100], "signal": "buy", "multiplier": 1.0},
+                },
+                "open_history": history,
+                "high_history": history,
+                "low_history": history,
+                "close_history": history,
+            }
+        )
+
+        result = TradingStrategy.execute_trading_signal(params)
+
+        assert result["action"] == "buy"
+        assert result["available_cash"] >= 0.0
+        # Spent exactly everything: the residue must be zero, not -1e-11.
+        assert result["available_cash"] == 0.0
+        # The exact failure site was response validation — it must round-trip.
+        StrategyResponse(**result)
+
+    def test_percentile_100_lands_in_terminal_range(self, base_params):
+        """A forecast above the entire window must match the top range.
+
+        percentile = count(history < forecast)/n, so forecast > max(history)
+        is exactly 100.0. With uniformly half-open ranges that value matched
+        nothing and the strongest possible signal silently held (observed live:
+        reason "Forecast percentile 100.0 does not match any quantile signal
+        range"). Terminal ranges ending at 100 are closed, per the
+        numpy.histogram last-bin convention.
+        """
+        history = [100.0 + i for i in range(20)]
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "quantile",
+                "forecast_price": 500.0,  # far above every bar -> percentile 100.0
+                "current_price": 119.0,
+                "current_position": 10.0,
+                "available_cash": 100000.0,
+                "which_history": "close",
+                "window_history": 20,
+                "quantile_signals": {
+                    0: {"range": [0, 75], "signal": "hold", "multiplier": 0.0},
+                    1: {"range": [75, 100], "signal": "sell", "multiplier": 1.0},
+                },
+                "open_history": history,
+                "high_history": [h + 2 for h in history],
+                "low_history": [h - 2 for h in history],
+                "close_history": history,
+            }
+        )
+
+        result = TradingStrategy.execute_trading_signal(params)
+
+        assert result["action"] == "sell"
+        assert "does not match any quantile signal range" not in result["reason"]
+
+    def test_interior_range_upper_edge_stays_open(self, base_params):
+        """Only the terminal edge closes: an interior boundary still belongs
+        to the next range up, so adjacent ranges never double-match."""
+        history = [100.0 + i for i in range(20)]
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "quantile",
+                # forecast equal to history[10] -> 10 of 20 strictly below -> 50.0
+                "forecast_price": 110.0,
+                "current_price": 110.0,
+                "current_position": 10.0,
+                "available_cash": 100000.0,
+                "which_history": "close",
+                "window_history": 20,
+                "quantile_signals": {
+                    0: {"range": [0, 50], "signal": "sell", "multiplier": 1.0},
+                    1: {"range": [50, 100], "signal": "buy", "multiplier": 0.5},
+                },
+                "open_history": history,
+                "high_history": [h + 2 for h in history],
+                "low_history": [h - 2 for h in history],
+                "close_history": history,
+            }
+        )
+
+        result = TradingStrategy.execute_trading_signal(params)
+
+        # 50.0 is the upper edge of [0,50) and the lower edge of [50,100]:
+        # it must land in the upper range.
+        assert result["action"] == "buy"
 
     def test_missing_ohlc_data(self, base_params):
         """Test missing OHLC data raises error."""

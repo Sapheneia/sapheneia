@@ -4,8 +4,6 @@ Integration tests for error handling.
 Tests that exceptions are properly converted to HTTP responses.
 """
 
-import pytest
-
 
 class TestErrorHandling:
     """Test error handling and exception responses."""
@@ -24,9 +22,7 @@ class TestErrorHandling:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should return 422 (validation error) or 400
         assert response.status_code in [400, 422]
@@ -47,9 +43,7 @@ class TestErrorHandling:
             "execution_size": 100.0,  # Want to buy 100 shares = $10,000
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should execute but result in hold due to insufficient cash
         assert response.status_code == 200
@@ -71,9 +65,7 @@ class TestErrorHandling:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should return 200 but with stopped=True
         assert response.status_code == 200
@@ -92,9 +84,7 @@ class TestErrorHandling:
             "initial_capital": 100000.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should return 422 (validation) or 400 (execution)
         assert response.status_code in [400, 422]
@@ -113,9 +103,7 @@ class TestErrorHandling:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code in [400, 422]
         data = response.json()

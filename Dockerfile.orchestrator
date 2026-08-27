@@ -1,0 +1,36 @@
+# Sapheneia orchestrator service
+FROM python:3.11.11-slim
+
+LABEL maintainer="Sapheneia"
+LABEL description="Sapheneia orchestrator service — sole writer of run-state to TimescaleDB"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV UV_HOME=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
+    mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+
+COPY pyproject.toml ./
+COPY shared/ ./shared/
+COPY orchestrator/ ./orchestrator/
+
+RUN uv pip install --system --no-cache -e ".[db]"
+
+# Run as an unprivileged user. Bind-mounted host dirs (./logs, model cache)
+# must be writable by uid 1000.
+RUN useradd --create-home --uid 1000 sapheneia \
+    && chown -R sapheneia:sapheneia /app
+USER sapheneia
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "orchestrator.main:app", "--host", "0.0.0.0", "--port", "8000"]

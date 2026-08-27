@@ -1,6 +1,6 @@
-import numpy as np
-from typing import Dict, Optional
 from enum import Enum
+
+import numpy as np
 
 
 # Optional Enum classes for type safety (string inputs still work)
@@ -38,7 +38,7 @@ class TradingStrategy:
     """
 
     @staticmethod
-    def execute_trading_signal(params: Dict) -> Dict:
+    def execute_trading_signal(params: dict) -> dict:
         """
         Execute trading signal with capital management
 
@@ -144,7 +144,7 @@ class TradingStrategy:
         return result
 
     @staticmethod
-    def generate_trading_signal(params: Dict) -> Dict:
+    def generate_trading_signal(params: dict) -> dict:
         """
         Generate trading signal based on strategy type
 
@@ -157,18 +157,13 @@ class TradingStrategy:
         """
         strategy_type = params.get("strategy_type", "threshold")
 
-        if (
-            strategy_type == "threshold"
-            or strategy_type == StrategyType.THRESHOLD.value
-        ):
+        if strategy_type == "threshold" or strategy_type == StrategyType.THRESHOLD.value:
             return TradingStrategy.calculate_threshold_signal(params)
 
         elif strategy_type == "return" or strategy_type == StrategyType.RETURN.value:
             return TradingStrategy.calculate_return_signal(params)
 
-        elif (
-            strategy_type == "quantile" or strategy_type == StrategyType.QUANTILE.value
-        ):
+        elif strategy_type == "quantile" or strategy_type == StrategyType.QUANTILE.value:
             return TradingStrategy.calculate_quantile_signal(params)
 
         else:
@@ -179,7 +174,7 @@ class TradingStrategy:
             }
 
     @staticmethod
-    def calculate_threshold_signal(params: Dict) -> Dict:
+    def calculate_threshold_signal(params: dict) -> dict:
         """
         Threshold-based strategy (includes sign-based as special case with threshold_value=0)
 
@@ -201,7 +196,6 @@ class TradingStrategy:
         """
         forecast_price = params["forecast_price"]
         current_price = params["current_price"]
-        current_position = params["current_position"]
         threshold_type = params.get("threshold_type", "absolute")
         threshold_value = params.get("threshold_value", 0.0)
         execution_size = params.get("execution_size", 1.0)
@@ -249,7 +243,7 @@ class TradingStrategy:
             }
 
     @staticmethod
-    def calculate_return_signal(params: Dict) -> Dict:
+    def calculate_return_signal(params: dict) -> dict:
         """
         Forecast return-based strategy with position sizing and return threshold
 
@@ -274,12 +268,11 @@ class TradingStrategy:
         """
         forecast_price = params["forecast_price"]
         current_price = params["current_price"]
-        current_position = params["current_position"]
         position_sizing = params.get("position_sizing", "fixed")
         threshold_value = params.get("threshold_value", 0.0)
         execution_size = params.get("execution_size", 1.0)
-        max_position_size = params.get("max_position_size", None)
-        min_position_size = params.get("min_position_size", None)
+        max_position_size = params.get("max_position_size")
+        min_position_size = params.get("min_position_size")
 
         # Calculate expected return
         expected_return = (forecast_price - current_price) / current_price
@@ -313,10 +306,7 @@ class TradingStrategy:
                 execution_size * abs(expected_return) * 100
             )  # *100 to convert decimal to %
 
-        elif (
-            position_sizing == "normalized"
-            or position_sizing == PositionSizing.NORMALIZED.value
-        ):
+        elif position_sizing == "normalized" or position_sizing == PositionSizing.NORMALIZED.value:
             # Normalize by recent return volatility
             which_history = params.get("which_history", "close")
             history_array = TradingStrategy._get_history_array(params, which_history)
@@ -354,7 +344,7 @@ class TradingStrategy:
         }
 
     @staticmethod
-    def calculate_quantile_signal(params: Dict) -> Dict:
+    def calculate_quantile_signal(params: dict) -> dict:
         """
         Quantile-based strategy using empirical quantiles
 
@@ -387,9 +377,8 @@ class TradingStrategy:
         window_history = params["window_history"]
         quantile_signals = params["quantile_signals"]
         position_sizing = params.get("position_sizing", "fixed")
-        execution_size = params.get("execution_size", 1.0)
-        max_position_size = params.get("max_position_size", None)
-        min_position_size = params.get("min_position_size", None)
+        max_position_size = params.get("max_position_size")
+        min_position_size = params.get("min_position_size")
         min_history_length = params.get("min_history_length", 2)
 
         # Get the appropriate history array
@@ -417,7 +406,7 @@ class TradingStrategy:
 
         # Find matching quantile signal
         matched_signal = None
-        for key, signal_config in quantile_signals.items():
+        for _key, signal_config in quantile_signals.items():
             range_min, range_max = signal_config["range"]
             if range_min <= percentile < range_max:
                 matched_signal = signal_config
@@ -474,13 +463,13 @@ class TradingStrategy:
         return {
             "action": signal_action,
             "size": position_size,
-            "reason": f'Forecast percentile {percentile:.1f} in range {matched_signal["range"]}, signal: {signal_action}, multiplier: {multiplier}',
+            "reason": f"Forecast percentile {percentile:.1f} in range {matched_signal['range']}, signal: {signal_action}, multiplier: {multiplier}",
         }
 
     # ========== HELPER METHODS ==========
 
     @staticmethod
-    def _get_history_array(params: Dict, which_history: str) -> Optional[np.ndarray]:
+    def _get_history_array(params: dict, which_history: str) -> np.ndarray | None:
         """Get the appropriate history array based on which_history parameter"""
         if which_history == "open" or which_history == WhichHistory.OPEN.value:
             return params.get("open_history")
@@ -497,10 +486,10 @@ class TradingStrategy:
     def _calculate_threshold(
         threshold_type: str,
         threshold_value: float,
-        open_history: Optional[np.ndarray],
-        high_history: Optional[np.ndarray],
-        low_history: Optional[np.ndarray],
-        close_history: Optional[np.ndarray],
+        open_history: np.ndarray | None,
+        high_history: np.ndarray | None,
+        low_history: np.ndarray | None,
+        close_history: np.ndarray | None,
         which_history: str,
         window_history: int,
         min_history_length: int,
@@ -508,21 +497,13 @@ class TradingStrategy:
     ) -> float:
         """Calculate threshold based on type"""
 
-        if (
-            threshold_type == "absolute"
-            or threshold_type == ThresholdType.ABSOLUTE.value
-        ):
+        if threshold_type == "absolute" or threshold_type == ThresholdType.ABSOLUTE.value:
             return threshold_value
 
-        elif (
-            threshold_type == "percentage"
-            or threshold_type == ThresholdType.PERCENTAGE.value
-        ):
+        elif threshold_type == "percentage" or threshold_type == ThresholdType.PERCENTAGE.value:
             return current_price * (threshold_value / 100.0)
 
-        elif (
-            threshold_type == "std_dev" or threshold_type == ThresholdType.STD_DEV.value
-        ):
+        elif threshold_type == "std_dev" or threshold_type == ThresholdType.STD_DEV.value:
             # Get the appropriate history array
             history_dict = {
                 "open_history": open_history,
@@ -531,9 +512,7 @@ class TradingStrategy:
                 "close_history": close_history,
                 "which_history": which_history,
             }
-            history_array = TradingStrategy._get_history_array(
-                history_dict, which_history
-            )
+            history_array = TradingStrategy._get_history_array(history_dict, which_history)
 
             if history_array is None or len(history_array) < min_history_length:
                 # Fallback to absolute

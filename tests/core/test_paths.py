@@ -7,10 +7,11 @@ Tests the normalize_data_path function from forecast.core.paths to ensure:
 3. Security validation against path traversal attacks
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch
-from forecast.core.paths import normalize_data_path, IS_DOCKER, PROJECT_ROOT
+
+import pytest
+
+from forecast.core.paths import IS_DOCKER, normalize_data_path
 
 
 class TestPathNormalization:
@@ -84,14 +85,14 @@ class TestEnvironmentSpecificBehavior:
     def test_venv_path_resolution(self):
         """Test path resolution in venv environment."""
         result = normalize_data_path("test.csv")
-        assert not str(result).startswith('/app')
+        assert not str(result).startswith("/app")
         assert "uploads" in str(result)
 
     @pytest.mark.skipif(not IS_DOCKER, reason="Test only applies when IN Docker")
     def test_docker_path_resolution(self):
         """Test path resolution in Docker environment."""
         result = normalize_data_path("test.csv")
-        assert str(result).startswith('/app/data/uploads')
+        assert str(result).startswith("/app/data/uploads")
 
     @pytest.mark.skipif(IS_DOCKER, reason="Test only applies when NOT in Docker")
     def test_cross_environment_path_conversion(self):
@@ -100,7 +101,7 @@ class TestEnvironmentSpecificBehavior:
         docker_style_path = "/app/data/uploads/test.csv"
         result = normalize_data_path(docker_style_path)
         # Should not start with /app in venv
-        assert not str(result).startswith('/app') or 'data' in str(result)
+        assert not str(result).startswith("/app") or "data" in str(result)
 
 
 class TestPathTypeHandling:

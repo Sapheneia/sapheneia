@@ -1,21 +1,48 @@
 # =============================================================================
-# Sapheneia Docker Compose - v2.0
+# Sapheneia v2 — Docker Compose
 # =============================================================================
-# Updated 2026-01-20 for Aleutian integration with 127xx port scheme
-#
-# Port assignments defined in .env file:
-#   ORCHESTRATION_PORT (12700) - Gateway
-#   CHRONOS_T5_*_PORT (12710-12714) - Chronos T5 models
-#   CHRONOS_BOLT_*_PORT (12715-12717) - Chronos Bolt models
-#   TIMESFM_*_PORT (12720-12721) - TimesFM models
-#   UI_PORT (12780) - Web interface
-#   TRADING_API_PORT (12132) - Trading API
-#   DATA_API_PORT (12701) - Data service
+# Stateless service mesh + orchestrator + TimescaleDB + sapheneia-mcp.
+# All services share the internal `sapheneia-net` bridge network.
+# Run with the default `cpu` profile, or `--profile gpu` for CUDA variants.
 # =============================================================================
 
 services:
-  # FastAPI Backend - Forecast API Gateway (routes to all models)
-  # NOTE: Uses module-level state - MUST run with single worker (UVICORN_WORKERS=1)
+
+  # --- Persistence -----------------------------------------------------------
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: sapheneia-timescaledb
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPUS:-2}"
+          memory: "${DB_MEM_LIMIT:-4G}"
+    environment:
+      POSTGRES_USER:     ${TIMESCALEDB_USER:-sapheneia}
+      POSTGRES_PASSWORD: ${TIMESCALEDB_PASSWORD:-sapheneia}
+      POSTGRES_DB:       ${TIMESCALEDB_DB:-sapheneia}
+    ports:
+      # Bound to loopback: services reach the DB by DNS name on sapheneia-net,
+      # so nothing outside this host needs the port. Docker's published-port
+      # rules bypass most host firewall configs, and the default credential is
+      # a one-guess `sapheneia`/`sapheneia`.
+      - "127.0.0.1:${TIMESCALEDB_PORT:-5432}:5432"
+    volumes:
+      # Named volume, NOT a host bind mount. Postgres chowns its data
+      # directory to uid 999 at startup, which fails on a host-owned bind
+      # mount (Docker Desktop's virtiofs rejects the chown and the container
+      # restart-loops). A named volume is created with correct ownership.
+      - timescaledb_data:/var/lib/postgresql/data
+    networks: [sapheneia-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TIMESCALEDB_USER:-sapheneia}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # --- Forecast gateway + per-model containers (CPU profile) ----------------
   forecast:
     profiles: ["cpu"]
     build:
@@ -25,886 +52,425 @@ services:
         MODEL_NAME: all
         MODEL_PORT: 8000
     container_name: sapheneia-forecast
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_CPUS:-4}"
+          memory: "${FORECAST_MEM_LIMIT:-16G}"
     ports:
-      - "${ORCHESTRATION_PORT:-12700}:8000"
-    env_file:
-      - .env
+      - "${FORECAST_PORT:-12700}:8000"
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=all
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-      # URLs for dedicated model containers (used by orchestration service)
-      - CHRONOS_SERVICE_URL=${CHRONOS_SERVICE_URL:-http://forecast-chronos-t5-tiny:8000}
-      - TIMESFM_SERVICE_URL=${TIMESFM_SERVICE_URL:-http://forecast-timesfm:8000}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: all
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
-      - ./data:/app/data
       - ./logs:/app/logs
-      - ./simulations:/app/simulations
       - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s
-
-  # ===========================================================================
-  # Amazon Chronos T5 Series
-  # ===========================================================================
+      start_period: 60s
 
   forecast-chronos-t5-tiny:
     profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
+    build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-tiny
-    ports:
-      - "${CHRONOS_T5_TINY_PORT:-12710}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_SMALL_CPUS:-2}"
+          memory: "${FORECAST_SMALL_MEM_LIMIT:-6G}"
+    ports: ["${CHRONOS_T5_TINY_PORT:-12710}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-tiny
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: chronos
+      MODEL_VARIANT: amazon/chronos-t5-tiny
+      HF_HOME: /models_cache
+      DEVICE: ${DEVICE:-cpu}
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
+    restart: unless-stopped
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 60s }
 
   forecast-chronos-t5-mini:
     profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
+    build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-mini
-    ports:
-      - "${CHRONOS_T5_MINI_PORT:-12711}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_SMALL_CPUS:-2}"
+          memory: "${FORECAST_SMALL_MEM_LIMIT:-6G}"
+    ports: ["${CHRONOS_T5_MINI_PORT:-12711}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-mini
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: chronos
+      MODEL_VARIANT: amazon/chronos-t5-mini
+      HF_HOME: /models_cache
+      DEVICE: ${DEVICE:-cpu}
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
     restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 60s }
 
   forecast-chronos-t5-small:
     profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
+    build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-small
-    ports:
-      - "${CHRONOS_T5_SMALL_PORT:-12712}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_CPUS:-4}"
+          memory: "${FORECAST_MEM_LIMIT:-16G}"
+    ports: ["${CHRONOS_T5_SMALL_PORT:-12712}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-small
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: chronos
+      MODEL_VARIANT: amazon/chronos-t5-small
+      HF_HOME: /models_cache
+      DEVICE: ${DEVICE:-cpu}
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
     restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 60s }
 
   forecast-chronos-t5-base:
     profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
+    build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-base
-    ports:
-      - "${CHRONOS_T5_BASE_PORT:-12713}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_CPUS:-4}"
+          memory: "${FORECAST_MEM_LIMIT:-16G}"
+    ports: ["${CHRONOS_T5_BASE_PORT:-12713}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-base
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: chronos
+      MODEL_VARIANT: amazon/chronos-t5-base
+      HF_HOME: /models_cache
+      DEVICE: ${DEVICE:-cpu}
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
     restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 60s }
 
   forecast-chronos-t5-large:
     profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
+    build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: chronos, MODEL_PORT: 8000 } }
     container_name: forecast-chronos-t5-large
-    ports:
-      - "${CHRONOS_T5_LARGE_PORT:-12714}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_LARGE_CPUS:-6}"
+          memory: "${FORECAST_LARGE_MEM_LIMIT:-24G}"
+    ports: ["${CHRONOS_T5_LARGE_PORT:-12714}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-large
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: chronos
+      MODEL_VARIANT: amazon/chronos-t5-large
+      HF_HOME: /models_cache
+      DEVICE: ${DEVICE:-cpu}
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
     restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 60s }
 
-  # ===========================================================================
-  # Amazon Chronos Bolt Series
-  # ===========================================================================
-
-  forecast-chronos-bolt-mini:
+  forecast-timesfm-2-0:
     profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-bolt-mini
-    ports:
-      - "${CHRONOS_BOLT_MINI_PORT:-12715}:8000"
+    build: { context: ., dockerfile: Dockerfile.forecast, args: { MODEL_NAME: timesfm20, MODEL_PORT: 8000 } }
+    container_name: forecast-timesfm-2-0
+    deploy:
+      resources:
+        limits:
+          cpus: "${FORECAST_LARGE_CPUS:-6}"
+          memory: "${FORECAST_LARGE_MEM_LIMIT:-24G}"
+    ports: ["${TIMESFM_2_0_PORT:-12721}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-bolt-mini
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: timesfm20
+      # Same pin variable every family reads; the canonical /forecast route
+      # refuses to serve a model this container is not pinned to.
+      MODEL_VARIANT: google/timesfm-2.0-500m-pytorch
+      TIMESFM20_DEFAULT_CHECKPOINT: google/timesfm-2.0-500m-pytorch
+      HF_HOME: /models_cache
+      DEVICE: ${DEVICE:-cpu}
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  forecast-chronos-bolt-small:
-    profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-bolt-small
-    ports:
-      - "${CHRONOS_BOLT_SMALL_PORT:-12716}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-bolt-small
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  forecast-chronos-bolt-base:
-    profiles: ["cpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.forecast
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-bolt-base
-    ports:
-      - "${CHRONOS_BOLT_BASE_PORT:-12717}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-bolt-base
-      - HF_HOME=/models_cache
-      - DEVICE=cpu
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # ===========================================================================
-  # Google TimesFM (commented - uncomment to enable)
-  # ===========================================================================
-
-  # forecast-timesfm-2-0:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.forecast
-  #     args:
-  #       MODEL_NAME: timesfm
-  #       MODEL_PORT: 8000
-  #   container_name: forecast-timesfm-2-0
-  #   ports:
-  #     - "${TIMESFM_2_0_PORT:-12720}:8000"
-  #   environment:
-  #     - API_HOST=0.0.0.0
-  #     - API_PORT=8000
-  #     - MODEL_NAME=timesfm
-  #     - MODEL_VARIANT=google/timesfm-2.0-500m-pytorch
-  #     - HF_HOME=/models_cache
-  #     - DEVICE=cpu
-  #     - PYTHONPATH=/app
-  #   volumes:
-  #     - ./forecast:/app/forecast
-  #     - ./logs:/app/logs
-  #     - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-  #   networks:
-  #     - aleutian-network
-  #   restart: "no"
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 120s
-
-  # ===========================================================================
-  # UI Service
-  # ===========================================================================
-
-  forecast-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: all
-        MODEL_PORT: 8000
-    container_name: sapheneia-forecast-gpu
-    ports:
-      - "${ORCHESTRATION_PORT:-12700}:8000"
-    env_file:
-      - .env
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=all
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-      # URLs for dedicated model containers (used by orchestration service)
-      - CHRONOS_SERVICE_URL=${CHRONOS_SERVICE_URL:-http://forecast-chronos-t5-tiny:8000}
-      - TIMESFM_SERVICE_URL=${TIMESFM_SERVICE_URL:-http://forecast-timesfm:8000}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./simulations:/app/simulations
       - forecast_models_timesfm20:/app/forecast/models/timesfm20/local
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
+    restart: "no"
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 120s }
 
+  # GPU variant of the TimesFM container. Same service contract as
+  # forecast-timesfm-2-0 above (same port family, same pin), but built on the
+  # CUDA base with cu121 torch wheels and DEVICE/TIMESFM20_DEFAULT_BACKEND=gpu.
+  #
+  # NOTE on GPU passthrough: podman 4.x's `podman compose` (docker-compose
+  # backend) drops CDI device reservations from this block — known upstream
+  # gap (containers/podman#28436/#19338). On podman >= 5 this works as written.
+  # On 4.x, run the container manually instead:
+  #   podman run -d --device nvidia.com/gpu=all ... (see .env.template comments)
+  forecast-timesfm-gpu:
+    profiles: ["gpu"]
+    build: { context: ., dockerfile: Dockerfile.gpu, args: { MODEL_NAME: timesfm20, MODEL_PORT: 8000 } }
+    container_name: forecast-timesfm-gpu
     deploy:
       resources:
+        limits:
+          cpus: "${FORECAST_LARGE_CPUS:-6}"
+          memory: "${FORECAST_LARGE_MEM_LIMIT:-24G}"
         reservations:
           devices:
+            # Compose-spec standard GPU reservation. capabilities is required.
             - driver: nvidia
-              count: all
+              count: 1
               capabilities: [gpu]
-  forecast-chronos-t5-tiny-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-t5-tiny-gpu
-    ports:
-      - "${CHRONOS_T5_TINY_PORT:-12710}:8000"
+    ports: ["${TIMESFM_GPU_PORT:-12731}:8000"]
     environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-tiny
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      MODEL_NAME: timesfm20
+      MODEL_VARIANT: google/timesfm-2.0-500m-pytorch
+      TIMESFM20_DEFAULT_CHECKPOINT: google/timesfm-2.0-500m-pytorch
+      # TimesFM only moves weights to the GPU when its backend hparam is "gpu"
+      # (torch.device("cuda" if backend=="gpu" ...)). DEVICE alone is not read
+      # by the model loader; both must be gpu/cuda for real GPU inference.
+      TIMESFM20_DEFAULT_BACKEND: gpu
+      DEVICE: cuda
+      HF_HOME: /models_cache
+      PYTHONPATH: /app
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: 1
     volumes:
       - ./forecast:/app/forecast
       - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
+      - ${MODELS_CACHE_PATH:-./.models_cache}:/models_cache
+    networks: [sapheneia-net]
     restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 120s }
 
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-t5-mini-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-t5-mini-gpu
-    ports:
-      - "${CHRONOS_T5_MINI_PORT:-12711}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-mini
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-t5-small-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-t5-small-gpu
-    ports:
-      - "${CHRONOS_T5_SMALL_PORT:-12712}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-small
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-t5-base-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-t5-base-gpu
-    ports:
-      - "${CHRONOS_T5_BASE_PORT:-12713}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-base
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-t5-large-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-t5-large-gpu
-    ports:
-      - "${CHRONOS_T5_LARGE_PORT:-12714}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-t5-large
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-bolt-mini-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-bolt-mini-gpu
-    ports:
-      - "${CHRONOS_BOLT_MINI_PORT:-12715}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-bolt-mini
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-bolt-small-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-bolt-small-gpu
-    ports:
-      - "${CHRONOS_BOLT_SMALL_PORT:-12716}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-bolt-small
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  forecast-chronos-bolt-base-gpu:
-    profiles: ["gpu"]
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-      args:
-        MODEL_NAME: chronos
-        MODEL_PORT: 8000
-    container_name: forecast-chronos-bolt-base-gpu
-    ports:
-      - "${CHRONOS_BOLT_BASE_PORT:-12717}:8000"
-    environment:
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - MODEL_NAME=chronos
-      - MODEL_VARIANT=amazon/chronos-bolt-base
-      - HF_HOME=/models_cache
-      - DEVICE=cuda:0
-      - PYTHONPATH=/app
-      - API_SECRET_KEY=${API_SECRET_KEY}
-    volumes:
-      - ./forecast:/app/forecast
-      - ./logs:/app/logs
-      - ${MODELS_CACHE_PATH:-./models_cache}:/models_cache
-    networks:
-      - aleutian-network
-    restart: "no"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-  ui:
-    build:
-      context: .
-      dockerfile: Dockerfile.ui
-    container_name: sapheneia-ui
-    ports:
-      - "${UI_PORT:-12780}:8080"
-    environment:
-      - UI_API_BASE_URL=http://forecast:8000
-      - UI_PORT=8080
-      - PYTHONPATH=/app
-    volumes:
-      - ./ui:/app/ui
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ui_results:/app/ui/results
-    depends_on:
-      forecast:
-        condition: service_healthy
-        required: false
-      forecast-gpu:
-        condition: service_healthy
-        required: false
-    networks:
-      - aleutian-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ===========================================================================
-  # Trading API Service
-  # ===========================================================================
-
+  # --- Trading service -------------------------------------------------------
   trading:
-    build:
-      context: .
-      dockerfile: Dockerfile.trading
+    build: { context: ., dockerfile: Dockerfile.trading }
     container_name: sapheneia-trading
-    ports:
-      - "${TRADING_API_PORT:-12132}:9000"
-    env_file:
-      - .env
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-1}"
+          memory: "${SERVICE_MEM_LIMIT:-1G}"
+    ports: ["${TRADING_API_PORT:-12132}:9000"]
     environment:
-      - TRADING_API_KEY=${TRADING_API_KEY}
-      - TRADING_API_HOST=0.0.0.0
-      - TRADING_API_PORT=9000
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      - PYTHONPATH=/app
+      TRADING_API_KEY: ${TRADING_API_KEY}
+      TRADING_API_HOST: 0.0.0.0
+      TRADING_API_PORT: 9000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONPATH: /app
     volumes:
       - ./trading:/app/trading
       - ./logs:/app/logs
-    networks:
-      - aleutian-network
+    networks: [sapheneia-net]
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:9000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 40s }
 
-  # ===========================================================================
-  # Data Service (Yahoo Finance → InfluxDB)
-  # ===========================================================================
-
-  data:
-    build:
-      context: .
-      dockerfile: Dockerfile.data
-    container_name: sapheneia-data
-    ports:
-      - "${DATA_API_PORT:-12701}:8000"
-    environment:
-      - INFLUXDB_URL=http://user-influxdb:8086
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-aleutian-dev-token-2026}
-      - INFLUXDB_ORG=${INFLUXDB_ORG:-aleutian-finance}
-      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-financial-data}
-    networks:
-      - aleutian-network
-    restart: unless-stopped
-    depends_on:
-      influxdb:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 15s
-
-  # ===========================================================================
-  # Metrics Service
-  # ===========================================================================
-
+  # --- Metrics service -------------------------------------------------------
   metrics:
-    build:
-      context: .
-      dockerfile: Dockerfile.metrics
+    build: { context: ., dockerfile: Dockerfile.metrics }
     container_name: sapheneia-metrics
-    ports:
-      - "${METRICS_PORT:-12702}:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-1}"
+          memory: "${SERVICE_MEM_LIMIT:-1G}"
+    ports: ["127.0.0.1:${METRICS_PORT:-12702}:8000"]
     environment:
-      - METRICS_HOST=0.0.0.0
-      - METRICS_PORT=8000
-      - LOG_LEVEL=${METRICS_LOG_LEVEL:-INFO}
-    networks:
-      - aleutian-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ===========================================================================
-  # InfluxDB (sapheneia-managed) — replaces Aleutian's user-influxdb
-  # Container name retained as `user-influxdb` so existing INFLUXDB_URL
-  # references (http://user-influxdb:8086) keep working without code change.
-  # ===========================================================================
-  influxdb:
-    image: influxdb:2.7
-    container_name: user-influxdb
-    ports:
-      - "${INFLUXDB_PORT:-12130}:8086"
+      METRICS_HOST: 0.0.0.0
+      METRICS_PORT: 8000
+      METRICS_API_KEY: ${METRICS_API_KEY}
+      METRICS_ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
-      - influxdb_data:/var/lib/influxdb2
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME:-admin}
-      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-adminadmin}
-      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG:-aleutian-finance}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET:-financial-data}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-aleutian-dev-token-2026}
-    networks:
-      - aleutian-network
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    networks: [sapheneia-net]
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 10s }
+
+  # --- Data service (Python) ------------------------------------------------
+  data:
+    build: { context: ., dockerfile: Dockerfile.data }
+    container_name: sapheneia-data
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-2}"
+          memory: "${SERVICE_MEM_LIMIT:-2G}"
+    ports: ["127.0.0.1:${DATA_API_PORT:-12701}:8000"]
+    environment:
+      DATA_HOST: 0.0.0.0
+      DATA_PORT: 8000
+      DATA_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATA_API_KEY: ${DATA_API_KEY:-}
+      DATA_ENVIRONMENT: ${ENVIRONMENT:-development}
+      TIMESCALEDB_HOST: timescaledb
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_USER: ${TIMESCALEDB_USER:-sapheneia}
+      TIMESCALEDB_PASSWORD: ${TIMESCALEDB_PASSWORD:-sapheneia}
+      TIMESCALEDB_DB: ${TIMESCALEDB_DB:-sapheneia}
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    depends_on:
+      timescaledb: { condition: service_healthy }
+    networks: [sapheneia-net]
+    restart: unless-stopped
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 15s }
+
+  # --- Orchestrator service -------------------------------------------------
+  orchestrator:
+    build: { context: ., dockerfile: Dockerfile.orchestrator }
+    container_name: sapheneia-orchestrator
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-2}"
+          memory: "${SERVICE_MEM_LIMIT:-2G}"
+    ports: ["127.0.0.1:${ORCHESTRATOR_PORT:-12704}:8000"]
+    environment:
+      ORCHESTRATOR_HOST: 0.0.0.0
+      ORCHESTRATOR_PORT: 8000
+      ORCHESTRATOR_LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:-}
+      ORCHESTRATOR_ENVIRONMENT: ${ENVIRONMENT:-development}
+      ORCHESTRATOR_DATA_SERVICE_URL: http://data:8000
+      # Deliberately EMPTY: each model is served by its own container, so the
+      # orchestrator resolves model_id -> container via shared/model_registry.py.
+      # Pointing this at a single endpoint makes every model in a sweep return
+      # whichever model that container loaded first.
+      ORCHESTRATOR_FORECAST_SERVICE_URL: ""
+      ORCHESTRATOR_TRADING_SERVICE_URL: http://trading:9000
+      ORCHESTRATOR_METRICS_SERVICE_URL: http://metrics:8000
+      ORCHESTRATOR_DATA_API_KEY: ${DATA_API_KEY:-}
+      ORCHESTRATOR_FORECAST_API_KEY: ${API_SECRET_KEY:-}
+      ORCHESTRATOR_TRADING_API_KEY: ${TRADING_API_KEY:-}
+      ORCHESTRATOR_METRICS_API_KEY: ${METRICS_API_KEY:-}
+      ORCHESTRATOR_MAX_CONCURRENT_RUNS: ${ORCHESTRATOR_MAX_CONCURRENT_RUNS:-4}
+      ORCHESTRATOR_MAX_PER_MODEL: ${ORCHESTRATOR_MAX_PER_MODEL:-2}
+      ORCHESTRATOR_HEARTBEAT_INTERVAL: ${ORCHESTRATOR_HEARTBEAT_INTERVAL:-30}
+      ORCHESTRATOR_HEARTBEAT_STALE_AFTER: ${ORCHESTRATOR_HEARTBEAT_STALE_AFTER:-900}
+      ORCHESTRATOR_RECONCILE_ALL_OWNERS: ${ORCHESTRATOR_RECONCILE_ALL_OWNERS:-true}
+      TIMESCALEDB_HOST: timescaledb
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_USER: ${TIMESCALEDB_USER:-sapheneia}
+      TIMESCALEDB_PASSWORD: ${TIMESCALEDB_PASSWORD:-sapheneia}
+      TIMESCALEDB_DB: ${TIMESCALEDB_DB:-sapheneia}
+    volumes:
+      - ./orchestrator:/app/orchestrator
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      data: { condition: service_healthy }
+    networks: [sapheneia-net]
+    restart: unless-stopped
+    healthcheck: { test: ["CMD", "curl", "-f", "http://localhost:8000/health"], interval: 30s, timeout: 10s, retries: 3, start_period: 15s }
+
+  # --- sapheneia-mcp server (HTTP/SSE) -------------------------------------
+  sapheneia-mcp:
+    build: { context: ., dockerfile: Dockerfile.mcp }
+    container_name: sapheneia-mcp
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVICE_CPUS:-1}"
+          memory: "${SERVICE_MEM_LIMIT:-1G}"
+    ports: ["127.0.0.1:${SAPHENEIA_MCP_PORT:-12703}:8000"]
+    environment:
+      SAPHENEIA_MCP_HOST: 0.0.0.0
+      SAPHENEIA_MCP_PORT: 8000
+      SAPHENEIA_MCP_TOKEN: ${SAPHENEIA_MCP_TOKEN:-}
+      SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE: ${SAPHENEIA_MCP_ALLOW_UNAUTHENTICATED_SSE:-false}
+      SAPHENEIA_MCP_ORCHESTRATOR_URL: http://orchestrator:8000
+      SAPHENEIA_MCP_DATA_URL: http://data:8000
+      # Empty: resolve model_id -> container via shared/model_registry.py.
+      SAPHENEIA_MCP_FORECAST_URL: ""
+      SAPHENEIA_MCP_TRADING_URL: http://trading:9000
+      SAPHENEIA_MCP_METRICS_URL: http://metrics:8000
+      SAPHENEIA_MCP_ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:-}
+      SAPHENEIA_MCP_DATA_API_KEY: ${DATA_API_KEY:-}
+      SAPHENEIA_MCP_FORECAST_API_KEY: ${API_SECRET_KEY:-}
+      SAPHENEIA_MCP_TRADING_API_KEY: ${TRADING_API_KEY:-}
+      SAPHENEIA_MCP_METRICS_API_KEY: ${METRICS_API_KEY:-}
+    depends_on:
+      orchestrator: { condition: service_healthy }
+    networks: [sapheneia-net]
+    restart: unless-stopped
 
 networks:
-  aleutian-network:
-    name: sapheneia-network
+  sapheneia-net:
+    driver: bridge
 
 volumes:
-  forecast_models_timesfm20:
+  timescaledb_data:
     driver: local
-  ui_results:
-  influxdb_data:
+  forecast_models_timesfm20:
     driver: local

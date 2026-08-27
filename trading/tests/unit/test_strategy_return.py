@@ -6,9 +6,9 @@ for return strategy with various position sizing methods.
 """
 
 import pytest
-import numpy as np
-from trading.services.trading import TradingStrategy
+
 from trading.core.exceptions import InvalidParametersError
+from trading.services.trading import TradingStrategy
 
 
 class TestReturnStrategy:
@@ -75,9 +75,7 @@ class TestReturnStrategy:
         # = 10.0 * 0.10 * 100 = 100.0
         assert result["size"] == pytest.approx(100.0, rel=0.01)
 
-    def test_normalized_position_sizing_with_history(
-        self, base_params, sample_ohlc_data
-    ):
+    def test_normalized_position_sizing_with_history(self, base_params, sample_ohlc_data):
         """Test normalized position sizing with history."""
         params = base_params.copy()
         params.update(
