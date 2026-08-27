@@ -279,7 +279,12 @@ class QuantileSignalConfig(BaseModel):
         ...,
         min_items=2,
         max_items=2,
-        description="Percentile range [min, max] where 0 <= min < max <= 100",
+        description=(
+            "Percentile range where 0 <= min < max <= 100. Ranges are half-open "
+            "[min, max), except a range ending at 100, which is closed [min, 100] "
+            "(numpy.histogram bin convention) so the maximum percentile is never "
+            "orphaned."
+        ),
     )
     signal: Literal["buy", "sell", "hold"] = Field(
         ..., description="Signal action for this percentile range"

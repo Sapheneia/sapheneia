@@ -756,7 +756,13 @@ class TradingStrategy:
         matched_signal = None
         for _key, signal_config in quantile_signals.items():
             range_min, range_max = signal_config["range"]
-            if range_min <= percentile < range_max:
+            # numpy.histogram bin convention: ranges are half-open [min, max),
+            # except a terminal range ending at 100, which is closed [min, 100].
+            # The percentile is count(history < forecast)/n, so a forecast above
+            # the entire window — the strongest possible signal — is exactly
+            # 100.0 and would otherwise match no range and silently hold.
+            upper_ok = percentile <= range_max if range_max == 100 else percentile < range_max
+            if range_min <= percentile and upper_ok:
                 matched_signal = signal_config
                 break
 

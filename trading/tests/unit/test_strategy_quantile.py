@@ -382,6 +382,75 @@ class TestQuantileStrategy:
         # The exact failure site was response validation — it must round-trip.
         StrategyResponse(**result)
 
+    def test_percentile_100_lands_in_terminal_range(self, base_params):
+        """A forecast above the entire window must match the top range.
+
+        percentile = count(history < forecast)/n, so forecast > max(history)
+        is exactly 100.0. With uniformly half-open ranges that value matched
+        nothing and the strongest possible signal silently held (observed live:
+        reason "Forecast percentile 100.0 does not match any quantile signal
+        range"). Terminal ranges ending at 100 are closed, per the
+        numpy.histogram last-bin convention.
+        """
+        history = [100.0 + i for i in range(20)]
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "quantile",
+                "forecast_price": 500.0,  # far above every bar -> percentile 100.0
+                "current_price": 119.0,
+                "current_position": 10.0,
+                "available_cash": 100000.0,
+                "which_history": "close",
+                "window_history": 20,
+                "quantile_signals": {
+                    0: {"range": [0, 75], "signal": "hold", "multiplier": 0.0},
+                    1: {"range": [75, 100], "signal": "sell", "multiplier": 1.0},
+                },
+                "open_history": history,
+                "high_history": [h + 2 for h in history],
+                "low_history": [h - 2 for h in history],
+                "close_history": history,
+            }
+        )
+
+        result = TradingStrategy.execute_trading_signal(params)
+
+        assert result["action"] == "sell"
+        assert "does not match any quantile signal range" not in result["reason"]
+
+    def test_interior_range_upper_edge_stays_open(self, base_params):
+        """Only the terminal edge closes: an interior boundary still belongs
+        to the next range up, so adjacent ranges never double-match."""
+        history = [100.0 + i for i in range(20)]
+        params = base_params.copy()
+        params.update(
+            {
+                "strategy_type": "quantile",
+                # forecast equal to history[10] -> 10 of 20 strictly below -> 50.0
+                "forecast_price": 110.0,
+                "current_price": 110.0,
+                "current_position": 10.0,
+                "available_cash": 100000.0,
+                "which_history": "close",
+                "window_history": 20,
+                "quantile_signals": {
+                    0: {"range": [0, 50], "signal": "sell", "multiplier": 1.0},
+                    1: {"range": [50, 100], "signal": "buy", "multiplier": 0.5},
+                },
+                "open_history": history,
+                "high_history": [h + 2 for h in history],
+                "low_history": [h - 2 for h in history],
+                "close_history": history,
+            }
+        )
+
+        result = TradingStrategy.execute_trading_signal(params)
+
+        # 50.0 is the upper edge of [0,50) and the lower edge of [50,100]:
+        # it must land in the upper range.
+        assert result["action"] == "buy"
+
     def test_missing_ohlc_data(self, base_params):
         """Test missing OHLC data raises error."""
         params = base_params.copy()
