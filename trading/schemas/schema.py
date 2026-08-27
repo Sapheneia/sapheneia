@@ -72,6 +72,30 @@ class BaseStrategyRequest(BaseModel):
 # ========== THRESHOLD STRATEGY SCHEMA ==========
 
 
+def _reject_contradictory_history_window(model):
+    """Reject min_history_length > window_history outright.
+
+    pandas rolling is the precedent (`min_periods N must be <= window M`,
+    raised at construction): a minimum that can never be met by the window it
+    applies to is a config contradiction, not a choice of behavior. Before
+    this check the service paths disagreed — std_dev/normalized checked the
+    minimum against the full array before slicing while quantile checked
+    after — so the same contradictory config either ran or silently fell back
+    depending on whether window_history was written explicitly. With the
+    contradiction rejected, the remaining paths are equivalent.
+    """
+    if (
+        model.min_history_length is not None
+        and model.window_history is not None
+        and model.min_history_length > model.window_history
+    ):
+        raise ValueError(
+            f"min_history_length {model.min_history_length} must be <= "
+            f"window_history {model.window_history}"
+        )
+    return model
+
+
 class ThresholdStrategyRequest(BaseStrategyRequest):
     """
     Schema for threshold-based trading strategy.
@@ -124,6 +148,11 @@ class ThresholdStrategyRequest(BaseStrategyRequest):
         default=None,
         description="Close price history (required for ATR threshold type, optional for std_dev)",
     )
+
+    @model_validator(mode="after")
+    def validate_min_history_vs_window(self):
+        """See _reject_contradictory_history_window (pandas rolling precedent)."""
+        return _reject_contradictory_history_window(self)
 
     @model_validator(mode="after")
     def validate_atr_requirements(self):
@@ -220,6 +249,11 @@ class ReturnStrategyRequest(BaseStrategyRequest):
     high_history: list[float] | None = None
     low_history: list[float] | None = None
     close_history: list[float] | None = None
+
+    @model_validator(mode="after")
+    def validate_min_history_vs_window(self):
+        """See _reject_contradictory_history_window (pandas rolling precedent)."""
+        return _reject_contradictory_history_window(self)
 
     @model_validator(mode="after")
     def validate_position_size_constraints(self):
@@ -354,6 +388,11 @@ class QuantileStrategyRequest(BaseStrategyRequest):
     high_history: list[float] = Field(..., description="High price history (required)")
     low_history: list[float] = Field(..., description="Low price history (required)")
     close_history: list[float] = Field(..., description="Close price history (required)")
+
+    @model_validator(mode="after")
+    def validate_min_history_vs_window(self):
+        """See _reject_contradictory_history_window (pandas rolling precedent)."""
+        return _reject_contradictory_history_window(self)
 
     @model_validator(mode="after")
     def validate_ohlc_lengths(self):
