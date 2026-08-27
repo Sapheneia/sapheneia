@@ -27,7 +27,7 @@ htmlcov
 
 # Data and artifacts that must never enter a build context
 .models_cache
-.timescaledb-data
+.timescaledb-data/**
 logs
 simulations/strategies
 *.log
@@ -37,3 +37,4 @@ docs
 tickets
 *.md
 !README.md
+.timescaledb-data.old/**
