@@ -20,6 +20,8 @@ from metrics.core.metrics import (
     calculate_max_drawdown,
     calculate_performance_metrics,
     calculate_sharpe_ratio,
+    calculate_sortino_ratio,
+    calculate_total_return,
     calculate_win_rate,
 )
 
@@ -546,3 +548,33 @@ def test_performance_metrics_partial_failure():
         assert "max_drawdown" in result
         assert "win_rate" in result
         assert result["win_rate"] > 0  # Should still work
+
+
+# --- Sortino ratio and total return ---
+
+
+def test_total_return_compounds():
+    """Total return compounds the series rather than summing it."""
+    assert calculate_total_return([0.10, 0.10]) == pytest.approx(0.21)
+    assert calculate_total_return([0.10, -0.10]) == pytest.approx(-0.01)
+
+
+def test_sortino_ratio_mixed_returns(mixed_returns):
+    """Sortino is finite and positive for a profitable series with some losses."""
+    sortino = calculate_sortino_ratio(mixed_returns)
+    assert isinstance(sortino, float)
+    assert np.isfinite(sortino)
+
+
+def test_sortino_ratio_no_losses_is_finite():
+    """No downside deviation means an undefined ratio, reported as 0.0."""
+    assert calculate_sortino_ratio([0.01, 0.02, 0.03]) == 0.0
+
+
+def test_performance_metrics_include_sortino_and_total_return(mixed_returns):
+    """The performance payload carries the two fields the orchestrator persists."""
+    metrics = calculate_performance_metrics(mixed_returns)
+    assert isinstance(metrics["sortino_ratio"], float)
+    assert metrics["total_return"] == pytest.approx(
+        float((1.0 + pd.Series(mixed_returns)).prod() - 1.0)
+    )

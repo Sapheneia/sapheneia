@@ -4,6 +4,8 @@ Tests for Metrics API Endpoints
 Tests the unified /metrics/v1/compute/ endpoint with different metric parameters.
 """
 
+import pytest
+
 # --- Basic Endpoints Tests ---
 
 
@@ -102,17 +104,19 @@ def test_compute_all_metrics(client):
     assert response.status_code == 200
 
     data = response.json()
-    # Should have all 5 metrics
+    # Should have all 7 metrics
     assert "sharpe_ratio" in data
     assert "max_drawdown" in data
     assert "cagr" in data
     assert "calmar_ratio" in data
     assert "win_rate" in data
+    assert "sortino_ratio" in data
+    assert "total_return" in data
     # Should NOT have interpretation or metadata
     assert "interpretation" not in data
     assert "metadata" not in data
     # Verify it's clean response
-    assert len(data) == 5
+    assert len(data) == 7
 
 
 def test_compute_all_default_example(client):
@@ -122,7 +126,7 @@ def test_compute_all_default_example(client):
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 5
+    assert len(data) == 7
     assert data["win_rate"] == 0.6
 
 
@@ -136,7 +140,7 @@ def test_compute_all_weekly_data(client):
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
-    assert len(response.json()) == 5
+    assert len(response.json()) == 7
 
 
 # --- Compute Endpoint: Individual Metrics ---
@@ -371,3 +375,20 @@ def test_insufficient_data_returns_validation_error_code(client):
     assert response.status_code == 400
     body = response.json()
     assert body["error"] == "VALIDATION_ERROR"
+
+
+# --- Compute Endpoint: sortino and total_return ---
+
+
+def test_compute_sortino_only(client):
+    payload = {"returns": [0.01, -0.02, 0.03, 0.02, -0.01], "metric": "sortino"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 200
+    assert list(response.json()) == ["sortino_ratio"]
+
+
+def test_compute_total_return_only(client):
+    payload = {"returns": [0.10, 0.10], "metric": "total_return"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 200
+    assert response.json()["total_return"] == pytest.approx(0.21)

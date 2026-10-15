@@ -27,7 +27,15 @@ class ComputeRequest(BaseModel):
 
     returns: list[float] = Field(..., description="Return series (e.g., daily returns)")
     metric: Literal[
-        "performance", "all", "sharpe", "max_drawdown", "cagr", "calmar", "win_rate"
+        "performance",
+        "all",
+        "sharpe",
+        "max_drawdown",
+        "cagr",
+        "calmar",
+        "win_rate",
+        "sortino",
+        "total_return",
     ] = Field(
         default="performance",
         description="Metric to compute: 'performance' (all with interpretation), 'all' (all clean), or individual metrics",
@@ -84,13 +92,15 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
 
     ## Metric Options:
 
-    - **performance**: All 5 metrics with interpretation & metadata (default)
-    - **all**: All 5 metrics, clean response (no interpretation/metadata)
+    - **performance**: All 7 metrics with interpretation & metadata (default)
+    - **all**: All 7 metrics, clean response (no interpretation/metadata)
     - **sharpe**: Sharpe Ratio only
     - **max_drawdown**: Maximum Drawdown only
     - **cagr**: CAGR only
     - **calmar**: Calmar Ratio only
     - **win_rate**: Win Rate only
+    - **sortino**: Sortino Ratio only
+    - **total_return**: Total Return only
 
     ## Example Requests:
 
@@ -126,13 +136,15 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
 
     Response format varies by `metric` parameter:
 
-    - **performance**: `{sharpe_ratio, max_drawdown, cagr, calmar_ratio, win_rate, interpretation?, metadata}`
-    - **all**: `{sharpe_ratio, max_drawdown, cagr, calmar_ratio, win_rate}`
+    - **performance**: `{sharpe_ratio, max_drawdown, cagr, calmar_ratio, win_rate, sortino_ratio, total_return, interpretation?, metadata}`
+    - **all**: `{sharpe_ratio, max_drawdown, cagr, calmar_ratio, win_rate, sortino_ratio, total_return}`
     - **sharpe**: `{sharpe_ratio}`
     - **max_drawdown**: `{max_drawdown}`
     - **cagr**: `{cagr}`
     - **calmar**: `{calmar_ratio}`
     - **win_rate**: `{win_rate}`
+    - **sortino**: `{sortino_ratio}`
+    - **total_return**: `{total_return}`
     """
     try:
         # Route to appropriate metric calculation
@@ -157,6 +169,12 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
             cagr = metrics.calculate_cagr(request.returns, request.periods_per_year)
             calmar = metrics.calculate_calmar_ratio(request.returns, request.periods_per_year)
             win_rate = metrics.calculate_win_rate(request.returns)
+            sortino = metrics.calculate_sortino_ratio(
+                request.returns,
+                risk_free_rate=request.risk_free_rate,
+                periods_per_year=request.periods_per_year,
+            )
+            total_return = metrics.calculate_total_return(request.returns)
 
             return {
                 "sharpe_ratio": sharpe,
@@ -164,6 +182,8 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
                 "cagr": cagr,
                 "calmar_ratio": calmar,
                 "win_rate": win_rate,
+                "sortino_ratio": sortino,
+                "total_return": total_return,
             }
 
         elif request.metric == "sharpe":
@@ -190,10 +210,21 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
             win_rate = metrics.calculate_win_rate(request.returns)
             return {"win_rate": win_rate}
 
+        elif request.metric == "sortino":
+            sortino = metrics.calculate_sortino_ratio(
+                request.returns,
+                risk_free_rate=request.risk_free_rate,
+                periods_per_year=request.periods_per_year,
+            )
+            return {"sortino_ratio": sortino}
+
+        elif request.metric == "total_return":
+            return {"total_return": metrics.calculate_total_return(request.returns)}
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid metric: {request.metric}. Must be one of: performance, all, sharpe, max_drawdown, cagr, calmar, win_rate",
+                detail=f"Invalid metric: {request.metric}. Must be one of: performance, all, sharpe, max_drawdown, cagr, calmar, win_rate, sortino, total_return",
             )
 
     except ValueError as e:

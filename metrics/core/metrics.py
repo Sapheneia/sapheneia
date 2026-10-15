@@ -10,6 +10,8 @@ Metrics included:
 - CAGR: Compound Annual Growth Rate
 - Calmar Ratio: Return per unit of maximum drawdown
 - Win Rate: Percentage of profitable periods
+- Sortino Ratio: Return per unit of downside volatility
+- Total Return: Compounded return over the whole series
 
 Usage:
     from metrics.core.metrics import calculate_performance_metrics
@@ -281,6 +283,53 @@ def calculate_win_rate(returns: pd.Series | np.ndarray | list) -> float:
     return float(win_rate)
 
 
+def calculate_sortino_ratio(
+    returns: pd.Series | np.ndarray | list,
+    risk_free_rate: float = 0.0,
+    periods_per_year: int = 252,
+) -> float:
+    """
+    Calculate Sortino Ratio: return per unit of downside volatility.
+
+    Like Sharpe, but only penalises negative returns. Higher is better.
+    A series with no losing periods has no downside deviation, so the ratio is
+    undefined (infinite); it is reported as 0.0, matching how this module
+    reports other non-finite results.
+
+    Args:
+        returns: Return series
+        risk_free_rate: Annual risk-free rate (default: 0)
+        periods_per_year: Number of periods per year
+
+    Returns:
+        Sortino ratio value
+    """
+    returns = _validate_returns(returns)
+
+    try:
+        sortino = qs.stats.sortino(returns, rf=risk_free_rate, periods=periods_per_year)
+        return float(sortino) if np.isfinite(sortino) else 0.0
+    except Exception as e:
+        logger.warning(f"Error calculating sortino ratio: {e}")
+        return 0.0
+
+
+def calculate_total_return(returns: pd.Series | np.ndarray | list) -> float:
+    """
+    Calculate Total Return: compounded return over the whole series.
+
+    Args:
+        returns: Return series
+
+    Returns:
+        Total return as decimal (e.g., 0.12 for +12%)
+    """
+    returns = _validate_returns(returns)
+
+    total = float(np.prod(1.0 + returns.to_numpy(dtype=float))) - 1.0
+    return total if np.isfinite(total) else 0.0
+
+
 # --- Main Function ---
 
 
@@ -294,7 +343,7 @@ def calculate_performance_metrics(
     Calculate all key performance metrics for a return series.
 
     This is the main entry point for metrics calculation. It computes
-    all five core metrics and optionally provides interpretation guidance.
+    all seven core metrics and optionally provides interpretation guidance.
 
     Args:
         returns: Return series (daily, weekly, or monthly returns)
@@ -309,6 +358,8 @@ def calculate_performance_metrics(
             - cagr: Compound annual growth rate
             - calmar_ratio: Return per unit of max drawdown
             - win_rate: Percentage of profitable periods
+            - sortino_ratio: Return per unit of downside volatility
+            - total_return: Compounded return over the series
             - interpretation: Human-readable assessment (if include_interpretation=True)
             - metadata: Configuration used for calculation
 
@@ -333,6 +384,8 @@ def calculate_performance_metrics(
     cagr = calculate_cagr(returns, periods_per_year)
     calmar = calculate_calmar_ratio(returns, periods_per_year)
     win_rate = calculate_win_rate(returns)
+    sortino = calculate_sortino_ratio(returns, risk_free_rate, periods_per_year)
+    total_return = calculate_total_return(returns)
 
     # Build result
     result = {
@@ -341,6 +394,8 @@ def calculate_performance_metrics(
         "cagr": cagr,
         "calmar_ratio": calmar,
         "win_rate": win_rate,
+        "sortino_ratio": sortino,
+        "total_return": total_return,
         "metadata": {
             "risk_free_rate": float(risk_free_rate),
             "periods_per_year": periods_per_year,
