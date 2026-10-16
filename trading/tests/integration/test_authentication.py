@@ -4,8 +4,6 @@ Integration tests for authentication.
 Tests API key validation on protected endpoints.
 """
 
-import pytest
-
 
 class TestAuthentication:
     """Test authentication on API endpoints."""
@@ -24,9 +22,7 @@ class TestAuthentication:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
 
@@ -71,9 +67,11 @@ class TestAuthentication:
             # No Authorization header
         )
 
-        assert (
-            response.status_code == 403
-        )  # FastAPI returns 403 for missing credentials
+        # 401 + WWW-Authenticate is the correct response for a missing credential.
+        # This previously asserted 403, which was FastAPI's HTTPBearer(auto_error=True)
+        # default leaking through rather than an intended contract.
+        assert response.status_code == 401
+        assert response.headers["WWW-Authenticate"] == "Bearer"
 
     def test_malformed_authorization_header(self, test_client):
         """Test malformed Authorization header returns 401."""

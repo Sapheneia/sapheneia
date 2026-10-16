@@ -1,3 +1,0 @@
-"""
-Orchestration module tests.
-"""

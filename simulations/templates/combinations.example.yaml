@@ -1,0 +1,53 @@
+# Example combinations.yaml — drop into the agent's run-simulation skill.
+# 2 tickers x 2 models x 2 trading horizons x 2 context sizes x 2 strategies = 32 cells
+# With forecast-cohort dedup: 8 unique forecast cohorts.
+
+metadata:
+  experiment_id: "exp-baseline-2026-q2"
+  description:   "Baseline grid: SPY/QQQ vs Chronos-T5-Tiny + TimesFM-2.0"
+  author:        "marcelo"
+
+matrix:
+  ticker:           [SPY, QQQ]
+  model:
+    - amazon/chronos-t5-tiny
+    - google/timesfm-2.0-500m-pytorch
+  trading_horizon:  [1, 5]
+  context_size:     [126, 252]
+  strategy_type:    [threshold, quantile]
+
+common:
+  fetch_start_date: "20211201"   # warmup buffer; data fetched from here
+  start_date:       "20230101"   # first evaluation date
+  end_date:         "20240101"   # last evaluation date
+  forecast_horizon: 20           # model output window; must be >= max(trading_horizon)
+  initial_capital:  100000.0
+  initial_position: 0.0
+
+strategy_params:
+  threshold:
+    threshold_type:  percentage
+    threshold_value: 1.5
+    execution_size:  10.0
+  # Strategy CONFIG only. The open/high/low/close history arrays the quantile
+  # strategy also requires are runtime market data: the orchestrator assembles
+  # them per iteration from the bars it fetched (last `window_history` bars
+  # ending at the current date) — never put them here.
+  quantile:
+    which_history:  close
+    window_history: 60
+    quantile_signals:          # dict keyed by label; signals lowercase; multiplier 0..1
+      0: { range: [0,   25],  signal: buy,  multiplier: 1.0 }
+      1: { range: [25,  75],  signal: hold, multiplier: 0.0 }
+      2: { range: [75, 100],  signal: sell, multiplier: 1.0 }
+
+metrics: [sharpe, sortino, cagr, calmar, max_drawdown, win_rate, total_return]
+
+cache:
+  enabled: true       # share forecast computations across the matrix
+  scope:   experiment # only within this experiment_id
+  what:    [forecasts]
+
+parallelism:
+  max_concurrent_runs: 4
+  max_per_model:       2

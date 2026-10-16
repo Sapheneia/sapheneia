@@ -6,9 +6,9 @@ for threshold strategy with various threshold types.
 """
 
 import pytest
-import numpy as np
-from trading.services.trading import TradingStrategy
+
 from trading.core.exceptions import InvalidParametersError
+from trading.services.trading import TradingStrategy
 
 
 class TestThresholdStrategy:

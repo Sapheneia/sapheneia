@@ -1,0 +1,28 @@
+metadata:
+  id: "{{ experiment_id }}__{{ ticker | lower }}__{{ model | replace('/', '_') }}__{{ strategy_type }}__h{{ trading_horizon }}__c{{ context_size }}"
+  experiment_id: "{{ experiment_id }}"
+  description: "Auto-generated from {{ experiment_id }}"
+  author: "agent"
+
+evaluation:
+  ticker:           "{{ ticker }}"
+  fetch_start_date: "{{ common.fetch_start_date }}"
+  start_date:       "{{ common.start_date }}"
+  end_date:         "{{ common.end_date }}"
+
+forecast:
+  model:            "{{ model }}"
+  context_size:     {{ context_size }}
+  forecast_horizon: {{ common.forecast_horizon }}
+
+trading:
+  horizon:          {{ trading_horizon }}
+  initial_capital:  {{ common.initial_capital }}
+  initial_position: {{ common.initial_position }}
+  initial_cash:     {{ common.initial_capital }}
+  strategy_type:    "{{ strategy_type }}"
+  params:           {{ strategy_params[strategy_type] | to_json }}
+
+metrics: {{ metrics | to_json }}
+
+cache: {{ cache | to_json }}

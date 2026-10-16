@@ -5,8 +5,9 @@ Tests utility methods like ATR calculation, returns calculation,
 threshold calculation, history array getters, and portfolio utilities.
 """
 
-import pytest
 import numpy as np
+import pytest
+
 from trading.services.trading import TradingStrategy
 
 

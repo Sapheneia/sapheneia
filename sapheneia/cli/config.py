@@ -5,8 +5,8 @@ Pydantic models for validating strategy YAML config files.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -20,7 +20,7 @@ class StrategyConfig:
     # Evaluation parameters
     ticker: str
     start_date: str  # YYYY-MM-DD format
-    end_date: str    # YYYY-MM-DD format
+    end_date: str  # YYYY-MM-DD format
 
     # Forecast parameters
     model: str
@@ -30,13 +30,13 @@ class StrategyConfig:
     # Trading parameters
     initial_capital: float = 100000.0
     strategy_type: str = "threshold"
-    strategy_params: Dict[str, Any] = field(default_factory=dict)
+    strategy_params: dict[str, Any] = field(default_factory=dict)
 
     # Optional metadata
     description: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StrategyConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "StrategyConfig":
         """
         Create StrategyConfig from a dictionary (parsed YAML).
 
@@ -139,9 +139,11 @@ class StrategyConfig:
             dt = datetime.strptime(date_str, "%Y-%m-%d")
             return dt.strftime("%Y-%m-%d")
         except ValueError:
-            raise ValueError(f"Invalid date format: {date_str}. Expected YYYY-MM-DD or YYYYMMDD")
+            raise ValueError(
+                f"Invalid date format: {date_str}. Expected YYYY-MM-DD or YYYYMMDD"
+            ) from None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "metadata": {

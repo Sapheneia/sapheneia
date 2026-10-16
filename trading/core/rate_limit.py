@@ -5,12 +5,13 @@ Provides request rate limiting using slowapi to prevent abuse and ensure
 fair resource allocation.
 """
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+import logging
+
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-import logging
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from .config import settings
 
@@ -38,8 +39,7 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Res
         JSON response with 429 status code
     """
     logger.warning(
-        f"Rate limit exceeded for {get_remote_address(request)} "
-        f"on path {request.url.path}"
+        f"Rate limit exceeded for {get_remote_address(request)} on path {request.url.path}"
     )
 
     return JSONResponse(

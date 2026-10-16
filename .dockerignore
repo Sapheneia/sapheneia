@@ -1,0 +1,40 @@
+# Keep secrets and bulk out of the build context.
+#
+# .env is the important one: nothing in the images needs it (runtime config
+# comes from compose `environment:` blocks), and a stray `COPY . .` would
+# otherwise bake live credentials into a shipped image layer.
+.env
+.env.*
+!.env.template
+
+# VCS / tooling
+.git
+.gitignore
+.github
+.config
+.claude
+
+# Local state and caches
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# Data and artifacts that must never enter a build context
+.models_cache
+.timescaledb-data/**
+logs
+simulations/strategies
+*.log
+
+# Docs and local scratch
+docs
+tickets
+*.md
+!README.md
+.timescaledb-data.old/**

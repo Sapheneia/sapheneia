@@ -1,12 +1,19 @@
-# Sapheneia API Dockerfile (GPU Accelerated)
-# FastAPI backend for time series forecasting - supports multiple models
+# Sapheneia Forecast API — GPU accelerated (TimesFM 2.0 / Chronos)
+#
+# Same layout as Dockerfile.forecast, but on a CUDA base with GPU wheels:
+#   - nvidia/cuda runtime base (driver on host supplies the kernel module)
+#   - torch from the cu121 index
+#   - MODEL_VARIANT pin + non-root user, matching the CPU image's guards
 #
 # Build args:
-#   MODEL_NAME: Name of the model to run (default: all models via main API)
-#   MODEL_PORT: Port to expose (default: 8000)
+#   MODEL_NAME: chronos | timesfm20 | all (default: all)
+#   MODEL_PORT: container port (default: 8000)
 #
-# Examples:
-#   docker build -f Dockerfile.gpu -t sapheneia-api-gpu .
+# Run requirements (see docker-compose.yml `forecast-timesfm-gpu` service):
+#   NVIDIA driver on host + CDI spec generated:
+#     nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+#   podman >= 5 honors CDI through compose; on podman 4.x pass the device
+#   explicitly (podman run --device nvidia.com/gpu=all) or use podman-compose.
 
 FROM docker.io/nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
@@ -14,18 +21,16 @@ FROM docker.io/nvidia/cuda:12.1.1-runtime-ubuntu22.04
 ARG MODEL_NAME=all
 ARG MODEL_PORT=8000
 
-# Set as environment variables
 ENV MODEL_NAME=${MODEL_NAME}
 ENV MODEL_PORT=${MODEL_PORT}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-LABEL maintainer="Sapheneia Team"
 LABEL description="Sapheneia Forecasting API (GPU) - Model: ${MODEL_NAME}"
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (python3.11 + curl for healthchecks/uv)
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -42,44 +47,45 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
     mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
 
-# Verify uv is installed
 RUN which uv && uv --version
 
-# Copy project files
+# Copy project files. §4.3: forecast is a leaf service — shared/ ships (it holds
+# the contracts and registry), orchestration/ must never be copied into it.
 COPY pyproject.toml ./
 COPY forecast/ ./forecast/
-COPY orchestration/ ./orchestration/
-COPY .env .env
+COPY shared/ ./shared/
 
-# Install base dependencies with forecasting extras (includes uvicorn, fastapi, etc.)
+# Base deps first (torch from PyPI here is CPU/cu-default; the per-model step
+# below re-pins torch to the cu121 index so both orders converge on CUDA builds)
 RUN uv pip install --system --no-cache -e ".[forecasting]"
 
-# Install model-specific dependencies based on MODEL_NAME
-# Explicitly use cu121 index for Torch
+# Model-specific deps, torch pinned to the cu121 index
 RUN if [ "$MODEL_NAME" = "timesfm20" ] || [ "$MODEL_NAME" = "all" ]; then \
         echo "Installing TimesFM GPU dependencies..." && \
         uv pip install --system --no-cache torch --extra-index-url https://download.pytorch.org/whl/cu121; \
     fi
 
-# Install Chronos dependencies
 RUN if [ "$MODEL_NAME" = "chronos" ] || [ "$MODEL_NAME" = "all" ]; then \
         echo "Installing Chronos GPU dependencies..." && \
         uv pip install --system --no-cache torch git+https://github.com/amazon-science/chronos-forecasting.git --extra-index-url https://download.pytorch.org/whl/cu121; \
     fi
 
-# Create necessary directories for all models
+# Create necessary directories
 RUN mkdir -p \
     forecast/models/timesfm20/local \
     forecast/models/chronos/local \
     data/uploads \
     logs
 
-# Expose the specified port
+# Run as an unprivileged user, same as the CPU image. Bind-mounted host dirs
+# (./logs, model cache) must be writable by uid 1000.
+RUN useradd --create-home --uid 1000 sapheneia \
+    && chown -R sapheneia:sapheneia /app
+USER sapheneia
+
 EXPOSE ${MODEL_PORT}
 
-# Health check - adjust port based on MODEL_PORT
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -f http://localhost:${MODEL_PORT}/health || exit 1
 
-# Run API server on specified port
 CMD ["uvicorn", "forecast.main:app", "--host", "0.0.0.0", "--port", "8000"]

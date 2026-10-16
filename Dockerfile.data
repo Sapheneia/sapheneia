@@ -1,31 +1,36 @@
-# Sapheneia Finance Data Service Dockerfile (Python)
-# Fetches Yahoo Finance data and reads/writes InfluxDB.
+# Sapheneia data service (Python rewrite)
+FROM python:3.11.11-slim
 
-FROM python:3.11-slim AS runtime
-
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+LABEL maintainer="Sapheneia"
+LABEL description="Sapheneia data service — Yahoo Finance + TimescaleDB cache"
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir \
-    "fastapi>=0.109.0" \
-    "uvicorn[standard]>=0.27.0" \
-    "pydantic>=2.5.0" \
-    "httpx>=0.25.0" \
-    "influxdb-client>=1.40.0"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY services/data_service /app/services/data_service
+ENV UV_HOME=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.cargo/bin/uv /usr/local/bin/uv 2>/dev/null || \
+    mv /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+
+COPY pyproject.toml ./
+COPY shared/ ./shared/
+COPY data/ ./data/
+
+RUN uv pip install --system --no-cache -e ".[data,db]"
+
+# Run as an unprivileged user. Bind-mounted host dirs (./logs, model cache)
+# must be writable by uid 1000.
+RUN useradd --create-home --uid 1000 sapheneia \
+    && chown -R sapheneia:sapheneia /app
+USER sapheneia
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "services.data_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "data.main:app", "--host", "0.0.0.0", "--port", "8000"]

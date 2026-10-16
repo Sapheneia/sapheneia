@@ -4,8 +4,6 @@ Integration tests for schema validation.
 Tests Pydantic schema validation on request bodies.
 """
 
-import pytest
-
 
 class TestSchemaValidation:
     """Test schema validation for different strategy types."""
@@ -25,9 +23,7 @@ class TestSchemaValidation:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Accept both 200 (success) and 429 (rate limited) as valid responses
         # Rate limiting is working correctly, so 429 is acceptable
@@ -54,9 +50,7 @@ class TestSchemaValidation:
             "execution_size": 10.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Accept both 200 (success) and 429 (rate limited) as valid responses
         # Rate limiting is working correctly, so 429 is acceptable
@@ -69,9 +63,7 @@ class TestSchemaValidation:
             assert "size" in data
             assert "value" in data
 
-    def test_quantile_strategy_schema_validation(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_quantile_strategy_schema_validation(self, test_client, auth_headers, sample_ohlc_data):
         """Test quantile strategy schema validation."""
         payload = {
             "strategy_type": "quantile",
@@ -82,17 +74,13 @@ class TestSchemaValidation:
             "initial_capital": 100000.0,
             "which_history": "close",
             "window_history": 20,
-            "quantile_signals": {
-                1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}
-            },
+            "quantile_signals": {1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}},
             "position_sizing": "fixed",
             "execution_size": 100.0,
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Accept both 200 (success) and 429 (rate limited) as valid responses
         # Rate limiting is working correctly, so 429 is acceptable
@@ -120,9 +108,7 @@ class TestSchemaValidation:
             # Missing OHLC data
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should return 422 validation error or 400 (depending on validation timing)
         assert response.status_code in [400, 422]
@@ -138,17 +124,13 @@ class TestSchemaValidation:
             "initial_capital": 100000.0,
             "which_history": "close",
             "window_history": 20,
-            "quantile_signals": {
-                1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}
-            },
+            "quantile_signals": {1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}},
             "position_sizing": "fixed",
             "execution_size": 100.0,
             # Missing OHLC data
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -163,9 +145,7 @@ class TestSchemaValidation:
             "initial_capital": 100000.0,
             "which_history": "close",
             "window_history": 20,
-            "quantile_signals": {
-                1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}
-            },
+            "quantile_signals": {1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}},
             "position_sizing": "fixed",
             "execution_size": 100.0,
             "open_history": [100.0] * 20,
@@ -174,9 +154,7 @@ class TestSchemaValidation:
             "close_history": [100.0] * 15,  # Different length
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -196,15 +174,11 @@ class TestSchemaValidation:
             "min_position_size": 10.0,  # Greater than max
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
-    def test_quantile_range_overlap_validation(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_quantile_range_overlap_validation(self, test_client, auth_headers, sample_ohlc_data):
         """Test that overlapping quantile signal ranges are rejected."""
         payload = {
             "strategy_type": "quantile",
@@ -228,9 +202,7 @@ class TestSchemaValidation:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
         data = response.json()
@@ -265,16 +237,12 @@ class TestSchemaValidation:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should accept (200) or rate limit (429) - both are valid
         assert response.status_code in [200, 429]
 
-    def test_quantile_signal_range_validation(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_quantile_signal_range_validation(self, test_client, auth_headers, sample_ohlc_data):
         """Test quantile signal range validation (0-100, min < max)."""
         payload = {
             "strategy_type": "quantile",
@@ -297,15 +265,11 @@ class TestSchemaValidation:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
-    def test_window_history_maximum_validation(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_window_history_maximum_validation(self, test_client, auth_headers, sample_ohlc_data):
         """Test that window_history exceeding maximum (10000) is rejected."""
         from trading.core.config import settings
 
@@ -324,9 +288,7 @@ class TestSchemaValidation:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
         data = response.json()
@@ -349,9 +311,7 @@ class TestSchemaValidation:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -365,23 +325,17 @@ class TestSchemaValidation:
             "initial_capital": 100000.0,
             "which_history": "close",
             "window_history": settings.MAX_HISTORY_WINDOW + 1,  # Exceeds max
-            "quantile_signals": {
-                1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}
-            },
+            "quantile_signals": {1: {"range": [90, 95], "signal": "buy", "multiplier": 0.75}},
             "position_sizing": "fixed",
             "execution_size": 100.0,
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
-    def test_window_history_at_maximum_accepted(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_window_history_at_maximum_accepted(self, test_client, auth_headers, sample_ohlc_data):
         """Test that window_history at maximum (10000) is accepted."""
         from trading.core.config import settings
 
@@ -407,9 +361,7 @@ class TestSchemaValidation:
         }
         payload.update(extended_ohlc)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         # Should accept (200) or rate limit (429) - both are valid
         assert response.status_code in [200, 429]

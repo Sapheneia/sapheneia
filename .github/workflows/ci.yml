@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, agentic-refactor]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-format:
+    name: Lint + Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install dev tooling
+        # ruff/mypy/pytest live in the `dev` *extra* (not [dependency-groups]).
+        run: uv sync --extra dev --no-install-project
+      - name: Ruff check
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  typecheck:
+    name: Type-check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install dev tooling + runtime deps
+        # `--extra trading` brings slowapi, which shared/rate_limit.py imports.
+        run: uv sync --extra dev --extra trading --extra data --extra db --extra mcp --extra metrics --no-install-project
+      - name: mypy
+        # Scope comes from [tool.mypy] files in pyproject.toml.
+        run: uv run mypy
+
+  test:
+    name: Tests (unit)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install package + test deps
+        # Leaves out `forecasting` (torch/jax/timesfm) — its tests skip gracefully.
+        run: uv sync --extra dev --extra data --extra db --extra mcp --extra trading --extra metrics
+      - name: Run unit tests
+        run: uv run pytest -m "not integration" -q
+        env:
+          TIMESCALEDB_HOST: localhost
+
+  integration:
+    name: Tests (integration, real TimescaleDB)
+    runs-on: ubuntu-latest
+    # The unit job above runs `-m "not integration"`, which excludes every test
+    # that touches a real database. Without this job, none of the repository
+    # SQL — the cache-lookup JOIN, reconcile_stale's interval query, the
+    # migration itself — is ever executed against Postgres, so a syntax error
+    # or a wrong column name cannot fail the build.
+    services:
+      timescaledb:
+        # Keep in sync with TIMESCALEDB_IMAGE in conftest.py and
+        # docker-compose.yml; tests/test_image_pins.py asserts they match.
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: sapheneia
+          POSTGRES_PASSWORD: sapheneia
+          POSTGRES_DB: sapheneia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sapheneia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install package + test deps
+        run: uv sync --extra dev --extra data --extra db --extra mcp --extra trading --extra metrics
+      - name: Run full test suite against real TimescaleDB
+        # Full suite (not just `-m integration`): the coverage gate (35%) only
+        # clears on the complete run (unit + integration ≈ 53%).
+        run: uv run pytest -q
+        env:
+          # The service container above is disposable, so opting in to the
+          # destructive schema reset is safe here. It is deliberately NOT the
+          # default: without this the suite uses a throwaway testcontainer.
+          SAPHENEIA_TEST_ALLOW_DB_RESET: "1"
+          TIMESCALEDB_HOST: localhost
+          TIMESCALEDB_PORT: "5432"
+          TIMESCALEDB_USER: sapheneia
+          TIMESCALEDB_PASSWORD: sapheneia
+          TIMESCALEDB_DB: sapheneia

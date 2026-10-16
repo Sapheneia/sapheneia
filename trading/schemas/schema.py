@@ -5,18 +5,18 @@ Defines request and response models for all trading strategy endpoints with
 comprehensive validation and documentation.
 """
 
+from enum import StrEnum
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Literal, Dict, List, Optional, Union, Any
-from enum import Enum
 
 # Import settings for constants
 from ..core.config import settings
 
-
 # ========== ENUM CLASSES ==========
 
 
-class StrategyTypeEnum(str, Enum):
+class StrategyTypeEnum(StrEnum):
     """
     Enumeration of supported trading strategy types.
 
@@ -41,15 +41,9 @@ class BaseStrategyRequest(BaseModel):
     Contains common fields required by all trading strategies.
     """
 
-    strategy_type: StrategyTypeEnum = Field(
-        ..., description="Type of trading strategy to execute"
-    )
-    forecast_price: float = Field(
-        ..., gt=0, description="Forecasted price (must be positive)"
-    )
-    current_price: float = Field(
-        ..., gt=0, description="Current market price (must be positive)"
-    )
+    strategy_type: StrategyTypeEnum = Field(..., description="Type of trading strategy to execute")
+    forecast_price: float = Field(..., gt=0, description="Forecasted price (must be positive)")
+    current_price: float = Field(..., gt=0, description="Current market price (must be positive)")
     current_position: float = Field(
         ...,
         ge=0,
@@ -78,6 +72,30 @@ class BaseStrategyRequest(BaseModel):
 # ========== THRESHOLD STRATEGY SCHEMA ==========
 
 
+def _reject_contradictory_history_window(model):
+    """Reject min_history_length > window_history outright.
+
+    pandas rolling is the precedent (`min_periods N must be <= window M`,
+    raised at construction): a minimum that can never be met by the window it
+    applies to is a config contradiction, not a choice of behavior. Before
+    this check the service paths disagreed — std_dev/normalized checked the
+    minimum against the full array before slicing while quantile checked
+    after — so the same contradictory config either ran or silently fell back
+    depending on whether window_history was written explicitly. With the
+    contradiction rejected, the remaining paths are equivalent.
+    """
+    if (
+        model.min_history_length is not None
+        and model.window_history is not None
+        and model.min_history_length > model.window_history
+    ):
+        raise ValueError(
+            f"min_history_length {model.min_history_length} must be <= "
+            f"window_history {model.window_history}"
+        )
+    return model
+
+
 class ThresholdStrategyRequest(BaseStrategyRequest):
     """
     Schema for threshold-based trading strategy.
@@ -100,51 +118,55 @@ class ThresholdStrategyRequest(BaseStrategyRequest):
     )
 
     # Conditional fields for std_dev and atr
-    which_history: Optional[Literal["open", "high", "low", "close"]] = Field(
+    which_history: Literal["open", "high", "low", "close"] | None = Field(
         default="close",
         description="History type to use for std_dev threshold calculations",
     )
-    window_history: Optional[int] = Field(
+    window_history: int | None = Field(
         default=settings.DEFAULT_WINDOW_SIZE,
         gt=0,
         le=settings.MAX_HISTORY_WINDOW,
         description=f"Window size for std_dev/atr calculations (must be positive, max: {settings.MAX_HISTORY_WINDOW})",
     )
-    min_history_length: Optional[int] = Field(
+    min_history_length: int | None = Field(
         default=2,
         gt=0,
         description="Minimum history length required (must be positive)",
     )
 
     # OHLC data (required for atr, optional for std_dev)
-    open_history: Optional[List[float]] = Field(
+    open_history: list[float] | None = Field(
         default=None, description="Open price history (required for ATR threshold type)"
     )
-    high_history: Optional[List[float]] = Field(
+    high_history: list[float] | None = Field(
         default=None, description="High price history (required for ATR threshold type)"
     )
-    low_history: Optional[List[float]] = Field(
+    low_history: list[float] | None = Field(
         default=None, description="Low price history (required for ATR threshold type)"
     )
-    close_history: Optional[List[float]] = Field(
+    close_history: list[float] | None = Field(
         default=None,
         description="Close price history (required for ATR threshold type, optional for std_dev)",
     )
 
     @model_validator(mode="after")
+    def validate_min_history_vs_window(self):
+        """See _reject_contradictory_history_window (pandas rolling precedent)."""
+        return _reject_contradictory_history_window(self)
+
+    @model_validator(mode="after")
     def validate_atr_requirements(self):
         """Validate that OHLC data is provided when threshold_type is 'atr'."""
-        if self.threshold_type == "atr":
-            if (
-                self.open_history is None
-                or self.high_history is None
-                or self.low_history is None
-                or self.close_history is None
-            ):
-                raise ValueError(
-                    "All OHLC histories (open_history, high_history, low_history, close_history) "
-                    "are required when threshold_type is 'atr'"
-                )
+        if self.threshold_type == "atr" and (
+            self.open_history is None
+            or self.high_history is None
+            or self.low_history is None
+            or self.close_history is None
+        ):
+            raise ValueError(
+                "All OHLC histories (open_history, high_history, low_history, close_history) "
+                "are required when threshold_type is 'atr'"
+            )
         return self
 
     @field_validator("open_history", "high_history", "low_history", "close_history")
@@ -154,9 +176,7 @@ class ThresholdStrategyRequest(BaseStrategyRequest):
         if v is not None and len(v) == 0:
             raise ValueError("History arrays cannot be empty")
         if v is not None and len(v) > settings.MAX_ARRAY_SIZE:
-            raise ValueError(
-                f"History arrays cannot exceed {settings.MAX_ARRAY_SIZE} elements"
-            )
+            raise ValueError(f"History arrays cannot exceed {settings.MAX_ARRAY_SIZE} elements")
         return v
 
     class Config:
@@ -198,37 +218,42 @@ class ReturnStrategyRequest(BaseStrategyRequest):
     execution_size: float = Field(
         default=1.0, gt=0, description="Base execution size (must be positive)"
     )
-    max_position_size: Optional[float] = Field(
+    max_position_size: float | None = Field(
         default=None,
         gt=0,
         description="Maximum position size constraint (optional, must be positive if provided)",
     )
-    min_position_size: Optional[float] = Field(
+    min_position_size: float | None = Field(
         default=None,
         gt=0,
         description="Minimum position size constraint (optional, must be positive if provided)",
     )
 
     # Conditional for normalized sizing
-    which_history: Optional[Literal["open", "high", "low", "close"]] = Field(
+    which_history: Literal["open", "high", "low", "close"] | None = Field(
         default="close",
         description="History type to use for normalized position sizing",
     )
-    window_history: Optional[int] = Field(
+    window_history: int | None = Field(
         default=settings.DEFAULT_WINDOW_SIZE,
         gt=0,
         le=settings.MAX_HISTORY_WINDOW,
         description=f"Window size for normalized sizing calculations (must be positive, max: {settings.MAX_HISTORY_WINDOW})",
     )
-    min_history_length: Optional[int] = Field(
+    min_history_length: int | None = Field(
         default=2,
         gt=0,
         description="Minimum history length required (must be positive)",
     )
-    open_history: Optional[List[float]] = None
-    high_history: Optional[List[float]] = None
-    low_history: Optional[List[float]] = None
-    close_history: Optional[List[float]] = None
+    open_history: list[float] | None = None
+    high_history: list[float] | None = None
+    low_history: list[float] | None = None
+    close_history: list[float] | None = None
+
+    @model_validator(mode="after")
+    def validate_min_history_vs_window(self):
+        """See _reject_contradictory_history_window (pandas rolling precedent)."""
+        return _reject_contradictory_history_window(self)
 
     @model_validator(mode="after")
     def validate_position_size_constraints(self):
@@ -284,11 +309,16 @@ class QuantileSignalConfig(BaseModel):
     Defines a signal action (buy/sell/hold) for a specific percentile range.
     """
 
-    range: List[float] = Field(
+    range: list[float] = Field(
         ...,
         min_items=2,
         max_items=2,
-        description="Percentile range [min, max] where 0 <= min < max <= 100",
+        description=(
+            "Percentile range where 0 <= min < max <= 100. Ranges are half-open "
+            "[min, max), except a range ending at 100, which is closed [min, 100] "
+            "(numpy.histogram bin convention) so the maximum percentile is never "
+            "orphaned."
+        ),
     )
     signal: Literal["buy", "sell", "hold"] = Field(
         ..., description="Signal action for this percentile range"
@@ -311,9 +341,7 @@ class QuantileSignalConfig(BaseModel):
         return v
 
     class Config:
-        json_schema_extra = {
-            "example": {"range": [90, 95], "signal": "buy", "multiplier": 0.75}
-        }
+        json_schema_extra = {"example": {"range": [90, 95], "signal": "buy", "multiplier": 0.75}}
 
 
 class QuantileStrategyRequest(BaseStrategyRequest):
@@ -334,34 +362,37 @@ class QuantileStrategyRequest(BaseStrategyRequest):
         le=settings.MAX_HISTORY_WINDOW,
         description=f"Window size for quantile calculation (must be positive, max: {settings.MAX_HISTORY_WINDOW})",
     )
-    quantile_signals: Dict[int, QuantileSignalConfig] = Field(
+    quantile_signals: dict[int, QuantileSignalConfig] = Field(
         ..., description="Quantile signal configuration dictionary"
     )
-    position_sizing: Optional[Literal["fixed", "normalized"]] = Field(
+    position_sizing: Literal["fixed", "normalized"] | None = Field(
         default="fixed", description="Position sizing method (default: fixed)"
     )
     execution_size: float = Field(
         default=1.0, gt=0, description="Base execution size (must be positive)"
     )
-    max_position_size: Optional[float] = Field(
+    max_position_size: float | None = Field(
         default=None, gt=0, description="Maximum position size constraint (optional)"
     )
-    min_position_size: Optional[float] = Field(
+    min_position_size: float | None = Field(
         default=None, gt=0, description="Minimum position size constraint (optional)"
     )
-    min_history_length: Optional[int] = Field(
+    min_history_length: int | None = Field(
         default=2,
         gt=0,
         description="Minimum history length required (must be positive)",
     )
 
     # OHLC data (required)
-    open_history: List[float] = Field(..., description="Open price history (required)")
-    high_history: List[float] = Field(..., description="High price history (required)")
-    low_history: List[float] = Field(..., description="Low price history (required)")
-    close_history: List[float] = Field(
-        ..., description="Close price history (required)"
-    )
+    open_history: list[float] = Field(..., description="Open price history (required)")
+    high_history: list[float] = Field(..., description="High price history (required)")
+    low_history: list[float] = Field(..., description="Low price history (required)")
+    close_history: list[float] = Field(..., description="Close price history (required)")
+
+    @model_validator(mode="after")
+    def validate_min_history_vs_window(self):
+        """See _reject_contradictory_history_window (pandas rolling precedent)."""
+        return _reject_contradictory_history_window(self)
 
     @model_validator(mode="after")
     def validate_ohlc_lengths(self):
@@ -448,9 +479,7 @@ class QuantileStrategyRequest(BaseStrategyRequest):
 # ========== DISCRIMINATED UNION ==========
 
 # Union type for request routing (discriminated by strategy_type)
-StrategyRequest = Union[
-    ThresholdStrategyRequest, ReturnStrategyRequest, QuantileStrategyRequest
-]
+StrategyRequest = ThresholdStrategyRequest | ReturnStrategyRequest | QuantileStrategyRequest
 
 
 # ========== RESPONSE SCHEMAS ==========
@@ -474,12 +503,8 @@ class StrategyResponse(BaseModel):
     available_cash: float = Field(
         ..., ge=0, description="Available cash after trade (non-negative)"
     )
-    position_after: float = Field(
-        ..., ge=0, description="Position size after trade (non-negative)"
-    )
-    stopped: bool = Field(
-        ..., description="Whether strategy is stopped (no capital remaining)"
-    )
+    position_after: float = Field(..., ge=0, description="Position size after trade (non-negative)")
+    stopped: bool = Field(..., description="Whether strategy is stopped (no capital remaining)")
 
     class Config:
         json_schema_extra = {
@@ -504,7 +529,7 @@ class StrategyInfo(BaseModel):
 
     type: str = Field(..., description="Strategy type identifier")
     description: str = Field(..., description="Strategy description")
-    parameters: Dict[str, Any] = Field(..., description="Parameter requirements")
+    parameters: dict[str, Any] = Field(..., description="Parameter requirements")
 
 
 class StrategyListResponse(BaseModel):
@@ -514,9 +539,7 @@ class StrategyListResponse(BaseModel):
     Contains information about all supported trading strategies.
     """
 
-    strategies: List[StrategyInfo] = Field(
-        ..., description="List of available trading strategies"
-    )
+    strategies: list[StrategyInfo] = Field(..., description="List of available trading strategies")
 
     class Config:
         json_schema_extra = {

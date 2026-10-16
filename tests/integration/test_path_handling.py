@@ -5,10 +5,9 @@ Tests ensure that path handling works consistently in both Docker and venv
 environments, addressing the critical issues from Phase 2.
 """
 
-import pytest
-import os
-from unittest.mock import patch
 from pathlib import Path
+
+import pytest
 
 # Import IS_DOCKER to use in skipif markers
 from forecast.core.paths import IS_DOCKER
@@ -25,7 +24,7 @@ class TestVenvEnvironment:
         result = normalize_data_path("test.csv")
 
         # Should not start with /app in venv
-        assert not str(result).startswith('/app')
+        assert not str(result).startswith("/app")
         assert "data" in str(result)
         assert "uploads" in str(result)
 
@@ -40,7 +39,7 @@ class TestVenvEnvironment:
 
         # Should not start with /app
         result_str = str(result)
-        assert not result_str.startswith('/app'), f"Path still starts with /app: {result_str}"
+        assert not result_str.startswith("/app"), f"Path still starts with /app: {result_str}"
 
 
 class TestDockerEnvironment:
@@ -54,7 +53,7 @@ class TestDockerEnvironment:
         result = normalize_data_path("test.csv")
 
         # Should start with /app in Docker
-        assert str(result).startswith('/app/data/uploads')
+        assert str(result).startswith("/app/data/uploads")
 
     @pytest.mark.skipif(not IS_DOCKER, reason="Test only applies when IN Docker")
     def test_docker_handles_venv_paths(self):
@@ -63,7 +62,7 @@ class TestDockerEnvironment:
 
         # Relative path should resolve to Docker path
         result = normalize_data_path("data/uploads/test.csv")
-        assert str(result).startswith('/app')
+        assert str(result).startswith("/app")
 
 
 class TestCrossEnvironmentCompatibility:
@@ -99,7 +98,7 @@ class TestRealEnvironment:
 
     def test_current_environment_paths(self):
         """Test path handling in the actual environment we're running in."""
-        from forecast.core.paths import normalize_data_path, IS_DOCKER
+        from forecast.core.paths import IS_DOCKER, normalize_data_path
 
         # Test basic filename resolution
         result = normalize_data_path("test.csv")
@@ -110,10 +109,10 @@ class TestRealEnvironment:
 
         # Environment-specific checks
         if IS_DOCKER:
-            assert str(result).startswith('/app')
+            assert str(result).startswith("/app")
         else:
             # In venv, path should be relative to project
-            assert not str(result).startswith('/app')
+            assert not str(result).startswith("/app")
 
     def test_current_environment_security(self):
         """Test security validation in current environment."""
@@ -135,7 +134,7 @@ class TestPathConsistency:
             "test.csv",
             "data/uploads/test.csv",
             "local://test.csv",
-            "local://data/uploads/test.csv"
+            "local://data/uploads/test.csv",
         ]
 
         # All should resolve to the same filename (even if exact paths differ)

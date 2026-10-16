@@ -4,28 +4,29 @@ Tests for Financial Performance Metrics Module
 Tests the metrics_api/core/metrics.py module functions and calculations.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+import pytest
+
 from metrics.core.metrics import (
-    calculate_sharpe_ratio,
-    calculate_max_drawdown,
-    calculate_cagr,
-    calculate_calmar_ratio,
-    calculate_win_rate,
-    calculate_performance_metrics,
-    _interpret_sharpe,
     _interpret_calmar,
+    _interpret_sharpe,
     _interpret_win_rate,
     _validate_returns,
-    SHARPE_THRESHOLDS,
-    CALMAR_THRESHOLDS,
-    WIN_RATE_THRESHOLDS
+    calculate_cagr,
+    calculate_calmar_ratio,
+    calculate_max_drawdown,
+    calculate_performance_metrics,
+    calculate_sharpe_ratio,
+    calculate_sortino_ratio,
+    calculate_total_return,
+    calculate_win_rate,
 )
 
-
 # --- Fixtures ---
+
 
 @pytest.fixture
 def positive_returns():
@@ -61,6 +62,7 @@ def realistic_daily_returns():
 
 
 # --- Validation Tests ---
+
 
 def test_validate_returns_series():
     """Test validation of pandas Series."""
@@ -114,6 +116,7 @@ def test_validate_returns_insufficient_data():
 
 # --- Sharpe Ratio Tests ---
 
+
 def test_sharpe_ratio_positive_returns(positive_returns):
     """Test Sharpe ratio with positive returns."""
     sharpe = calculate_sharpe_ratio(positive_returns)
@@ -152,6 +155,7 @@ def test_sharpe_ratio_with_int_risk_free_rate(mixed_returns):
 
 # --- Maximum Drawdown Tests ---
 
+
 def test_max_drawdown_positive_returns(positive_returns):
     """Test max drawdown with all positive returns."""
     mdd = calculate_max_drawdown(positive_returns)
@@ -177,6 +181,7 @@ def test_max_drawdown_severe_loss():
 
 # --- CAGR Tests ---
 
+
 def test_cagr_positive_returns(positive_returns):
     """Test CAGR with positive returns."""
     cagr = calculate_cagr(positive_returns)
@@ -198,6 +203,7 @@ def test_cagr_realistic_range(realistic_daily_returns):
 
 
 # --- Calmar Ratio Tests ---
+
 
 def test_calmar_ratio_positive_returns():
     """Test Calmar ratio with mostly positive returns (but with some drawdown)."""
@@ -230,6 +236,7 @@ def test_calmar_ratio_relationship():
 
 # --- Win Rate Tests ---
 
+
 def test_win_rate_all_positive(positive_returns):
     """Test win rate with all positive returns."""
     win_rate = calculate_win_rate(positive_returns)
@@ -260,6 +267,7 @@ def test_win_rate_fifty_fifty():
 
 # --- Interpretation Tests ---
 
+
 def test_interpret_sharpe():
     """Test Sharpe ratio interpretation."""
     assert _interpret_sharpe(2.5) == "excellent"
@@ -285,6 +293,7 @@ def test_interpret_win_rate():
 
 
 # --- Integrated Metrics Tests ---
+
 
 def test_calculate_performance_metrics_basic(mixed_returns):
     """Test basic performance metrics calculation."""
@@ -312,9 +321,7 @@ def test_calculate_performance_metrics_basic(mixed_returns):
 def test_calculate_performance_metrics_metadata(mixed_returns):
     """Test metadata in performance metrics."""
     metrics = calculate_performance_metrics(
-        mixed_returns,
-        risk_free_rate=0.03,
-        periods_per_year=252
+        mixed_returns, risk_free_rate=0.03, periods_per_year=252
     )
 
     metadata = metrics["metadata"]
@@ -327,10 +334,7 @@ def test_calculate_performance_metrics_metadata(mixed_returns):
 
 def test_calculate_performance_metrics_no_interpretation(mixed_returns):
     """Test metrics calculation without interpretation."""
-    metrics = calculate_performance_metrics(
-        mixed_returns,
-        include_interpretation=False
-    )
+    metrics = calculate_performance_metrics(mixed_returns, include_interpretation=False)
 
     assert "interpretation" not in metrics
 
@@ -340,7 +344,7 @@ def test_calculate_performance_metrics_with_int_risk_free_rate(mixed_returns):
     metrics = calculate_performance_metrics(
         mixed_returns,
         risk_free_rate=0,  # Integer input
-        periods_per_year=252
+        periods_per_year=252,
     )
 
     # Should be converted to float
@@ -353,7 +357,7 @@ def test_calculate_performance_metrics_with_float_risk_free_rate(mixed_returns):
     metrics = calculate_performance_metrics(
         mixed_returns,
         risk_free_rate=0.04,  # Float
-        periods_per_year=252
+        periods_per_year=252,
     )
 
     assert isinstance(metrics["metadata"]["risk_free_rate"], float)
@@ -365,13 +369,14 @@ def test_calculate_performance_metrics_realistic_data(realistic_daily_returns):
     metrics = calculate_performance_metrics(
         realistic_daily_returns,
         risk_free_rate=0.02,  # 2% risk-free rate
-        periods_per_year=252
+        periods_per_year=252,
     )
 
     # All metrics should be calculated
-    assert all(key in metrics for key in [
-        "sharpe_ratio", "max_drawdown", "cagr", "calmar_ratio", "win_rate"
-    ])
+    assert all(
+        key in metrics
+        for key in ["sharpe_ratio", "max_drawdown", "cagr", "calmar_ratio", "win_rate"]
+    )
 
     # Sharpe should be in reasonable range for realistic data
     assert -5.0 < metrics["sharpe_ratio"] < 5.0
@@ -392,16 +397,10 @@ def test_calculate_performance_metrics_different_periods():
     returns = pd.Series([0.01, -0.005, 0.01, -0.005] * 13)  # 52 periods with drawdowns
 
     # Calculate with weekly periods
-    metrics_weekly = calculate_performance_metrics(
-        returns,
-        periods_per_year=52
-    )
+    metrics_weekly = calculate_performance_metrics(returns, periods_per_year=52)
 
     # Calculate with daily periods (wrong, but testing flexibility)
-    metrics_daily = calculate_performance_metrics(
-        returns,
-        periods_per_year=252
-    )
+    metrics_daily = calculate_performance_metrics(returns, periods_per_year=252)
 
     # CAGR should differ due to annualization
     assert metrics_weekly["cagr"] != metrics_daily["cagr"]
@@ -420,6 +419,7 @@ def test_calculate_performance_metrics_overall_assessment():
 
 
 # --- Edge Cases ---
+
 
 def test_metrics_with_zero_returns():
     """Test metrics with mostly zero returns (edge case)."""
@@ -468,6 +468,7 @@ def test_metrics_with_list_input():
 
 # --- Performance Tests ---
 
+
 @pytest.mark.slow
 def test_metrics_performance_large_dataset():
     """Test performance with large dataset."""
@@ -488,6 +489,7 @@ def test_metrics_performance_large_dataset():
 
 # --- Error Handling Tests ---
 
+
 def test_metrics_invalid_input_type():
     """Test that invalid input types raise ValueError."""
     with pytest.raises(ValueError):
@@ -505,6 +507,7 @@ def test_metrics_with_inf_values():
 
 # --- GAP-15 Edge Case Tests ---
 
+
 def test_validate_returns_with_inf_removed():
     """_validate_returns should remove Inf values and continue."""
     returns = pd.Series([0.01, np.inf, 0.02, -np.inf, 0.03])
@@ -513,26 +516,26 @@ def test_validate_returns_with_inf_removed():
     assert len(validated) == 3
 
 
-def test_sharpe_ratio_exception_returns_zero():
-    """calculate_sharpe_ratio should return 0.0 on internal exception, not crash."""
+def test_sharpe_ratio_exception_returns_none():
+    """calculate_sharpe_ratio should return None on internal exception, not crash or fake a 0."""
     # This tests the try/except in calculate_sharpe_ratio
     with patch("metrics.core.metrics.qs.stats.sharpe", side_effect=Exception("qs error")):
         result = calculate_sharpe_ratio([0.01, 0.02, 0.03])
-        assert result == 0.0
+        assert result is None
 
 
-def test_cagr_exception_returns_zero():
-    """calculate_cagr should return 0.0 on internal exception."""
+def test_cagr_exception_returns_none():
+    """calculate_cagr should return None on internal exception."""
     with patch("metrics.core.metrics.qs.stats.cagr", side_effect=Exception("qs error")):
         result = calculate_cagr([0.01, 0.02, 0.03])
-        assert result == 0.0
+        assert result is None
 
 
-def test_calmar_exception_returns_zero():
-    """calculate_calmar_ratio should return 0.0 on internal exception."""
+def test_calmar_exception_returns_none():
+    """calculate_calmar_ratio should return None on internal exception."""
     with patch("metrics.core.metrics.qs.stats.calmar", side_effect=Exception("qs error")):
         result = calculate_calmar_ratio([0.01, 0.02, 0.03])
-        assert result == 0.0
+        assert result is None
 
 
 def test_performance_metrics_partial_failure():
@@ -540,8 +543,117 @@ def test_performance_metrics_partial_failure():
     returns = [0.01, -0.02, 0.03, 0.02, -0.01]
     with patch("metrics.core.metrics.qs.stats.sharpe", side_effect=Exception("sharpe broke")):
         result = calculate_performance_metrics(returns)
-        # Sharpe should be 0.0 (fallback), others should be computed
-        assert result["sharpe_ratio"] == 0.0
+        # Sharpe is undefined (None), the others are still computed
+        assert result["sharpe_ratio"] is None
+        assert result["sortino_ratio"] is not None
         assert "max_drawdown" in result
         assert "win_rate" in result
         assert result["win_rate"] > 0  # Should still work
+
+
+# --- Sortino ratio and total return ---
+
+
+def test_total_return_compounds():
+    """Total return compounds the series rather than summing it."""
+    assert calculate_total_return([0.10, 0.10]) == pytest.approx(0.21)
+    assert calculate_total_return([0.10, -0.10]) == pytest.approx(-0.01)
+
+
+def test_sortino_ratio_known_value():
+    """Hand-derived: mean 0.006, downside deviation sqrt((0.02**2 + 0.01**2) / 5) = 0.01."""
+    sortino = calculate_sortino_ratio([0.01, -0.02, 0.03, 0.02, -0.01])
+    assert sortino == pytest.approx(0.6 * np.sqrt(252), rel=1e-6)
+
+
+def test_sortino_ratio_mixed_returns(mixed_returns):
+    """Sortino is a finite float for a series that has losing periods."""
+    sortino = calculate_sortino_ratio(mixed_returns)
+    assert isinstance(sortino, float)
+    assert np.isfinite(sortino)
+
+
+def test_sortino_ratio_no_losses_is_undefined():
+    """No downside deviation means an undefined ratio (None), not a misleading 0.0."""
+    assert calculate_sortino_ratio([0.01, 0.02, 0.03]) is None
+
+
+def test_zero_variance_ratios_are_undefined():
+    """Constant returns have no volatility: Sharpe and Calmar are None, not 0.0."""
+    flat = [0.01, 0.01, 0.01]
+    assert calculate_sharpe_ratio(flat) is None
+    assert calculate_calmar_ratio(flat) is None
+
+
+def test_returns_below_minus_one_are_rejected():
+    """A period return under -100% is impossible; compounding it flips signs."""
+    with pytest.raises(ValueError, match="below -1.0"):
+        calculate_total_return([-2.0, 0.1])
+    with pytest.raises(ValueError, match="below -1.0"):
+        calculate_performance_metrics([-2.0, -3.0])
+
+
+def test_total_return_total_loss_is_minus_one():
+    """Exactly -100% is a valid total loss and stays -1.0."""
+    assert calculate_total_return([-1.0, 0.5]) == pytest.approx(-1.0)
+
+
+def test_total_return_overflow_is_undefined():
+    assert calculate_total_return([1e200, 1e200]) is None
+
+
+def test_performance_metrics_flag_constant_returns():
+    result = calculate_performance_metrics([0.0, 0.0, 0.0, 0.0])
+    assert "constant_returns" in result["warnings"]
+    assert result["sharpe_ratio"] is None
+    assert result["interpretation"]["sharpe_ratio"] == "undefined"
+    assert result["total_return"] == 0.0
+
+
+def test_performance_metrics_report_dropped_returns():
+    result = calculate_performance_metrics([0.5, np.nan, 0.1, -0.2])
+    assert result["metadata"]["dropped_periods"] == 1
+    assert result["metadata"]["total_periods"] == 3
+    assert "dropped_nonfinite_returns:1" in result["warnings"]
+
+
+def test_sortino_and_max_drawdown_exceptions_return_none():
+    with patch("metrics.core.metrics.qs.stats.sortino", side_effect=Exception("boom")):
+        assert calculate_sortino_ratio([0.01, -0.02, 0.03]) is None
+    with patch("metrics.core.metrics.qs.stats.max_drawdown", side_effect=Exception("boom")):
+        assert calculate_max_drawdown([0.01, -0.02, 0.03]) is None
+
+
+def test_performance_metrics_no_warnings_key_when_clean():
+    # 60 periods with 24 losing ones and varied values: no caveats apply.
+    clean = np.tile([0.01, -0.005, 0.02, -0.01, 0.015], 12)
+    assert "warnings" not in calculate_performance_metrics(clean)
+
+
+def test_performance_metrics_flag_low_sample(mixed_returns):
+    # mixed_returns has 8 periods, below the 30-period reliability threshold.
+    assert "low_sample:8" in calculate_performance_metrics(mixed_returns)["warnings"]
+
+
+def test_performance_metrics_flag_few_losing_periods():
+    # 40 periods but only 2 losers: Sortino rests on two observations.
+    returns = np.array([0.01, 0.012, 0.008, 0.011] * 10)
+    returns[5] = -0.004
+    returns[20] = -0.006
+    warnings = calculate_performance_metrics(returns)["warnings"]
+    assert warnings == ["few_losing_periods:2"]
+
+
+def test_no_losing_periods_warns_nothing_extra():
+    # Zero losers makes Sortino undefined (None); that is not also a 'few losers' case.
+    returns = np.array([0.01, 0.012, 0.008, 0.011] * 10)
+    result = calculate_performance_metrics(returns)
+    assert result["sortino_ratio"] is None
+    assert not any(w.startswith("few_losing") for w in result.get("warnings", []))
+
+
+def test_performance_metrics_include_sortino_and_total_return(mixed_returns):
+    """The performance payload carries the two fields the orchestrator persists."""
+    metrics = calculate_performance_metrics(mixed_returns)
+    assert isinstance(metrics["sortino_ratio"], float)
+    assert metrics["total_return"] == pytest.approx(0.09047173504068784)

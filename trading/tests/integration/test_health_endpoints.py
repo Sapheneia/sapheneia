@@ -4,8 +4,6 @@ Integration tests for health check endpoints.
 Tests root and health endpoints.
 """
 
-import pytest
-
 
 class TestHealthEndpoints:
     """Test health check endpoints."""

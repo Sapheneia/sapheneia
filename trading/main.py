@@ -5,26 +5,27 @@ Main entry point for the trading strategies service.
 Provides REST API endpoints for executing trading strategies.
 """
 
+import time
+import uuid
+
+import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-import uvicorn
-import uuid
-import time
+
+# Import shared error handlers
+from shared.errors import register_error_handlers
 
 # Import core settings (this also configures logging)
-from .core.config import settings, logger
-
-# Import rate limiting
-from .core.rate_limit import limiter, rate_limit_exceeded_handler, get_rate_limit
+from .core.config import logger, settings
 
 # Import custom exceptions
 from .core.exceptions import TradingException
 
-# Import shared error handlers
-from shared.errors import register_error_handlers
+# Import rate limiting
+from .core.rate_limit import get_rate_limit, limiter, rate_limit_exceeded_handler
 
 # Import routers
 from .routes import endpoints
@@ -52,9 +53,7 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 logger.info("=" * 80)
 logger.info("Sapheneia Trading Strategies API")
 logger.info(f"Version: {app.version}")
-logger.info(
-    f"Docs: http://{settings.TRADING_API_HOST}:{settings.TRADING_API_PORT}/docs"
-)
+logger.info(f"Docs: http://{settings.TRADING_API_HOST}:{settings.TRADING_API_PORT}/docs")
 logger.info("=" * 80)
 
 
@@ -70,9 +69,7 @@ app.add_middleware(
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=cors_methods,
     allow_headers=(
-        ["*"]
-        if settings.CORS_ALLOW_HEADERS == "*"
-        else settings.CORS_ALLOW_HEADERS.split(",")
+        ["*"] if settings.CORS_ALLOW_HEADERS == "*" else settings.CORS_ALLOW_HEADERS.split(",")
     ),
 )
 
@@ -203,9 +200,7 @@ logger.info("  - Max request size: 10MB")
 
 
 @app.exception_handler(TradingException)
-async def trading_exception_handler(
-    request: Request, exc: TradingException
-) -> JSONResponse:
+async def trading_exception_handler(request: Request, exc: TradingException) -> JSONResponse:
     """
     Handle TradingException and convert to HTTP response.
 
@@ -328,15 +323,9 @@ async def startup_event():
     logger.info("🚀 Trading Strategies API Startup")
     logger.info("=" * 80)
     logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(
-        f"API Host:Port: {settings.TRADING_API_HOST}:{settings.TRADING_API_PORT}"
-    )
-    logger.info(
-        f"Rate limiting: {'enabled' if settings.RATE_LIMIT_ENABLED else 'disabled'}"
-    )
-    logger.info(
-        f"Execute endpoint limit: {settings.RATE_LIMIT_EXECUTE_PER_MINUTE}/minute"
-    )
+    logger.info(f"API Host:Port: {settings.TRADING_API_HOST}:{settings.TRADING_API_PORT}")
+    logger.info(f"Rate limiting: {'enabled' if settings.RATE_LIMIT_ENABLED else 'disabled'}")
+    logger.info(f"Execute endpoint limit: {settings.RATE_LIMIT_EXECUTE_PER_MINUTE}/minute")
     logger.info("Available strategies: threshold, return, quantile")
     logger.info("Application startup complete")
     logger.info("=" * 80)
@@ -364,9 +353,7 @@ async def shutdown_event():
 if __name__ == "__main__":
     logger.warning("=" * 80)
     logger.warning("Running Uvicorn server directly (DEVELOPMENT MODE)")
-    logger.warning(
-        "For production, use: uvicorn trading.main:app --host 0.0.0.0 --port 9000"
-    )
+    logger.warning("For production, use: uvicorn trading.main:app --host 0.0.0.0 --port 9000")
     logger.warning("=" * 80)
 
     uvicorn.run(

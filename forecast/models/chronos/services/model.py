@@ -5,13 +5,14 @@ Handles model initialization, state management, and inference execution.
 Uses HuggingFace cache for model loading.
 """
 
-import os
 import logging
-import time
+import os
 import threading
-import torch
+import time
+from typing import Any
+
 import numpy as np
-from typing import Tuple, Optional, Any, List, Dict
+import torch
 from chronos import ChronosPipeline
 
 logger = logging.getLogger(__name__)
@@ -20,28 +21,27 @@ logger = logging.getLogger(__name__)
 # --- Custom Exceptions ---
 class ModelNotInitializedError(Exception):
     """Raised when inference is attempted on uninitialized model."""
+
     pass
 
 
 class ModelInitializationError(Exception):
     """Raised when model initialization fails."""
+
     pass
 
 
 # --- Module-Level State Management ---
 # For single-worker deployment, store model state at module level
-_pipeline: Optional[ChronosPipeline] = None
+_pipeline: ChronosPipeline | None = None
 _model_status: str = "uninitialized"  # "uninitialized", "initializing", "ready", "error"
-_error_message: Optional[str] = None
-_model_variant: Optional[str] = None
+_error_message: str | None = None
+_model_variant: str | None = None
 _device: str = "cpu"
 _model_lock = threading.Lock()
 
 
-def initialize_model(
-    model_variant: Optional[str] = None,
-    device: Optional[str] = None
-) -> None:
+def initialize_model(model_variant: str | None = None, device: str | None = None) -> None:
     """
     Initialize Chronos model from HuggingFace cache.
 
@@ -71,9 +71,7 @@ def initialize_model(
         model_variant = os.getenv("MODEL_VARIANT")
 
     if not model_variant:
-        raise ValueError(
-            "model_variant must be provided or MODEL_VARIANT env var must be set"
-        )
+        raise ValueError("model_variant must be provided or MODEL_VARIANT env var must be set")
 
     # Determine device
     if device is None:
@@ -82,7 +80,7 @@ def initialize_model(
     start_time = time.time()
 
     logger.info("=" * 80)
-    logger.info(f"🚀 Starting Chronos initialization")
+    logger.info("🚀 Starting Chronos initialization")
     logger.info(f"   Model Variant: {model_variant}")
     logger.info(f"   Device: {device}")
     logger.info(f"   HF_HOME: {os.getenv('HF_HOME', 'default')}")
@@ -107,7 +105,7 @@ def initialize_model(
         elapsed = time.time() - start_time
 
         logger.info("=" * 80)
-        logger.info(f"✅ Chronos initialization complete!")
+        logger.info("✅ Chronos initialization complete!")
         logger.info(f"   Time: {elapsed:.2f}s")
         logger.info(f"   Model: {model_variant}")
         logger.info("=" * 80)
@@ -122,10 +120,10 @@ def initialize_model(
         logger.error(f"❌ Chronos initialization failed: {e}")
         logger.error("=" * 80)
 
-        raise ModelInitializationError(f"Model initialization failed: {e}")
+        raise ModelInitializationError(f"Model initialization failed: {e}") from e
 
 
-def get_status() -> Tuple[str, Optional[str]]:
+def get_status() -> tuple[str, str | None]:
     """
     Get current model status (thread-safe).
 
@@ -136,7 +134,7 @@ def get_status() -> Tuple[str, Optional[str]]:
         return _model_status, _error_message
 
 
-def get_model_info() -> Optional[Dict[str, Any]]:
+def get_model_info() -> dict[str, Any] | None:
     """
     Get model information (thread-safe).
 
@@ -150,18 +148,18 @@ def get_model_info() -> Optional[Dict[str, Any]]:
         return {
             "model_variant": _model_variant,
             "device": _device,
-            "status": _model_status
+            "status": _model_status,
         }
 
 
 def run_inference(
-    context: List[float],
+    context: list[float],
     prediction_length: int,
     num_samples: int = 20,
     temperature: float = 1.0,
     top_k: int = 50,
-    top_p: float = 1.0
-) -> Dict[str, Any]:
+    top_p: float = 1.0,
+) -> dict[str, Any]:
     """
     Run Chronos inference on provided context.
 
@@ -184,9 +182,7 @@ def run_inference(
     # Check model status
     with _model_lock:
         if _model_status != "ready" or _pipeline is None:
-            raise ModelNotInitializedError(
-                f"Model not initialized. Status: {_model_status}"
-            )
+            raise ModelNotInitializedError(f"Model not initialized. Status: {_model_status}")
         pipeline = _pipeline
 
     logger.info("=" * 80)
@@ -210,7 +206,7 @@ def run_inference(
             num_samples=num_samples,
             temperature=temperature,
             top_k=top_k,
-            top_p=top_p
+            top_p=top_p,
         )
 
         # Convert to numpy for easier manipulation
@@ -254,8 +250,8 @@ def run_inference(
                 "prediction_length": prediction_length,
                 "num_samples": num_samples,
                 "model_variant": _model_variant,
-                "inference_time_seconds": round(elapsed, 3)
-            }
+                "inference_time_seconds": round(elapsed, 3),
+            },
         }
 
     except Exception as e:
@@ -280,7 +276,7 @@ def shutdown_model() -> bool:
             return False
 
         logger.info("=" * 80)
-        logger.info(f"🔄 Shutting down Chronos model")
+        logger.info("🔄 Shutting down Chronos model")
         logger.info(f"   Model: {_model_variant}")
         logger.info("=" * 80)
 

@@ -12,7 +12,7 @@ Usage:
     # Returns structured JSON response with error_code, message, details
 """
 
-from typing import Optional, Dict, Any
+from typing import Any
 
 
 class TradingException(Exception):
@@ -30,7 +30,7 @@ class TradingException(Exception):
         self,
         message: str,
         error_code: str = "TRADING_ERROR",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
         suggested_status_code: int = 500,
     ):
         """
@@ -48,7 +48,7 @@ class TradingException(Exception):
         self.suggested_status_code = suggested_status_code
         super().__init__(message)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Convert exception to dictionary format for JSON responses.
 
@@ -74,8 +74,8 @@ class InvalidStrategyError(TradingException):
     def __init__(
         self,
         message: str = "Invalid strategy type",
-        strategy_type: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        strategy_type: str | None = None,
+        details: dict[str, Any] | None = None,
     ):
         """
         Initialize InvalidStrategyError.
@@ -110,9 +110,9 @@ class InsufficientCapitalError(TradingException):
     def __init__(
         self,
         message: str = "Insufficient capital to execute trade",
-        available_cash: Optional[float] = None,
-        required: Optional[float] = None,
-        details: Optional[Dict[str, Any]] = None,
+        available_cash: float | None = None,
+        required: float | None = None,
+        details: dict[str, Any] | None = None,
     ):
         """
         Initialize InsufficientCapitalError.
@@ -153,9 +153,9 @@ class InvalidParametersError(TradingException):
     def __init__(
         self,
         message: str = "Invalid parameters provided",
-        parameter: Optional[str] = None,
-        validation_errors: Optional[Dict[str, Any]] = None,
-        details: Optional[Dict[str, Any]] = None,
+        parameter: str | None = None,
+        validation_errors: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
     ):
         """
         Initialize InvalidParametersError.
@@ -191,9 +191,9 @@ class StrategyStoppedError(TradingException):
     def __init__(
         self,
         message: str = "Strategy stopped: no capital remaining",
-        available_cash: Optional[float] = None,
-        current_position: Optional[float] = None,
-        details: Optional[Dict[str, Any]] = None,
+        available_cash: float | None = None,
+        current_position: float | None = None,
+        details: dict[str, Any] | None = None,
     ):
         """
         Initialize StrategyStoppedError.

@@ -4,17 +4,17 @@ Pytest configuration and shared fixtures for Trading Strategies tests.
 Provides common test fixtures and utilities for all test modules.
 """
 
-import pytest
-import numpy as np
 import os
-from fastapi.testclient import TestClient
-from unittest.mock import patch
 
-# Import the FastAPI app
-from trading.main import app
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
 
 # Import settings (will be mocked in tests)
 from trading.core.config import settings
+
+# Import the FastAPI app
+from trading.main import app
 
 # Note: Rate limiting is enabled for tests to verify it works correctly
 # Some tests may hit rate limits (429) which is expected behavior
@@ -26,11 +26,17 @@ def test_client():
     """
     FastAPI test client for testing API endpoints.
 
-    Returns:
-        TestClient instance for the trading app
+    Resets the slowapi in-memory limiter on each fixture instantiation so
+    that rate-limit-sensitive tests don't bleed counters into each other.
     """
-    # Note: Rate limiting uses memory storage which resets between test runs
-    # Individual tests shouldn't hit rate limits (10/minute for execute endpoint)
+    try:
+        from trading.core.rate_limit import limiter
+
+        # slowapi.Limiter exposes a top-level reset()
+        if hasattr(limiter, "reset"):
+            limiter.reset()
+    except Exception:  # noqa: BLE001
+        pass
     return TestClient(app)
 
 
@@ -56,8 +62,6 @@ def sample_ohlc_data():
     """
     np.random.seed(42)  # For reproducible tests
     n_periods = 30
-
-    base_price = 100.0
     open_history = np.random.uniform(95, 105, n_periods).tolist()
     high_history = np.random.uniform(100, 110, n_periods).tolist()
     low_history = np.random.uniform(90, 100, n_periods).tolist()

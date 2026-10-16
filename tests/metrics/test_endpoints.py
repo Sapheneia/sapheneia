@@ -3,11 +3,11 @@ Tests for Metrics API Endpoints
 
 Tests the unified /metrics/v1/compute/ endpoint with different metric parameters.
 """
-import pytest
-from fastapi.testclient import TestClient
 
+import pytest
 
 # --- Basic Endpoints Tests ---
+
 
 def test_root_endpoint(client):
     """Test root endpoint."""
@@ -30,6 +30,7 @@ def test_health_endpoint(client):
 
 # --- Compute Endpoint: metric="performance" ---
 
+
 def test_compute_performance_with_interpretation(client):
     """Test compute endpoint with metric='performance' and interpretation."""
     payload = {
@@ -37,7 +38,7 @@ def test_compute_performance_with_interpretation(client):
         "metric": "performance",
         "risk_free_rate": 0.0,
         "periods_per_year": 252,
-        "include_interpretation": True
+        "include_interpretation": True,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -62,7 +63,7 @@ def test_compute_performance_without_interpretation(client):
         "metric": "performance",
         "risk_free_rate": 0.0,
         "periods_per_year": 252,
-        "include_interpretation": False
+        "include_interpretation": False,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -79,7 +80,7 @@ def test_compute_performance_with_risk_free_rate(client):
         "returns": [0.01, -0.005, 0.02, 0.015],
         "metric": "performance",
         "risk_free_rate": 0.04,
-        "periods_per_year": 252
+        "periods_per_year": 252,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -90,42 +91,42 @@ def test_compute_performance_with_risk_free_rate(client):
 
 # --- Compute Endpoint: metric="all" ---
 
+
 def test_compute_all_metrics(client):
     """Test compute endpoint with metric='all'."""
     payload = {
         "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
         "metric": "all",
-        "periods_per_year": 252
+        "periods_per_year": 252,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
 
     data = response.json()
-    # Should have all 5 metrics
+    # Should have all 7 metrics
     assert "sharpe_ratio" in data
     assert "max_drawdown" in data
     assert "cagr" in data
     assert "calmar_ratio" in data
     assert "win_rate" in data
+    assert "sortino_ratio" in data
+    assert "total_return" in data
     # Should NOT have interpretation or metadata
     assert "interpretation" not in data
     assert "metadata" not in data
     # Verify it's clean response
-    assert len(data) == 5
+    assert len(data) == 7
 
 
 def test_compute_all_default_example(client):
     """Test compute all with the standard example vector."""
-    payload = {
-        "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
-        "metric": "all"
-    }
+    payload = {"returns": [0.01, -0.02, 0.03, 0.02, -0.01], "metric": "all"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 5
+    assert len(data) == 7
     assert data["win_rate"] == 0.6
 
 
@@ -134,15 +135,16 @@ def test_compute_all_weekly_data(client):
     payload = {
         "returns": [0.02, -0.01, 0.015, 0.01, 0.025],
         "metric": "all",
-        "periods_per_year": 52
+        "periods_per_year": 52,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
-    assert len(response.json()) == 5
+    assert len(response.json()) == 7
 
 
 # --- Compute Endpoint: Individual Metrics ---
+
 
 def test_compute_sharpe_only(client):
     """Test compute endpoint with metric='sharpe'."""
@@ -150,7 +152,7 @@ def test_compute_sharpe_only(client):
         "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
         "metric": "sharpe",
         "risk_free_rate": 0.0,
-        "periods_per_year": 252
+        "periods_per_year": 252,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -166,7 +168,7 @@ def test_compute_sharpe_with_risk_free_rate(client):
         "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
         "metric": "sharpe",
         "risk_free_rate": 0.04,
-        "periods_per_year": 252
+        "periods_per_year": 252,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -176,10 +178,7 @@ def test_compute_sharpe_with_risk_free_rate(client):
 
 def test_compute_max_drawdown_only(client):
     """Test compute endpoint with metric='max_drawdown'."""
-    payload = {
-        "returns": [0.01, 0.02, -0.05, 0.03, 0.01],
-        "metric": "max_drawdown"
-    }
+    payload = {"returns": [0.01, 0.02, -0.05, 0.03, 0.01], "metric": "max_drawdown"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
@@ -194,7 +193,7 @@ def test_compute_cagr_only(client):
     payload = {
         "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
         "metric": "cagr",
-        "periods_per_year": 252
+        "periods_per_year": 252,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -209,7 +208,7 @@ def test_compute_cagr_weekly_data(client):
     payload = {
         "returns": [0.02, -0.01, 0.015, 0.01, 0.025],
         "metric": "cagr",
-        "periods_per_year": 52
+        "periods_per_year": 52,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -222,7 +221,7 @@ def test_compute_calmar_only(client):
     payload = {
         "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
         "metric": "calmar",
-        "periods_per_year": 252
+        "periods_per_year": 252,
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -234,10 +233,7 @@ def test_compute_calmar_only(client):
 
 def test_compute_win_rate_only(client):
     """Test compute endpoint with metric='win_rate'."""
-    payload = {
-        "returns": [0.01, -0.02, 0.03, 0.02, -0.01],
-        "metric": "win_rate"
-    }
+    payload = {"returns": [0.01, -0.02, 0.03, 0.02, -0.01], "metric": "win_rate"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
@@ -249,10 +245,7 @@ def test_compute_win_rate_only(client):
 
 def test_compute_win_rate_all_winners(client):
     """Test win rate with all positive returns."""
-    payload = {
-        "returns": [0.01, 0.02, 0.03],
-        "metric": "win_rate"
-    }
+    payload = {"returns": [0.01, 0.02, 0.03], "metric": "win_rate"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
@@ -262,10 +255,7 @@ def test_compute_win_rate_all_winners(client):
 
 def test_compute_win_rate_all_losers(client):
     """Test win rate with all negative returns."""
-    payload = {
-        "returns": [-0.01, -0.02, -0.03],
-        "metric": "win_rate"
-    }
+    payload = {"returns": [-0.01, -0.02, -0.03], "metric": "win_rate"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
@@ -275,12 +265,10 @@ def test_compute_win_rate_all_losers(client):
 
 # --- Error Handling ---
 
+
 def test_compute_empty_returns(client):
     """Test error handling with empty returns."""
-    payload = {
-        "returns": [],
-        "metric": "all"
-    }
+    payload = {"returns": [], "metric": "all"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 400
@@ -293,7 +281,7 @@ def test_compute_insufficient_data(client):
     """Test error handling with insufficient data."""
     payload = {
         "returns": [0.01],  # Only one return
-        "metric": "sharpe"
+        "metric": "sharpe",
     }
 
     response = client.post("/metrics/v1/compute/", json=payload)
@@ -305,7 +293,7 @@ def test_compute_invalid_json(client):
     response = client.post(
         "/metrics/v1/compute/",
         data="not valid json",
-        headers={"Content-Type": "application/json"}
+        headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 422
 
@@ -323,16 +311,14 @@ def test_compute_missing_required_field(client):
 
 def test_compute_invalid_metric_type(client):
     """Test error handling with invalid metric type."""
-    payload = {
-        "returns": [0.01, -0.02, 0.03],
-        "metric": "invalid_metric"
-    }
+    payload = {"returns": [0.01, -0.02, 0.03], "metric": "invalid_metric"}
 
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 422  # Pydantic validation error
 
 
 # --- Default Behavior ---
+
 
 def test_compute_defaults(client):
     """Test compute endpoint with default parameters."""
@@ -350,6 +336,7 @@ def test_compute_defaults(client):
 
 
 # --- GAP-15 Structured Error Response Tests ---
+
 
 def test_structured_error_has_correct_keys(client):
     """Error responses should have error, message, details keys (not 'detail')."""
@@ -388,3 +375,35 @@ def test_insufficient_data_returns_validation_error_code(client):
     assert response.status_code == 400
     body = response.json()
     assert body["error"] == "VALIDATION_ERROR"
+
+
+# --- Compute Endpoint: sortino and total_return ---
+
+
+def test_compute_sortino_only(client):
+    payload = {"returns": [0.01, -0.02, 0.03, 0.02, -0.01], "metric": "sortino"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 200
+    assert list(response.json()) == ["sortino_ratio"]
+    assert response.json()["sortino_ratio"] == pytest.approx(0.6 * 252**0.5, rel=1e-6)
+
+
+def test_compute_rejects_returns_below_minus_one(client):
+    payload = {"returns": [-2.0, 0.1], "metric": "total_return"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 400
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
+def test_compute_undefined_ratio_is_null(client):
+    payload = {"returns": [0.01, 0.02, 0.03], "metric": "sortino"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 200
+    assert response.json() == {"sortino_ratio": None}
+
+
+def test_compute_total_return_only(client):
+    payload = {"returns": [0.10, 0.10], "metric": "total_return"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 200
+    assert response.json()["total_return"] == pytest.approx(0.21)

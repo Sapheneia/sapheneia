@@ -4,9 +4,6 @@ Integration tests for /execute endpoint.
 Tests the full request/response cycle for strategy execution.
 """
 
-import pytest
-from trading.schemas.schema import StrategyResponse
-
 
 class TestExecuteEndpoint:
     """Test POST /trading/execute endpoint."""
@@ -25,9 +22,7 @@ class TestExecuteEndpoint:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -54,17 +49,13 @@ class TestExecuteEndpoint:
             "execution_size": 10.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
         assert data["action"] in ["buy", "sell", "hold"]
 
-    def test_quantile_strategy_execution(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_quantile_strategy_execution(self, test_client, auth_headers, sample_ohlc_data):
         """Test quantile strategy execution with valid request."""
         payload = {
             "strategy_type": "quantile",
@@ -84,9 +75,7 @@ class TestExecuteEndpoint:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -103,9 +92,7 @@ class TestExecuteEndpoint:
             "initial_capital": 100000.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422  # Validation error
 
@@ -116,9 +103,7 @@ class TestExecuteEndpoint:
             # Missing forecast_price, current_price, etc.
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -136,9 +121,7 @@ class TestExecuteEndpoint:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -156,9 +139,7 @@ class TestExecuteEndpoint:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -176,9 +157,7 @@ class TestExecuteEndpoint:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -196,15 +175,11 @@ class TestExecuteEndpoint:
             "execution_size": 10.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
-    def test_invalid_quantile_signals_structure(
-        self, test_client, auth_headers, sample_ohlc_data
-    ):
+    def test_invalid_quantile_signals_structure(self, test_client, auth_headers, sample_ohlc_data):
         """Test invalid quantile_signals structure returns 422 validation error."""
         payload = {
             "strategy_type": "quantile",
@@ -221,9 +196,7 @@ class TestExecuteEndpoint:
         }
         payload.update(sample_ohlc_data)
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 422
 
@@ -241,9 +214,7 @@ class TestExecuteEndpoint:
             "execution_size": 100.0,
         }
 
-        response = test_client.post(
-            "/trading/execute", json=payload, headers=auth_headers
-        )
+        response = test_client.post("/trading/execute", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
