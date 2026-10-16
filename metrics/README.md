@@ -71,17 +71,21 @@ POST /metrics/v1/compute
 
 ### Undefined values and warnings
 
-- A ratio that is mathematically undefined (zero variance, no losing periods, zero
-  drawdown) is `null`, never `0.0`. This applies to `sharpe_ratio`, `sortino_ratio`,
-  `calmar_ratio` and `cagr`. If the underlying library call raises, the value is
-  still reported as `0.0`.
+- A metric that is mathematically undefined (zero variance, no losing periods, zero
+  drawdown) or whose calculation fails is `null`, never `0.0`. This applies to
+  `sharpe_ratio`, `sortino_ratio`, `calmar_ratio`, `cagr` and `max_drawdown`.
 - Returns below `-1.0` (-100%) are rejected with a `400 VALIDATION_ERROR`; exactly
   `-1.0` is a valid total loss.
 - `NaN` and infinite returns are dropped. `metadata.dropped_periods` counts them and
   `warnings` gains `dropped_nonfinite_returns:N`.
-- `warnings` (only in `performance`, only when non-empty) may contain
-  `constant_returns`: the series has zero variance (for example a run that made no
-  trades), so its ratios are undefined.
+- `warnings` (only in `performance`, only when non-empty) may contain:
+  - `constant_returns`: the series has zero variance (for example a run that made no
+    trades), so its ratios are undefined.
+  - `low_sample:N`: fewer than 30 return periods. Sharpe and Sortino from short
+    samples are mostly noise.
+  - `few_losing_periods:K`: between 1 and 4 losing periods. Sortino rests only on
+    the losing periods, so a handful of tiny losses can produce a huge ratio.
+  The thresholds (30 and 5) are rules of thumb, not statistical guarantees.
 
 ## Inputs
 

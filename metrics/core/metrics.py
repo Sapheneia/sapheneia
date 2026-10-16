@@ -40,6 +40,13 @@ CALMAR_THRESHOLDS = {"exceptional": 3.0, "good": 1.0, "decent": 0.5, "poor": 0.0
 WIN_RATE_THRESHOLDS = {"high": 0.6, "moderate": 0.5, "low": 0.4}
 
 
+# Heuristic thresholds for the ``warnings`` payload. They are rules of thumb,
+# not statistical guarantees: ratios from short or loss-poor samples are very
+# noisy, and Sortino in particular rests only on the losing periods.
+MIN_PERIODS_FOR_RELIABLE_RATIOS = 30
+MIN_LOSING_PERIODS_FOR_SORTINO = 5
+
+
 # --- Helper Functions ---
 
 
@@ -192,10 +199,10 @@ def calculate_sharpe_ratio(
         return _finite_or_none(sharpe)
     except Exception as e:
         logger.warning(f"Error calculating sharpe ratio: {e}")
-        return 0.0
+        return None
 
 
-def calculate_max_drawdown(returns: pd.Series | np.ndarray | list) -> float:
+def calculate_max_drawdown(returns: pd.Series | np.ndarray | list) -> float | None:
     """
     Calculate Maximum Drawdown: worst peak-to-trough decline.
 
@@ -206,7 +213,8 @@ def calculate_max_drawdown(returns: pd.Series | np.ndarray | list) -> float:
         returns: Return series
 
     Returns:
-        Maximum drawdown as negative decimal (e.g., -0.25 for 25% drawdown)
+        Maximum drawdown as negative decimal (e.g., -0.25 for 25% drawdown),
+        or None if the calculation fails.
 
     Interpretation:
         Closer to 0: Better (less severe drawdown)
@@ -218,10 +226,10 @@ def calculate_max_drawdown(returns: pd.Series | np.ndarray | list) -> float:
 
     try:
         max_dd = qs.stats.max_drawdown(returns)
-        return float(max_dd) if not np.isnan(max_dd) else 0.0
+        return _finite_or_none(max_dd)
     except Exception as e:
         logger.warning(f"Error calculating max drawdown: {e}")
-        return 0.0
+        return None
 
 
 def calculate_cagr(
@@ -251,7 +259,7 @@ def calculate_cagr(
         return _finite_or_none(cagr)
     except Exception as e:
         logger.warning(f"Error calculating CAGR: {e}")
-        return 0.0
+        return None
 
 
 def calculate_calmar_ratio(
@@ -283,7 +291,7 @@ def calculate_calmar_ratio(
         return _finite_or_none(calmar)
     except Exception as e:
         logger.warning(f"Error calculating calmar ratio: {e}")
-        return 0.0
+        return None
 
 
 def calculate_win_rate(returns: pd.Series | np.ndarray | list) -> float:
@@ -343,7 +351,7 @@ def calculate_sortino_ratio(
         return _finite_or_none(sortino)
     except Exception as e:
         logger.warning(f"Error calculating sortino ratio: {e}")
-        return 0.0
+        return None
 
 
 def calculate_total_return(returns: pd.Series | np.ndarray | list) -> float | None:
@@ -393,9 +401,11 @@ def calculate_performance_metrics(
             - win_rate: Percentage of profitable periods
             - sortino_ratio: Return per unit of downside volatility
             - total_return: Compounded return over the series
-            - warnings: (only when non-empty) e.g. constant_returns, dropped_nonfinite_returns:N
-            Ratios that are mathematically undefined (zero variance, no downside)
-            are None rather than 0.0.
+            - warnings: (only when non-empty) constant_returns,
+              dropped_nonfinite_returns:N, low_sample:N (fewer than 30 periods),
+              few_losing_periods:K (1-4 losing periods; Sortino is unreliable)
+            Ratios that are undefined (zero variance, no downside) or fail to
+            compute are None, never 0.0.
             - interpretation: Human-readable assessment (if include_interpretation=True)
             - metadata: Configuration used for calculation
 
@@ -451,6 +461,11 @@ def calculate_performance_metrics(
         warnings.append("constant_returns")
     if dropped_periods:
         warnings.append(f"dropped_nonfinite_returns:{dropped_periods}")
+    if len(returns) < MIN_PERIODS_FOR_RELIABLE_RATIOS:
+        warnings.append(f"low_sample:{len(returns)}")
+    losing_periods = result["metadata"]["losing_periods"]
+    if 0 < losing_periods < MIN_LOSING_PERIODS_FOR_SORTINO:
+        warnings.append(f"few_losing_periods:{losing_periods}")
     if warnings:
         result["warnings"] = warnings
 
@@ -461,7 +476,10 @@ def calculate_performance_metrics(
             "calmar_ratio": _interpret_calmar(calmar) if calmar is not None else "undefined",
             "win_rate": _interpret_win_rate(win_rate),
             "overall_assessment": _get_overall_assessment(
-                sharpe or 0.0, max_dd, calmar or 0.0, win_rate
+                sharpe or 0.0,
+                max_dd if max_dd is not None else -1.0,
+                calmar or 0.0,
+                win_rate,
             ),
         }
 

@@ -82,7 +82,7 @@ Build a markdown table with these columns:
 
 Sort by `sharpe` descending (treat null as -inf). Bold the top 3 rows.
 
-A run whose `extra.warnings` contains `constant_returns` made no trades or had zero variance; its ratios are null. Keep it in the table but note it in the Failures/notes section so it is not read as a real result.
+A run whose `extra.warnings` contains `constant_returns` made no trades or had zero variance; its ratios are null. `low_sample:N` and `few_losing_periods:K` mean the Sharpe/Sortino values are statistically weak (short or loss-poor series). Keep these runs in the table but list their warnings in a notes section so they are not read as real results.
 
 Append a "Failures" section if any runs failed, listing run_id + error message.
 

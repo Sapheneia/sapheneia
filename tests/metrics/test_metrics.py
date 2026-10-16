@@ -516,26 +516,26 @@ def test_validate_returns_with_inf_removed():
     assert len(validated) == 3
 
 
-def test_sharpe_ratio_exception_returns_zero():
-    """calculate_sharpe_ratio should return 0.0 on internal exception, not crash."""
+def test_sharpe_ratio_exception_returns_none():
+    """calculate_sharpe_ratio should return None on internal exception, not crash or fake a 0."""
     # This tests the try/except in calculate_sharpe_ratio
     with patch("metrics.core.metrics.qs.stats.sharpe", side_effect=Exception("qs error")):
         result = calculate_sharpe_ratio([0.01, 0.02, 0.03])
-        assert result == 0.0
+        assert result is None
 
 
-def test_cagr_exception_returns_zero():
-    """calculate_cagr should return 0.0 on internal exception."""
+def test_cagr_exception_returns_none():
+    """calculate_cagr should return None on internal exception."""
     with patch("metrics.core.metrics.qs.stats.cagr", side_effect=Exception("qs error")):
         result = calculate_cagr([0.01, 0.02, 0.03])
-        assert result == 0.0
+        assert result is None
 
 
-def test_calmar_exception_returns_zero():
-    """calculate_calmar_ratio should return 0.0 on internal exception."""
+def test_calmar_exception_returns_none():
+    """calculate_calmar_ratio should return None on internal exception."""
     with patch("metrics.core.metrics.qs.stats.calmar", side_effect=Exception("qs error")):
         result = calculate_calmar_ratio([0.01, 0.02, 0.03])
-        assert result == 0.0
+        assert result is None
 
 
 def test_performance_metrics_partial_failure():
@@ -543,8 +543,9 @@ def test_performance_metrics_partial_failure():
     returns = [0.01, -0.02, 0.03, 0.02, -0.01]
     with patch("metrics.core.metrics.qs.stats.sharpe", side_effect=Exception("sharpe broke")):
         result = calculate_performance_metrics(returns)
-        # Sharpe should be 0.0 (fallback), others should be computed
-        assert result["sharpe_ratio"] == 0.0
+        # Sharpe is undefined (None), the others are still computed
+        assert result["sharpe_ratio"] is None
+        assert result["sortino_ratio"] is not None
         assert "max_drawdown" in result
         assert "win_rate" in result
         assert result["win_rate"] > 0  # Should still work
@@ -603,7 +604,7 @@ def test_total_return_overflow_is_undefined():
 
 def test_performance_metrics_flag_constant_returns():
     result = calculate_performance_metrics([0.0, 0.0, 0.0, 0.0])
-    assert result["warnings"] == ["constant_returns"]
+    assert "constant_returns" in result["warnings"]
     assert result["sharpe_ratio"] is None
     assert result["interpretation"]["sharpe_ratio"] == "undefined"
     assert result["total_return"] == 0.0
@@ -616,8 +617,39 @@ def test_performance_metrics_report_dropped_returns():
     assert "dropped_nonfinite_returns:1" in result["warnings"]
 
 
-def test_performance_metrics_no_warnings_key_when_clean(mixed_returns):
-    assert "warnings" not in calculate_performance_metrics(mixed_returns)
+def test_sortino_and_max_drawdown_exceptions_return_none():
+    with patch("metrics.core.metrics.qs.stats.sortino", side_effect=Exception("boom")):
+        assert calculate_sortino_ratio([0.01, -0.02, 0.03]) is None
+    with patch("metrics.core.metrics.qs.stats.max_drawdown", side_effect=Exception("boom")):
+        assert calculate_max_drawdown([0.01, -0.02, 0.03]) is None
+
+
+def test_performance_metrics_no_warnings_key_when_clean():
+    # 60 periods with 24 losing ones and varied values: no caveats apply.
+    clean = np.tile([0.01, -0.005, 0.02, -0.01, 0.015], 12)
+    assert "warnings" not in calculate_performance_metrics(clean)
+
+
+def test_performance_metrics_flag_low_sample(mixed_returns):
+    # mixed_returns has 8 periods, below the 30-period reliability threshold.
+    assert "low_sample:8" in calculate_performance_metrics(mixed_returns)["warnings"]
+
+
+def test_performance_metrics_flag_few_losing_periods():
+    # 40 periods but only 2 losers: Sortino rests on two observations.
+    returns = np.array([0.01, 0.012, 0.008, 0.011] * 10)
+    returns[5] = -0.004
+    returns[20] = -0.006
+    warnings = calculate_performance_metrics(returns)["warnings"]
+    assert warnings == ["few_losing_periods:2"]
+
+
+def test_no_losing_periods_warns_nothing_extra():
+    # Zero losers makes Sortino undefined (None); that is not also a 'few losers' case.
+    returns = np.array([0.01, 0.012, 0.008, 0.011] * 10)
+    result = calculate_performance_metrics(returns)
+    assert result["sortino_ratio"] is None
+    assert not any(w.startswith("few_losing") for w in result.get("warnings", []))
 
 
 def test_performance_metrics_include_sortino_and_total_return(mixed_returns):
