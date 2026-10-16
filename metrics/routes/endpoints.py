@@ -102,6 +102,9 @@ async def compute_metrics(request: ComputeRequest) -> dict[str, Any]:
     - **sortino**: Sortino Ratio only
     - **total_return**: Total Return only
 
+    Undefined ratios (zero variance, no downside) are `null`. Returns below -1.0 are
+    rejected with 400. `performance` adds `warnings` (e.g. `constant_returns`) when relevant.
+
     ## Example Requests:
 
     **Get all metrics with interpretation:**

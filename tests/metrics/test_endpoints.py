@@ -385,6 +385,21 @@ def test_compute_sortino_only(client):
     response = client.post("/metrics/v1/compute/", json=payload)
     assert response.status_code == 200
     assert list(response.json()) == ["sortino_ratio"]
+    assert response.json()["sortino_ratio"] == pytest.approx(0.6 * 252**0.5, rel=1e-6)
+
+
+def test_compute_rejects_returns_below_minus_one(client):
+    payload = {"returns": [-2.0, 0.1], "metric": "total_return"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 400
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
+def test_compute_undefined_ratio_is_null(client):
+    payload = {"returns": [0.01, 0.02, 0.03], "metric": "sortino"}
+    response = client.post("/metrics/v1/compute/", json=payload)
+    assert response.status_code == 200
+    assert response.json() == {"sortino_ratio": None}
 
 
 def test_compute_total_return_only(client):

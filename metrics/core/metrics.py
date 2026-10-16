@@ -43,6 +43,26 @@ WIN_RATE_THRESHOLDS = {"high": 0.6, "moderate": 0.5, "low": 0.4}
 # --- Helper Functions ---
 
 
+def _finite_or_none(value: Any) -> float | None:
+    """Return ``value`` as a float, or None when it is NaN or infinite.
+
+    A ratio that is mathematically undefined (zero variance, no downside
+    deviation, zero drawdown) is reported as None so it is never mistaken for a
+    genuine 0.0 or ranked as if it were one.
+    """
+    if value is None:
+        return None
+    value = float(value)
+    return value if np.isfinite(value) else None
+
+
+def _fmt(value: float | None, pct: bool = False) -> str:
+    """Format a possibly-undefined metric for log lines."""
+    if value is None:
+        return "n/a"
+    return f"{value:.2%}" if pct else f"{value:.2f}"
+
+
 def _interpret_sharpe(sharpe_ratio: float) -> str:
     """Interpret Sharpe ratio value."""
     if sharpe_ratio >= SHARPE_THRESHOLDS["excellent"]:
@@ -112,9 +132,19 @@ def _validate_returns(returns: pd.Series | np.ndarray | list) -> pd.Series:
 
     # Remove NaN values (including former Inf)
     returns_clean = returns.dropna()
+    dropped = len(returns) - len(returns_clean)
+    if dropped:
+        logger.warning(f"Dropped {dropped} non-finite return(s) before computing metrics")
 
     if len(returns_clean) < 2:
         raise ValueError(f"Need at least 2 valid returns, got {len(returns_clean)}")
+
+    # A period return below -100% would mean losing more than the whole position.
+    # Compounding it flips signs and produces meaningless results, so reject it.
+    if (returns_clean < -1.0).any():
+        raise ValueError(
+            f"Returns below -1.0 (-100%) are not valid; got minimum {float(returns_clean.min())}"
+        )
 
     # Ensure DatetimeIndex - quantstats requires this for some calculations
     # If no datetime index, create a synthetic one starting from a base date
@@ -133,7 +163,7 @@ def calculate_sharpe_ratio(
     returns: pd.Series | np.ndarray | list,
     risk_free_rate: float = 0.0,
     periods_per_year: int = 252,
-) -> float:
+) -> float | None:
     """
     Calculate Sharpe Ratio: risk-adjusted return metric.
 
@@ -159,7 +189,7 @@ def calculate_sharpe_ratio(
 
     try:
         sharpe = qs.stats.sharpe(returns, rf=risk_free_rate, periods=periods_per_year)
-        return float(sharpe) if not np.isnan(sharpe) else 0.0
+        return _finite_or_none(sharpe)
     except Exception as e:
         logger.warning(f"Error calculating sharpe ratio: {e}")
         return 0.0
@@ -194,7 +224,9 @@ def calculate_max_drawdown(returns: pd.Series | np.ndarray | list) -> float:
         return 0.0
 
 
-def calculate_cagr(returns: pd.Series | np.ndarray | list, periods_per_year: int = 252) -> float:
+def calculate_cagr(
+    returns: pd.Series | np.ndarray | list, periods_per_year: int = 252
+) -> float | None:
     """
     Calculate Compound Annual Growth Rate (CAGR).
 
@@ -216,7 +248,7 @@ def calculate_cagr(returns: pd.Series | np.ndarray | list, periods_per_year: int
 
     try:
         cagr = qs.stats.cagr(returns, periods=periods_per_year)
-        return float(cagr) if not np.isnan(cagr) else 0.0
+        return _finite_or_none(cagr)
     except Exception as e:
         logger.warning(f"Error calculating CAGR: {e}")
         return 0.0
@@ -224,7 +256,7 @@ def calculate_cagr(returns: pd.Series | np.ndarray | list, periods_per_year: int
 
 def calculate_calmar_ratio(
     returns: pd.Series | np.ndarray | list, periods_per_year: int = 252
-) -> float:
+) -> float | None:
     """
     Calculate Calmar Ratio: return per unit of maximum drawdown.
 
@@ -248,7 +280,7 @@ def calculate_calmar_ratio(
 
     try:
         calmar = qs.stats.calmar(returns, periods=periods_per_year)
-        return float(calmar) if not np.isnan(calmar) else 0.0
+        return _finite_or_none(calmar)
     except Exception as e:
         logger.warning(f"Error calculating calmar ratio: {e}")
         return 0.0
@@ -287,14 +319,14 @@ def calculate_sortino_ratio(
     returns: pd.Series | np.ndarray | list,
     risk_free_rate: float = 0.0,
     periods_per_year: int = 252,
-) -> float:
+) -> float | None:
     """
     Calculate Sortino Ratio: return per unit of downside volatility.
 
     Like Sharpe, but only penalises negative returns. Higher is better.
     A series with no losing periods has no downside deviation, so the ratio is
-    undefined (infinite); it is reported as 0.0, matching how this module
-    reports other non-finite results.
+    undefined; it is reported as None (not 0.0, which would rank a loss-free
+    series below a losing one).
 
     Args:
         returns: Return series
@@ -308,13 +340,13 @@ def calculate_sortino_ratio(
 
     try:
         sortino = qs.stats.sortino(returns, rf=risk_free_rate, periods=periods_per_year)
-        return float(sortino) if np.isfinite(sortino) else 0.0
+        return _finite_or_none(sortino)
     except Exception as e:
         logger.warning(f"Error calculating sortino ratio: {e}")
         return 0.0
 
 
-def calculate_total_return(returns: pd.Series | np.ndarray | list) -> float:
+def calculate_total_return(returns: pd.Series | np.ndarray | list) -> float | None:
     """
     Calculate Total Return: compounded return over the whole series.
 
@@ -322,12 +354,13 @@ def calculate_total_return(returns: pd.Series | np.ndarray | list) -> float:
         returns: Return series
 
     Returns:
-        Total return as decimal (e.g., 0.12 for +12%)
+        Total return as decimal (e.g., 0.12 for +12%), or None if the
+        compounded value overflows. Returns below -1.0 are rejected upstream.
     """
     returns = _validate_returns(returns)
 
     total = float(np.prod(1.0 + returns.to_numpy(dtype=float))) - 1.0
-    return total if np.isfinite(total) else 0.0
+    return _finite_or_none(total)
 
 
 # --- Main Function ---
@@ -360,6 +393,9 @@ def calculate_performance_metrics(
             - win_rate: Percentage of profitable periods
             - sortino_ratio: Return per unit of downside volatility
             - total_return: Compounded return over the series
+            - warnings: (only when non-empty) e.g. constant_returns, dropped_nonfinite_returns:N
+            Ratios that are mathematically undefined (zero variance, no downside)
+            are None rather than 0.0.
             - interpretation: Human-readable assessment (if include_interpretation=True)
             - metadata: Configuration used for calculation
 
@@ -374,7 +410,9 @@ def calculate_performance_metrics(
         >>> print(f"Max Drawdown: {metrics['max_drawdown']:.2%}")
     """
     # Validate returns
+    n_input = len(returns)
     returns = _validate_returns(returns)
+    dropped_periods = n_input - len(returns)
 
     logger.info(f"Calculating metrics for {len(returns)} return periods")
 
@@ -388,7 +426,7 @@ def calculate_performance_metrics(
     total_return = calculate_total_return(returns)
 
     # Build result
-    result = {
+    result: dict[str, Any] = {
         "sharpe_ratio": sharpe,
         "max_drawdown": max_dd,
         "cagr": cagr,
@@ -402,19 +440,34 @@ def calculate_performance_metrics(
             "total_periods": len(returns),
             "profitable_periods": int((returns > 0).sum()),
             "losing_periods": int((returns < 0).sum()),
+            "dropped_periods": dropped_periods,
         },
     }
+
+    # Machine-readable caveats. The orchestrator stores unknown top-level keys
+    # under the run's ``extra`` column, so these reach the run record.
+    warnings: list[str] = []
+    if returns.nunique() == 1:
+        warnings.append("constant_returns")
+    if dropped_periods:
+        warnings.append(f"dropped_nonfinite_returns:{dropped_periods}")
+    if warnings:
+        result["warnings"] = warnings
 
     # Add interpretation if requested
     if include_interpretation:
         result["interpretation"] = {
-            "sharpe_ratio": _interpret_sharpe(sharpe),
-            "calmar_ratio": _interpret_calmar(calmar),
+            "sharpe_ratio": _interpret_sharpe(sharpe) if sharpe is not None else "undefined",
+            "calmar_ratio": _interpret_calmar(calmar) if calmar is not None else "undefined",
             "win_rate": _interpret_win_rate(win_rate),
-            "overall_assessment": _get_overall_assessment(sharpe, max_dd, calmar, win_rate),
+            "overall_assessment": _get_overall_assessment(
+                sharpe or 0.0, max_dd, calmar or 0.0, win_rate
+            ),
         }
 
-    logger.info(f"Metrics calculated: Sharpe={sharpe:.2f}, MDD={max_dd:.2%}, CAGR={cagr:.2%}")
+    logger.info(
+        f"Metrics calculated: Sharpe={_fmt(sharpe)}, MDD={_fmt(max_dd, True)}, CAGR={_fmt(cagr, True)}"
+    )
 
     return result
 

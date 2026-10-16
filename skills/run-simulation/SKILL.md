@@ -82,6 +82,8 @@ Build a markdown table with these columns:
 
 Sort by `sharpe` descending (treat null as -inf). Bold the top 3 rows.
 
+A run whose `extra.warnings` contains `constant_returns` made no trades or had zero variance; its ratios are null. Keep it in the table but note it in the Failures/notes section so it is not read as a real result.
+
 Append a "Failures" section if any runs failed, listing run_id + error message.
 
 Save to `.local/experiments/{experiment_id}/report.md`. Also copy the input YAML to the same directory.

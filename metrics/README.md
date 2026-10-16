@@ -31,13 +31,15 @@ POST /metrics/v1/compute
 
 | Value | Returns |
 |-------|---------|
-| `performance` (default) | All five metrics + `interpretation` + `metadata` |
-| `all`                   | All five metrics, no interpretation |
+| `performance` (default) | All seven metrics + `interpretation` + `metadata` (+ `warnings` when present) |
+| `all`                   | All seven metrics, no interpretation |
 | `sharpe`                | `{sharpe_ratio}` |
 | `max_drawdown`          | `{max_drawdown}` |
 | `cagr`                  | `{cagr}` |
 | `calmar`                | `{calmar_ratio}` |
 | `win_rate`              | `{win_rate}` |
+| `sortino`               | `{sortino_ratio}` |
+| `total_return`          | `{total_return}` |
 
 ### Response (`metric=performance`)
 
@@ -48,6 +50,8 @@ POST /metrics/v1/compute
   "cagr": 0.12,
   "calmar_ratio": 1.71,
   "win_rate": 0.60,
+  "sortino_ratio": 2.31,
+  "total_return": 0.0295,
   "interpretation": {
     "sharpe_ratio": "good",
     "calmar_ratio": "good",
@@ -59,10 +63,25 @@ POST /metrics/v1/compute
     "periods_per_year": 252,
     "total_periods": 5,
     "profitable_periods": 3,
-    "losing_periods": 2
+    "losing_periods": 2,
+    "dropped_periods": 0
   }
 }
 ```
+
+### Undefined values and warnings
+
+- A ratio that is mathematically undefined (zero variance, no losing periods, zero
+  drawdown) is `null`, never `0.0`. This applies to `sharpe_ratio`, `sortino_ratio`,
+  `calmar_ratio` and `cagr`. If the underlying library call raises, the value is
+  still reported as `0.0`.
+- Returns below `-1.0` (-100%) are rejected with a `400 VALIDATION_ERROR`; exactly
+  `-1.0` is a valid total loss.
+- `NaN` and infinite returns are dropped. `metadata.dropped_periods` counts them and
+  `warnings` gains `dropped_nonfinite_returns:N`.
+- `warnings` (only in `performance`, only when non-empty) may contain
+  `constant_returns`: the series has zero variance (for example a run that made no
+  trades), so its ratios are undefined.
 
 ## Inputs
 

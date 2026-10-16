@@ -559,22 +559,69 @@ def test_total_return_compounds():
     assert calculate_total_return([0.10, -0.10]) == pytest.approx(-0.01)
 
 
+def test_sortino_ratio_known_value():
+    """Hand-derived: mean 0.006, downside deviation sqrt((0.02**2 + 0.01**2) / 5) = 0.01."""
+    sortino = calculate_sortino_ratio([0.01, -0.02, 0.03, 0.02, -0.01])
+    assert sortino == pytest.approx(0.6 * np.sqrt(252), rel=1e-6)
+
+
 def test_sortino_ratio_mixed_returns(mixed_returns):
-    """Sortino is finite and positive for a profitable series with some losses."""
+    """Sortino is a finite float for a series that has losing periods."""
     sortino = calculate_sortino_ratio(mixed_returns)
     assert isinstance(sortino, float)
     assert np.isfinite(sortino)
 
 
-def test_sortino_ratio_no_losses_is_finite():
-    """No downside deviation means an undefined ratio, reported as 0.0."""
-    assert calculate_sortino_ratio([0.01, 0.02, 0.03]) == 0.0
+def test_sortino_ratio_no_losses_is_undefined():
+    """No downside deviation means an undefined ratio (None), not a misleading 0.0."""
+    assert calculate_sortino_ratio([0.01, 0.02, 0.03]) is None
+
+
+def test_zero_variance_ratios_are_undefined():
+    """Constant returns have no volatility: Sharpe and Calmar are None, not 0.0."""
+    flat = [0.01, 0.01, 0.01]
+    assert calculate_sharpe_ratio(flat) is None
+    assert calculate_calmar_ratio(flat) is None
+
+
+def test_returns_below_minus_one_are_rejected():
+    """A period return under -100% is impossible; compounding it flips signs."""
+    with pytest.raises(ValueError, match="below -1.0"):
+        calculate_total_return([-2.0, 0.1])
+    with pytest.raises(ValueError, match="below -1.0"):
+        calculate_performance_metrics([-2.0, -3.0])
+
+
+def test_total_return_total_loss_is_minus_one():
+    """Exactly -100% is a valid total loss and stays -1.0."""
+    assert calculate_total_return([-1.0, 0.5]) == pytest.approx(-1.0)
+
+
+def test_total_return_overflow_is_undefined():
+    assert calculate_total_return([1e200, 1e200]) is None
+
+
+def test_performance_metrics_flag_constant_returns():
+    result = calculate_performance_metrics([0.0, 0.0, 0.0, 0.0])
+    assert result["warnings"] == ["constant_returns"]
+    assert result["sharpe_ratio"] is None
+    assert result["interpretation"]["sharpe_ratio"] == "undefined"
+    assert result["total_return"] == 0.0
+
+
+def test_performance_metrics_report_dropped_returns():
+    result = calculate_performance_metrics([0.5, np.nan, 0.1, -0.2])
+    assert result["metadata"]["dropped_periods"] == 1
+    assert result["metadata"]["total_periods"] == 3
+    assert "dropped_nonfinite_returns:1" in result["warnings"]
+
+
+def test_performance_metrics_no_warnings_key_when_clean(mixed_returns):
+    assert "warnings" not in calculate_performance_metrics(mixed_returns)
 
 
 def test_performance_metrics_include_sortino_and_total_return(mixed_returns):
     """The performance payload carries the two fields the orchestrator persists."""
     metrics = calculate_performance_metrics(mixed_returns)
     assert isinstance(metrics["sortino_ratio"], float)
-    assert metrics["total_return"] == pytest.approx(
-        float((1.0 + pd.Series(mixed_returns)).prod() - 1.0)
-    )
+    assert metrics["total_return"] == pytest.approx(0.09047173504068784)
