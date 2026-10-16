@@ -7,6 +7,8 @@ import contextlib
 import logging
 from datetime import datetime
 
+import httpx
+
 from shared.contracts import MAX_HISTORY_BARS, ForecastEnvelope
 from shared.timeutils import to_utc_date, to_utc_datetime
 
@@ -145,8 +147,21 @@ class InnerLoop:
             returns = _equity_to_returns([eq for _, eq in equity_curve])
             metrics_payload: dict = {}
             if returns:
-                resp = await self.metrics_client.compute(returns=returns, request_id=run_id)
-                metrics_payload = _normalise_metrics(resp)
+                try:
+                    resp = await self.metrics_client.compute(returns=returns, request_id=run_id)
+                except httpx.HTTPStatusError as exc:
+                    # 400 is the metrics service rejecting the series as invalid
+                    # (e.g. a period return below -100%). The trades and equity
+                    # curve are real, so keep the run and record why there are no
+                    # metrics. Anything else (5xx, 422, timeouts) means something is
+                    # broken and still fails the run.
+                    if exc.response.status_code != 400:
+                        raise
+                    reason = _metrics_rejection_reason(exc.response)
+                    logger.warning("Run %s: metrics rejected the series: %s", run_id, reason)
+                    metrics_payload = {"extra": {"warnings": [f"metrics_unavailable:{reason}"]}}
+                else:
+                    metrics_payload = _normalise_metrics(resp)
             await self.metrics.write(run_id, metrics_payload)
             await self.runs.update_status(run_id, "completed", completed=True, clear_error=True)
             logger.info("Run %s completed (%d iterations)", run_id, len(equity_curve))
@@ -334,6 +349,15 @@ class InnerLoop:
                 "returned no bars with complete open/high/low/close values"
             )
         return {f"{field}_history": [float(b[field]) for b in bars] for field in _OHLC_FIELDS}
+
+
+def _metrics_rejection_reason(response: httpx.Response) -> str:
+    """Short human-readable reason from a metrics-service 400 response."""
+    try:
+        message = response.json().get("message")
+    except ValueError:
+        message = None
+    return str(message or response.text or "rejected")[:200]
 
 
 def _equity_to_returns(equity: list[float]) -> list[float]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from orchestrator.schemas.strategy import StrategyConfig
@@ -97,6 +98,57 @@ async def test_inner_loop_happy_path(sample_strategy, synthetic_prices) -> None:
     args, _ = metrics_repo.write.await_args
     assert args[0] == "run-1"
     assert args[1]["sharpe"] == 1.5
+
+
+def _status_error(status: int, body: dict) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "http://metrics:8000/metrics/v1/compute")
+    response = httpx.Response(status, json=body, request=request)
+    return httpx.HTTPStatusError("boom", request=request, response=response)
+
+
+_HAPPY_TRADE = {"action": "BUY", "size": 1.0, "value": 110.0, "reason": "fcst>price"}
+
+
+async def test_metrics_rejection_keeps_the_run_and_records_why(
+    sample_strategy, synthetic_prices
+) -> None:
+    """A 400 from the metrics service must not discard a finished backtest."""
+    cfg = StrategyConfig.model_validate(sample_strategy)
+    inner, runs_repo, trades_repo, equity_repo, metrics_repo, _ = _make_inner(
+        synthetic_prices, _envelope([110.0] * 5), _HAPPY_TRADE, {}
+    )
+    inner.metrics_client.compute.side_effect = _status_error(
+        400, {"error": "VALIDATION_ERROR", "message": "Returns below -1.0 (-100%) are not valid"}
+    )
+
+    await inner.run("run-neg", cfg, "exp-test")
+
+    runs_repo.update_status.assert_any_await(
+        "run-neg", "completed", completed=True, clear_error=True
+    )
+    assert trades_repo.write.await_count > 0
+    assert equity_repo.write.await_count > 0
+    args, _ = metrics_repo.write.await_args
+    assert args[1]["extra"]["warnings"] == [
+        "metrics_unavailable:Returns below -1.0 (-100%) are not valid"
+    ]
+    assert args[1].get("sharpe") is None
+
+
+@pytest.mark.parametrize("status", [422, 500])
+async def test_other_metrics_errors_still_fail_the_run(
+    sample_strategy, synthetic_prices, status
+) -> None:
+    """Only a 400 rejection is degraded; real breakage must stay loud."""
+    cfg = StrategyConfig.model_validate(sample_strategy)
+    inner, runs_repo, *_ = _make_inner(synthetic_prices, _envelope([110.0] * 5), _HAPPY_TRADE, {})
+    inner.metrics_client.compute.side_effect = _status_error(status, {"detail": "x"})
+
+    await inner.run("run-broken-metrics", cfg, "exp-test")
+
+    runs_repo.update_status.assert_any_await(
+        "run-broken-metrics", "failed", error=AnyStringMatching(), completed=True
+    )
 
 
 async def test_inner_loop_marks_failed_on_data_error(sample_strategy) -> None:
