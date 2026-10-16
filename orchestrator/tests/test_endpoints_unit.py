@@ -138,6 +138,18 @@ def test_get_run_with_metrics(wired_app):
     assert body["metrics"]["sharpe"] == 1.2
 
 
+def test_get_run_decodes_jsonb_extra(wired_app):
+    """JSONB comes back from asyncpg as text; a populated ``extra`` must not 500."""
+    wired_app.state.runs_repo.get.return_value = {
+        **wired_app.state.runs_repo.get.return_value,
+        "extra": '{"warnings": ["constant_returns"]}',
+    }
+    with TestClient(wired_app) as client:
+        r = client.get("/v1/orchestration/runs/run-xyz")
+    assert r.status_code == 200, r.text
+    assert r.json()["metrics"]["extra"] == {"warnings": ["constant_returns"]}
+
+
 def test_delete_run(wired_app):
     with TestClient(wired_app) as client:
         r = client.delete("/v1/orchestration/runs/run-xyz")

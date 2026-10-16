@@ -88,7 +88,8 @@ async def get_run(request: Request, run_id: str) -> RunDetail:
         max_drawdown=row.get("max_drawdown"),
         win_rate=row.get("win_rate"),
         total_return=row.get("total_return"),
-        extra=row.get("extra"),
+        # asyncpg returns JSONB as text; config is already decoded the same way.
+        extra=_load_json(row["extra"]) if row.get("extra") is not None else None,
     )
     return RunDetail(
         **summary,
